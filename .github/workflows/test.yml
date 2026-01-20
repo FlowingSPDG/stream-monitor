@@ -48,9 +48,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Run Rust tests
+      - name: Run Rust tests (excluding keyring tests)
         working-directory: src-tauri
-        run: cargo test --all-features
+        run: cargo test --all-features -- --skip test_credential_manager
 
   test-frontend:
     name: Frontend Tests
