@@ -20,7 +20,6 @@ use commands::{
     stats::{get_channel_stats, get_live_channels, get_stream_stats},
 };
 use config::settings::SettingsManager;
-use database::{get_connection, models::Channel};
 use std::sync::Arc;
 
 #[tauri::command]

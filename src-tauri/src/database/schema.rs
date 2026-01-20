@@ -60,7 +60,10 @@ pub fn init_database(conn: &Connection) -> Result<(), duckdb::Error> {
 
     eprintln!("[Schema] Step 3: Creating stream_stats table...");
     // Create sequence for stream_stats table
-    conn.execute("CREATE SEQUENCE IF NOT EXISTS stream_stats_id_seq START 1", [])?;
+    conn.execute(
+        "CREATE SEQUENCE IF NOT EXISTS stream_stats_id_seq START 1",
+        [],
+    )?;
     eprintln!("[Schema] stream_stats sequence created");
 
     // stream_stats テーブル: 定期収集統計データ
@@ -81,7 +84,10 @@ pub fn init_database(conn: &Connection) -> Result<(), duckdb::Error> {
 
     eprintln!("[Schema] Step 4: Creating chat_messages table...");
     // Create sequence for chat_messages table
-    conn.execute("CREATE SEQUENCE IF NOT EXISTS chat_messages_id_seq START 1", [])?;
+    conn.execute(
+        "CREATE SEQUENCE IF NOT EXISTS chat_messages_id_seq START 1",
+        [],
+    )?;
     eprintln!("[Schema] chat_messages sequence created");
 
     // chat_messages テーブル: チャット全ログ
@@ -151,6 +157,9 @@ pub fn init_database(conn: &Connection) -> Result<(), duckdb::Error> {
 
 /// データベーススキーマのマイグレーションを行う関数
 /// 既存のテーブルにフィールドを追加する
+///
+/// NOTE: 現在は呼び出し側を一時的に無効化しているため dead_code を許可しています。
+#[allow(dead_code)]
 fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
     // streamsテーブルにthumbnail_urlフィールドを追加
     let mut streams_has_thumbnail = conn.prepare(
