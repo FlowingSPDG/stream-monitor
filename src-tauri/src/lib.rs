@@ -5,6 +5,7 @@ mod commands;
 mod config;
 mod database;
 mod oauth;
+mod websocket;
 
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
@@ -12,8 +13,9 @@ use tokio::sync::Mutex;
 use collectors::{poller::ChannelPoller, twitch::TwitchCollector, youtube::YouTubeCollector};
 use commands::{
     channels::{add_channel, list_channels, remove_channel, toggle_channel, update_channel},
+    chat::{get_chat_messages, get_chat_rate, get_chat_stats},
     config::{delete_token, get_token, has_token, save_token, verify_token},
-    export::export_to_csv,
+    export::{export_to_csv, export_to_json, export_to_parquet},
     oauth::{login_with_twitch, login_with_youtube},
     stats::{get_channel_stats, get_live_channels, get_stream_stats},
 };
@@ -145,6 +147,10 @@ pub fn run() {
             update_channel,
             list_channels,
             toggle_channel,
+            // Chat commands
+            get_chat_messages,
+            get_chat_stats,
+            get_chat_rate,
             // Config commands
             save_token,
             get_token,
@@ -160,6 +166,8 @@ pub fn run() {
             get_channel_stats,
             // Export commands
             export_to_csv,
+            export_to_json,
+            export_to_parquet,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

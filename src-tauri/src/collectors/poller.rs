@@ -141,29 +141,82 @@ impl ChannelPoller {
 
     /// ストリーム統計情報をデータベースに保存する
     fn save_stream_stats(conn: &Connection, channel_id: i64, stats: &StreamStats) -> Result<(), Box<dyn std::error::Error>> {
-    // ストリームを作成または更新（現在は簡易実装：channel_id + timestampをstream_idとして使用）
-    let stream_id = format!("{}_{}", channel_id, Utc::now().timestamp());
+        // ストリームを作成または更新（現在は簡易実装：channel_id + timestampをstream_idとして使用）
+        let stream_id = format!("{}_{}", channel_id, Utc::now().timestamp());
 
-    let stream = Stream {
-        id: None,
-        channel_id,
-        stream_id: stream_id.clone(),
-        title: None, // 現在はタイトル情報なし
-        category: None, // 現在はカテゴリ情報なし
-        started_at: stats.collected_at.clone(),
-        ended_at: None, // ライブ中なのでNone
-    };
+        let stream = Stream {
+            id: None,
+            channel_id,
+            stream_id: stream_id.clone(),
+            title: None, // 現在はタイトル情報なし
+            category: None, // 現在はカテゴリ情報なし
+            thumbnail_url: None, // 現在はサムネイル情報なし
+            started_at: stats.collected_at.clone(),
+            ended_at: None, // ライブ中なのでNone
+        };
 
-    // ストリームを保存
-    let stream_db_id = DatabaseWriter::insert_or_update_stream(conn, channel_id, &stream)?;
+        // ストリームを保存
+        let stream_db_id = DatabaseWriter::insert_or_update_stream(conn, channel_id, &stream)?;
 
-    // StreamStatsに正しいstream_idを設定
-    let mut stats_with_id = stats.clone();
-    stats_with_id.stream_id = stream_db_id;
+        // StreamStatsに正しいstream_idを設定
+        let mut stats_with_id = stats.clone();
+        stats_with_id.stream_id = stream_db_id;
 
-    // ストリーム統計を保存
-    DatabaseWriter::insert_stream_stats(conn, &stats_with_id)?;
+        // ストリーム統計を保存
+        DatabaseWriter::insert_stream_stats(conn, &stats_with_id)?;
 
-    Ok(())
-}
+        Ok(())
+    }
+
+    /// チャット収集を開始する（ストリーム開始時に呼び出し）
+    pub async fn start_chat_collection(&self, channel: &Channel, stream_id: i64, video_id: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+        match channel.platform.as_str() {
+            "twitch" => {
+                // Twitch IRCチャット収集を開始
+                if let Some(twitch_collector) = self.collectors.get("twitch") {
+                    if let Ok(twitch_collector) = twitch_collector.as_ref().downcast_ref::<crate::collectors::twitch::TwitchCollector>() {
+                        // TODO: アクセストークンを取得して渡す
+                        twitch_collector.start_chat_collection(stream_id, &channel.channel_name, "oauth_token_here").await?;
+                    }
+                }
+            }
+            "youtube" => {
+                // YouTube Live Chat収集を開始
+                if let Some(youtube_collector) = self.collectors.get("youtube") {
+                    if let Ok(youtube_collector) = youtube_collector.as_ref().downcast_ref::<crate::collectors::youtube::YouTubeCollector>() {
+                        if let Some(video_id) = video_id {
+                            youtube_collector.start_chat_collection(stream_id, video_id, 30).await?; // 30秒間隔
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// チャット収集を停止する（ストリーム終了時に呼び出し）
+    pub async fn stop_chat_collection(&self, channel: &Channel, video_id: Option<&str>) {
+        match channel.platform.as_str() {
+            "twitch" => {
+                // Twitch IRCチャット収集を停止
+                if let Some(twitch_collector) = self.collectors.get("twitch") {
+                    if let Ok(twitch_collector) = twitch_collector.as_ref().downcast_ref::<crate::collectors::twitch::TwitchCollector>() {
+                        twitch_collector.stop_chat_collection(&channel.channel_name).await;
+                    }
+                }
+            }
+            "youtube" => {
+                // YouTube Live Chat収集を停止
+                if let Some(youtube_collector) = self.collectors.get("youtube") {
+                    if let Ok(youtube_collector) = youtube_collector.as_ref().downcast_ref::<crate::collectors::youtube::YouTubeCollector>() {
+                        if let Some(video_id) = video_id {
+                            youtube_collector.stop_chat_collection(video_id).await;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
 }

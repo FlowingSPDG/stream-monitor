@@ -45,6 +45,12 @@ google-youtube3 = "6"
 hyper-rustls = { version = "0.26", features = ["native-tokio"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "tokio"] }
 yup-oauth2 = "9"
+# WebSocket and scraping libraries
+tungstenite = { version = "0.21", features = ["native-tls"] }
+scraper = "0.19"
+# Data export libraries
+parquet = { version = "52", features = ["arrow"] }
+arrow = { version = "52", features = ["json"] }
 # Test dependencies
 [dev-dependencies]
 tempfile = "3"

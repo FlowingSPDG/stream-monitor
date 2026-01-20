@@ -1,13 +1,16 @@
 use crate::api::youtube_api::YouTubeApiClient;
+use crate::api::youtube_live_chat::YouTubeLiveChatCollector;
 use crate::collectors::collector_trait::Collector;
 use crate::database::models::{Channel, StreamStats};
 use async_trait::async_trait;
 use chrono::Utc;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub struct YouTubeCollector {
     api_client: Arc<Mutex<YouTubeApiClient>>,
+    chat_collectors: Arc<Mutex<HashMap<String, YouTubeLiveChatCollector>>>,
 }
 
 impl YouTubeCollector {
@@ -19,6 +22,7 @@ impl YouTubeCollector {
         let api_client = YouTubeApiClient::new(client_id, client_secret, redirect_uri).await?;
         Ok(Self {
             api_client: Arc::new(Mutex::new(api_client)),
+            chat_collectors: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 }
@@ -60,5 +64,40 @@ impl Collector for YouTubeCollector {
     async fn start_collection(&self, _channel: &Channel) -> Result<(), Box<dyn std::error::Error>> {
         // 認証はOAuthモジュールで行われているため、ここでは確認のみ
         Ok(())
+    }
+
+    /// チャット収集を開始（ストリーム開始時に呼び出し）
+    pub async fn start_chat_collection(
+        &self,
+        stream_id: i64,
+        video_id: &str,
+        poll_interval_secs: u64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut client = self.api_client.lock().await;
+        let hub = client.get_hub().clone();
+
+        // TODO: データベース接続を取得
+        // 現時点ではチャットコレクターの作成のみ
+        let chat_collector = YouTubeLiveChatCollector::new(
+            hub,
+            Arc::new(Mutex::new(duckdb::Connection::open_in_memory()?)), // TODO: 実際のDB接続を使用
+            stream_id,
+        );
+
+        // ビデオIDでチャット収集を開始
+        chat_collector.start_with_video_id(video_id, poll_interval_secs).await?;
+
+        let mut chat_collectors = self.chat_collectors.lock().await;
+        chat_collectors.insert(video_id.to_string(), chat_collector);
+
+        Ok(())
+    }
+
+    /// チャット収集を停止（ストリーム終了時に呼び出し）
+    pub async fn stop_chat_collection(&self, video_id: &str) {
+        let mut chat_collectors = self.chat_collectors.lock().await;
+        if let Some(collector) = chat_collectors.remove(video_id) {
+            collector.stop_collection().await;
+        }
     }
 }

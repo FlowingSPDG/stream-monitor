@@ -1,4 +1,4 @@
-use crate::database::models::{Stream, StreamStats};
+use crate::database::models::{ChatMessage, Stream, StreamStats};
 use duckdb::Connection;
 
 pub struct DatabaseWriter;
@@ -61,7 +61,7 @@ impl DatabaseWriter {
         stats: &StreamStats,
     ) -> Result<(), duckdb::Error> {
         conn.execute(
-            "INSERT INTO stream_stats (stream_id, collected_at, viewer_count, chat_rate_1min) 
+            "INSERT INTO stream_stats (stream_id, collected_at, viewer_count, chat_rate_1min)
              VALUES (?, ?, ?, ?)",
             [
                 &stats.stream_id.to_string(),
@@ -73,6 +73,59 @@ impl DatabaseWriter {
                 &stats.chat_rate_1min.to_string(),
             ],
         )?;
+        Ok(())
+    }
+
+    pub fn insert_chat_message(
+        conn: &Connection,
+        message: &ChatMessage,
+    ) -> Result<(), duckdb::Error> {
+        conn.execute(
+            "INSERT INTO chat_messages (stream_id, timestamp, platform, user_id, user_name, message, message_type)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                &message.stream_id.to_string(),
+                &message.timestamp,
+                &message.platform,
+                &message.user_id.as_deref().unwrap_or(""),
+                &message.user_name,
+                &message.message,
+                &message.message_type,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn insert_chat_messages_batch(
+        conn: &Connection,
+        messages: &[ChatMessage],
+    ) -> Result<(), duckdb::Error> {
+        if messages.is_empty() {
+            return Ok(());
+        }
+
+        // バッチインサート用のトランザクション開始
+        conn.execute("BEGIN TRANSACTION", [])?;
+
+        // プリペアドステートメントを使用した効率的なバッチインサート
+        let mut stmt = conn.prepare(
+            "INSERT INTO chat_messages (stream_id, timestamp, platform, user_id, user_name, message, message_type)
+             VALUES (?, ?, ?, ?, ?, ?, ?)"
+        )?;
+
+        for message in messages {
+            stmt.execute([
+                &message.stream_id.to_string(),
+                &message.timestamp,
+                &message.platform,
+                &message.user_id.as_deref().unwrap_or(""),
+                &message.user_name,
+                &message.message,
+                &message.message_type,
+            ])?;
+        }
+
+        conn.execute("COMMIT", [])?;
         Ok(())
     }
 }

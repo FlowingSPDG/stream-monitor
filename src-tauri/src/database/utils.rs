@@ -1,4 +1,5 @@
-use duckdb::{Connection, Result as DuckResult};
+use crate::database::models::ChatMessage;
+use duckdb::{Connection, Result as DuckResult, Row};
 
 /// DuckDBの動的パラメータを処理するヘルパー関数
 /// パラメータが0-15個の場合にのみサポート
@@ -75,4 +76,29 @@ where
             "Too many parameters (max 5 supported)".to_string(),
         )),
     }
+}
+
+/// RowからChatMessageを作成するヘルパー関数
+pub fn row_to_chat_message(row: &Row) -> DuckResult<ChatMessage> {
+    Ok(ChatMessage {
+        id: Some(row.get(0)?),
+        stream_id: row.get(1)?,
+        timestamp: row.get(2)?,
+        platform: row.get(3)?,
+        user_id: row.get::<_, Option<String>>(4)?,
+        user_name: row.get(5)?,
+        message: row.get(6)?,
+        message_type: row.get(7)?,
+    })
+}
+
+/// チャットメッセージのクエリ結果をChatMessageベクターに変換するヘルパー関数
+pub fn query_chat_messages(
+    conn: &Connection,
+    sql: &str,
+    params: &[String],
+) -> DuckResult<Vec<ChatMessage>> {
+    let mut stmt = conn.prepare(sql)?;
+    let rows = query_map_with_params(&mut stmt, params, row_to_chat_message)?;
+    rows.collect()
 }

@@ -6,6 +6,7 @@ pub struct Channel {
     pub platform: String,
     pub channel_id: String,
     pub channel_name: String,
+    pub display_name: Option<String>,
     pub enabled: bool,
     pub poll_interval: i32,
     pub created_at: Option<String>,
@@ -19,6 +20,7 @@ pub struct Stream {
     pub stream_id: String,
     pub title: Option<String>,
     pub category: Option<String>,
+    pub thumbnail_url: Option<String>,
     pub started_at: String,
     pub ended_at: Option<String>,
 }
@@ -39,6 +41,18 @@ pub struct ChannelWithStats {
     pub is_live: bool,
     pub current_viewers: Option<i32>,
     pub current_title: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessage {
+    pub id: Option<i64>,
+    pub stream_id: i64,
+    pub timestamp: String,
+    pub platform: String,
+    pub user_id: Option<String>,
+    pub user_name: String,
+    pub message: String,
+    pub message_type: String,
 }
 
 #[cfg(test)]

@@ -1,50 +1,93 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Settings } from "./components/Settings";
+import { Dashboard } from "./components/Dashboard";
+import { ChannelList } from "./components/ChannelList";
+import { Statistics } from "./components/Statistics";
+import { Export } from "./components/Export";
+import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import "./App.css";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+const queryClient = new QueryClient();
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+type Tab = "dashboard" | "channels" | "statistics" | "export" | "settings";
+
+function App() {
+  const [activeTab, setActiveTab] = useState<Tab>("dashboard");
+
+  const tabs: { id: Tab; label: string; component: React.ReactNode }[] = [
+    {
+      id: "dashboard",
+      label: "ダッシュボード",
+      component: <Dashboard />
+    },
+    {
+      id: "channels",
+      label: "チャンネル管理",
+      component: <ChannelList />
+    },
+    {
+      id: "statistics",
+      label: "統計閲覧",
+      component: <Statistics />
+    },
+    {
+      id: "export",
+      label: "エクスポート",
+      component: <Export />
+    },
+    {
+      id: "settings",
+      label: "設定",
+      component: <Settings />
+    },
+  ];
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <div className="min-h-screen bg-gray-50">
+          {/* ナビゲーションバー */}
+          <nav className="bg-white shadow-sm border-b">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between h-16">
+                <div className="flex">
+                  <div className="flex-shrink-0 flex items-center">
+                    <h1 className="text-xl font-bold text-gray-900">Stream Stats Collector</h1>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+            {/* タブナビゲーション */}
+            <div className="border-t border-gray-200">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <nav className="flex space-x-8">
+                  {tabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                        activeTab === tab.id
+                          ? "border-blue-500 text-blue-600"
+                          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            </div>
+          </nav>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+          {/* メインコンテンツ */}
+          <main className="flex-1">
+            {tabs.find(tab => tab.id === activeTab)?.component}
+          </main>
+        </div>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

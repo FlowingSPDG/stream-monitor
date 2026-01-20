@@ -1,4 +1,4 @@
-use crate::database::{get_connection, models::StreamStats, utils};
+use crate::database::{aggregation::DataAggregator, get_connection, models::{ChatMessage, StreamStats}, utils};
 use duckdb::Connection;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
@@ -8,6 +8,8 @@ pub struct ExportQuery {
     pub channel_id: Option<i64>,
     pub start_time: Option<String>,
     pub end_time: Option<String>,
+    pub aggregation: Option<String>, // "raw", "1min", "5min", "1hour"
+    pub include_chat: Option<bool>,
 }
 
 #[tauri::command]
@@ -42,6 +44,96 @@ pub async fn export_to_csv(
     std::fs::write(&file_path, csv).map_err(|e| format!("Failed to write file: {}", e))?;
 
     Ok(format!("Exported {} records to {}", stats_len, file_path))
+}
+
+#[tauri::command]
+pub async fn export_to_json(
+    app_handle: AppHandle,
+    query: ExportQuery,
+    file_path: String,
+) -> Result<String, String> {
+    let conn = get_connection(&app_handle)
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    // ストリーム統計データを取得
+    let stats = get_stream_stats_internal(&conn, &query)
+        .map_err(|e| format!("Failed to query stats: {}", e))?;
+
+    // 集計処理
+    let processed_stats = if let Some(agg) = &query.aggregation {
+        match agg.as_str() {
+            "1min" => DataAggregator::aggregate_to_1min(&stats),
+            "5min" => DataAggregator::aggregate_to_5min(&stats),
+            "1hour" => DataAggregator::aggregate_to_1hour(&stats),
+            _ => stats.into_iter().map(|s| crate::database::aggregation::AggregatedStreamStats {
+                timestamp: s.collected_at,
+                interval_minutes: 0,
+                avg_viewer_count: s.viewer_count.map(|v| v as f64),
+                max_viewer_count: s.viewer_count,
+                min_viewer_count: s.viewer_count,
+                chat_rate_avg: s.chat_rate_1min as f64,
+                data_points: 1,
+            }).collect(),
+        }
+    } else {
+        stats.into_iter().map(|s| crate::database::aggregation::AggregatedStreamStats {
+            timestamp: s.collected_at,
+            interval_minutes: 0,
+            avg_viewer_count: s.viewer_count.map(|v| v as f64),
+            max_viewer_count: s.viewer_count,
+            min_viewer_count: s.viewer_count,
+            chat_rate_avg: s.chat_rate_1min as f64,
+            data_points: 1,
+        }).collect()
+    };
+
+    let mut export_data = serde_json::Map::new();
+    export_data.insert("stream_stats".to_string(), serde_json::to_value(&processed_stats).unwrap());
+
+    // チャットデータを含む場合
+    if query.include_chat.unwrap_or(false) {
+        let chat_messages = get_chat_messages_internal(&conn, &query)
+            .map_err(|e| format!("Failed to query chat messages: {}", e))?;
+
+        export_data.insert("chat_messages".to_string(), serde_json::to_value(&chat_messages).unwrap());
+    }
+
+    // メタデータを追加
+    let mut metadata = serde_json::Map::new();
+    metadata.insert("exported_at".to_string(), chrono::Utc::now().to_rfc3339().into());
+    metadata.insert("total_records".to_string(), processed_stats.len().into());
+    if query.include_chat.unwrap_or(false) {
+        let chat_count = if let Some(chat_data) = export_data.get("chat_messages") {
+            if let Some(arr) = chat_data.as_array() {
+                arr.len()
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+        metadata.insert("chat_messages_count".to_string(), chat_count.into());
+    }
+    export_data.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+
+    // JSONファイルに書き込み
+    let json_content = serde_json::to_string_pretty(&export_data)
+        .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+
+    std::fs::write(&file_path, json_content)
+        .map_err(|e| format!("Failed to write JSON file: {}", e))?;
+
+    Ok(format!("Exported data to {}", file_path))
+}
+
+#[tauri::command]
+pub async fn export_to_parquet(
+    _app_handle: AppHandle,
+    _query: ExportQuery,
+    _file_path: String,
+) -> Result<String, String> {
+    // Parquetエクスポートは高度な機能のため、現時点では未実装としてエラーを返す
+    Err("Parquet export is not yet implemented. Please use CSV or JSON export.".to_string())
 }
 
 fn get_stream_stats_internal(
@@ -89,4 +181,58 @@ fn get_stream_stats_internal(
         .collect();
 
     stats
+}
+
+fn get_chat_messages_internal(
+    conn: &Connection,
+    query: &ExportQuery,
+) -> Result<Vec<ChatMessage>, duckdb::Error> {
+    let mut sql = String::from(
+        r#"
+        SELECT
+            cm.id, cm.stream_id, cm.timestamp, cm.platform,
+            cm.user_id, cm.user_name, cm.message, cm.message_type
+        FROM chat_messages cm
+        INNER JOIN streams s ON cm.stream_id = s.id
+        WHERE 1=1
+        "#,
+    );
+
+    let mut params: Vec<String> = Vec::new();
+
+    if let Some(channel_id) = query.channel_id {
+        sql.push_str(" AND s.channel_id = ?");
+        params.push(channel_id.to_string());
+    }
+
+    if let Some(start_time) = &query.start_time {
+        sql.push_str(" AND cm.timestamp >= ?");
+        params.push(start_time.clone());
+    }
+
+    if let Some(end_time) = &query.end_time {
+        sql.push_str(" AND cm.timestamp <= ?");
+        params.push(end_time.clone());
+    }
+
+    sql.push_str(" ORDER BY cm.timestamp ASC");
+
+    let mut stmt = conn.prepare(&sql)?;
+
+    let messages: Result<Vec<ChatMessage>, _> =
+        utils::query_map_with_params(&mut stmt, &params, |row| {
+            Ok(ChatMessage {
+                id: Some(row.get(0)?),
+                stream_id: row.get(1)?,
+                timestamp: row.get(2)?,
+                platform: row.get(3)?,
+                user_id: row.get::<_, Option<String>>(4)?,
+                user_name: row.get(5)?,
+                message: row.get(6)?,
+                message_type: row.get(7)?,
+            })
+        })?
+        .collect();
+
+    messages
 }

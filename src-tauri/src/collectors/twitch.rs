@@ -1,18 +1,22 @@
 use crate::api::twitch_api::TwitchApiClient;
 use crate::collectors::collector_trait::Collector;
 use crate::database::models::{Channel, StreamStats};
+use crate::websocket::twitch_irc::TwitchIrcManager;
 use async_trait::async_trait;
 use chrono::Utc;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub struct TwitchCollector {
     api_client: Arc<TwitchApiClient>,
+    irc_manager: Arc<Mutex<Option<TwitchIrcManager>>>,
 }
 
 impl TwitchCollector {
     pub fn new(client_id: String, client_secret: String) -> Self {
         Self {
             api_client: Arc::new(TwitchApiClient::new(client_id, client_secret)),
+            irc_manager: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -63,9 +67,39 @@ impl Collector for TwitchCollector {
         }
     }
 
-    async fn start_collection(&self, _channel: &Channel) -> Result<(), Box<dyn std::error::Error>> {
+    async fn start_collection(&self, channel: &Channel) -> Result<(), Box<dyn std::error::Error>> {
         // 認証を確認
         self.api_client.authenticate().await?;
+
+        // IRCマネージャーが初期化されていない場合は初期化
+        let mut irc_manager_opt = self.irc_manager.lock().await;
+        if irc_manager_opt.is_none() {
+            // TODO: データベース接続をIRCマネージャーに渡す
+            // 現時点ではIRCマネージャーは未初期化のまま
+        }
+
         Ok(())
+    }
+
+    /// チャット収集を開始（ストリーム開始時に呼び出し）
+    pub async fn start_chat_collection(
+        &self,
+        stream_id: i64,
+        channel_name: &str,
+        access_token: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let irc_manager_opt = self.irc_manager.lock().await;
+        if let Some(irc_manager) = &*irc_manager_opt {
+            irc_manager.start_channel_collection(stream_id, channel_name, access_token).await?;
+        }
+        Ok(())
+    }
+
+    /// チャット収集を停止（ストリーム終了時に呼び出し）
+    pub async fn stop_chat_collection(&self, channel_name: &str) {
+        let irc_manager_opt = self.irc_manager.lock().await;
+        if let Some(irc_manager) = &*irc_manager_opt {
+            irc_manager.stop_channel_collection(channel_name).await;
+        }
     }
 }
