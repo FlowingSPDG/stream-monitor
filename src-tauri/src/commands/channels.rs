@@ -155,7 +155,7 @@ pub async fn update_channel(
 
 #[tauri::command]
 pub async fn list_channels(
-    app_handle: AppHandle,
+    _app_handle: AppHandle,
     db_manager: State<'_, DatabaseManager>
 ) -> Result<Vec<Channel>, String> {
     let conn = db_manager.get_connection()

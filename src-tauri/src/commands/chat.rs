@@ -66,7 +66,7 @@ pub struct ChatRateData {
 
 #[tauri::command]
 pub async fn get_chat_messages(
-    app_handle: AppHandle,
+    _app_handle: AppHandle,
     db_manager: State<'_, DatabaseManager>,
     query: ChatMessagesQuery,
 ) -> Result<Vec<ChatMessage>, String> {
@@ -124,7 +124,7 @@ pub async fn get_chat_messages(
 
 #[tauri::command]
 pub async fn get_chat_stats(
-    app_handle: AppHandle,
+    _app_handle: AppHandle,
     db_manager: State<'_, DatabaseManager>,
     query: ChatStatsQuery,
 ) -> Result<ChatStats, String> {
@@ -337,7 +337,7 @@ pub async fn get_chat_stats(
 
 #[tauri::command]
 pub async fn get_chat_rate(
-    app_handle: AppHandle,
+    _app_handle: AppHandle,
     db_manager: State<'_, DatabaseManager>,
     query: ChatRateQuery,
 ) -> Result<Vec<ChatRateData>, String> {

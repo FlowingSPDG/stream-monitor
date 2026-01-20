@@ -20,7 +20,7 @@ pub struct ExportQuery {
 
 #[tauri::command]
 pub async fn export_to_csv(
-    app_handle: AppHandle,
+    _app_handle: AppHandle,
     db_manager: State<'_, DatabaseManager>,
     query: ExportQuery,
     file_path: String,
@@ -55,7 +55,7 @@ pub async fn export_to_csv(
 
 #[tauri::command]
 pub async fn export_to_json(
-    app_handle: AppHandle,
+    _app_handle: AppHandle,
     db_manager: State<'_, DatabaseManager>,
     query: ExportQuery,
     file_path: String,

@@ -199,7 +199,7 @@ pub async fn recreate_database(app_handle: AppHandle) -> Result<DatabaseInitResu
 
 #[command]
 pub async fn get_database_init_status(
-    app_handle: AppHandle,
+    _app_handle: AppHandle,
     db_manager: State<'_, DatabaseManager>
 ) -> Result<DbInitStatus, String> {
     // データベース接続を試行して初期化状態を確認

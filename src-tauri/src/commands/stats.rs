@@ -12,7 +12,7 @@ pub struct StreamStatsQuery {
 
 #[tauri::command]
 pub async fn get_stream_stats(
-    app_handle: AppHandle,
+    _app_handle: AppHandle,
     db_manager: State<'_, DatabaseManager>,
     query: StreamStatsQuery,
 ) -> Result<Vec<StreamStats>, String> {
@@ -72,7 +72,7 @@ pub async fn get_stream_stats(
 
 #[tauri::command]
 pub async fn get_live_channels(
-    app_handle: AppHandle,
+    _app_handle: AppHandle,
     db_manager: State<'_, DatabaseManager>,
 ) -> Result<Vec<crate::database::models::ChannelWithStats>, String> {
     let conn = db_manager.get_connection()

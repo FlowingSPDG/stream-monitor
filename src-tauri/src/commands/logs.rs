@@ -44,7 +44,7 @@ pub async fn get_logs(
     // ログをパースしてフィルタリング
     let mut logs: Vec<LogEntry> = content
         .lines()
-        .filter_map(|line| parse_log_line(line))
+        .filter_map(parse_log_line)
         .collect();
 
     // レベルフィルタリング
