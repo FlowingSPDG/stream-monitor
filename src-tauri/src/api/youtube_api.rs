@@ -3,13 +3,11 @@ use google_youtube3::{hyper_rustls, hyper_util, yup_oauth2, YouTube};
 use hyper_util::client::legacy::connect::HttpConnector;
 use std::sync::Arc;
 
-#[allow(dead_code)]
 pub struct YouTubeApiClient {
     hub: Arc<YouTube<hyper_rustls::HttpsConnector<HttpConnector>>>,
     access_token: Option<String>,
 }
 
-#[allow(dead_code)]
 impl YouTubeApiClient {
     pub async fn new(
         client_id: String,

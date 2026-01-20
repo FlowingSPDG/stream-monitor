@@ -1,7 +1,10 @@
+use crate::collectors::poller::ChannelPoller;
 use crate::database::{get_connection, models::Channel, utils};
 use duckdb::Connection;
 use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
+use std::sync::Arc;
+use tauri::{AppHandle, Manager};
+use tokio::sync::Mutex;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AddChannelRequest {
@@ -42,11 +45,28 @@ pub async fn add_channel(
     let channel = get_channel_by_id(&conn, channel_id)
         .ok_or_else(|| "Failed to retrieve created channel".to_string())?;
 
+    // 有効なチャンネルであればポーリングを開始
+    if channel.enabled {
+        if let Some(poller) = app_handle.try_state::<Arc<Mutex<ChannelPoller>>>() {
+            let mut poller = poller.lock().await;
+            if let Err(e) = poller.start_polling(channel.clone()) {
+                eprintln!("Failed to start polling for new channel {}: {}", channel_id, e);
+                // エラーが発生してもチャンネル作成は成功とする
+            }
+        }
+    }
+
     Ok(channel)
 }
 
 #[tauri::command]
 pub async fn remove_channel(app_handle: AppHandle, id: i64) -> Result<(), String> {
+    // 削除前にポーリングを停止
+    if let Some(poller) = app_handle.try_state::<Arc<Mutex<ChannelPoller>>>() {
+        let mut poller = poller.lock().await;
+        poller.stop_polling(id);
+    }
+
     let conn = get_connection(&app_handle)
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
@@ -67,6 +87,9 @@ pub async fn update_channel(
 ) -> Result<Channel, String> {
     let conn = get_connection(&app_handle)
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    // 更新前の状態を取得（有効状態の変更を検知するため）
+    let old_channel = get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
 
     let mut updates = Vec::new();
     let mut params: Vec<String> = Vec::new();
@@ -98,7 +121,25 @@ pub async fn update_channel(
     utils::execute_with_params(&conn, &query, &params)
         .map_err(|e| format!("Failed to update channel: {}", e))?;
 
-    get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())
+    let updated_channel = get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
+
+    // 有効状態が変更された場合、ポーリングを開始/停止
+    if let Some(enabled) = enabled {
+        if let Some(poller) = app_handle.try_state::<Arc<Mutex<ChannelPoller>>>() {
+            let mut poller = poller.lock().await;
+            if enabled && !old_channel.enabled {
+                // 無効→有効になった場合、ポーリングを開始
+                if let Err(e) = poller.start_polling(updated_channel.clone()) {
+                    eprintln!("Failed to start polling for updated channel {}: {}", id, e);
+                }
+            } else if !enabled && old_channel.enabled {
+                // 有効→無効になった場合、ポーリングを停止
+                poller.stop_polling(id);
+            }
+        }
+    }
+
+    Ok(updated_channel)
 }
 
 #[tauri::command]
@@ -147,7 +188,23 @@ pub async fn toggle_channel(app_handle: AppHandle, id: i64) -> Result<Channel, S
     )
     .map_err(|e| format!("Failed to update channel: {}", e))?;
 
-    get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())
+    let updated_channel = get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
+
+    // ポーリングの開始/停止
+    if let Some(poller) = app_handle.try_state::<Arc<Mutex<ChannelPoller>>>() {
+        let mut poller = poller.lock().await;
+        if new_enabled {
+            // 有効化された場合、ポーリングを開始
+            if let Err(e) = poller.start_polling(updated_channel.clone()) {
+                eprintln!("Failed to start polling for channel {}: {}", id, e);
+            }
+        } else {
+            // 無効化された場合、ポーリングを停止
+            poller.stop_polling(id);
+        }
+    }
+
+    Ok(updated_channel)
 }
 
 fn get_channel_by_id(conn: &Connection, id: i64) -> Option<Channel> {

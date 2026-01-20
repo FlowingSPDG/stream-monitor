@@ -5,12 +5,10 @@ use async_trait::async_trait;
 use chrono::Utc;
 use std::sync::Arc;
 
-#[allow(dead_code)]
 pub struct TwitchCollector {
     api_client: Arc<TwitchApiClient>,
 }
 
-#[allow(dead_code)]
 impl TwitchCollector {
     pub fn new(client_id: String, client_secret: String) -> Self {
         Self {

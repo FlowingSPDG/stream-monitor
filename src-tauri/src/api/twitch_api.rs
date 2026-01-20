@@ -11,14 +11,12 @@ use twitch_api::{
 };
 use twitch_oauth2::{AppAccessToken, ClientId, ClientSecret};
 
-#[allow(dead_code)]
 pub struct TwitchApiClient {
     client: Arc<HelixClient<'static, reqwest::Client>>,
     client_id: String,
     client_secret: String,
 }
 
-#[allow(dead_code)]
 impl TwitchApiClient {
     pub fn new(client_id: String, client_secret: String) -> Self {
         let client = Arc::new(HelixClient::default());

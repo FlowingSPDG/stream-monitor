@@ -6,12 +6,10 @@ use chrono::Utc;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[allow(dead_code)]
 pub struct YouTubeCollector {
     api_client: Arc<Mutex<YouTubeApiClient>>,
 }
 
-#[allow(dead_code)]
 impl YouTubeCollector {
     pub async fn new(
         client_id: String,

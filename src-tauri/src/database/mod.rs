@@ -25,7 +25,6 @@ pub fn get_connection(_app_handle: &AppHandle) -> Result<Connection, Box<dyn std
     Ok(conn)
 }
 
-#[allow(dead_code)]
 pub fn get_connection_with_path(path: PathBuf) -> Result<Connection, Box<dyn std::error::Error>> {
     let conn = Connection::open(&path).map_err(|e| format!("Failed to open database: {}", e))?;
     schema::init_database(&conn).map_err(|e| format!("Failed to initialize schema: {}", e))?;

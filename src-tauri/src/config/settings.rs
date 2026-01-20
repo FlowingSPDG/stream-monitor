@@ -61,7 +61,6 @@ impl Default for AppSettings {
 #[allow(dead_code)]
 pub struct SettingsManager;
 
-#[allow(dead_code)]
 impl SettingsManager {
     pub fn get_settings_path(
         _app_handle: &AppHandle,

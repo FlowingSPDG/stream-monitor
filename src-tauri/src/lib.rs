@@ -6,6 +6,10 @@ mod config;
 mod database;
 mod oauth;
 
+use tauri::{AppHandle, Manager};
+use tokio::sync::Mutex;
+
+use collectors::{poller::ChannelPoller, twitch::TwitchCollector, youtube::YouTubeCollector};
 use commands::{
     channels::{add_channel, list_channels, remove_channel, toggle_channel, update_channel},
     config::{delete_token, get_token, has_token, save_token, verify_token},
@@ -13,6 +17,9 @@ use commands::{
     oauth::{login_with_twitch, login_with_youtube},
     stats::{get_channel_stats, get_live_channels, get_stream_stats},
 };
+use config::settings::SettingsManager;
+use database::{get_connection, models::Channel};
+use std::sync::Arc;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -23,6 +30,113 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            // Initialize ChannelPoller and manage it as app state
+            let poller = ChannelPoller::new(app.handle().clone());
+            let poller_arc = Arc::new(Mutex::new(poller));
+            app.manage(poller_arc.clone());
+
+            // Initialize collectors from settings
+            let app_handle = app.handle().clone();
+            let poller_for_collectors = poller_arc.clone();
+            std::thread::spawn(move || {
+                tauri::async_runtime::block_on(async {
+                    // Load settings
+                    let settings = match SettingsManager::load_settings(&app_handle) {
+                        Ok(settings) => settings,
+                        Err(e) => {
+                            eprintln!("Failed to load settings: {}", e);
+                            return;
+                        }
+                    };
+
+                    let mut poller = poller_for_collectors.lock().await;
+
+                    // Initialize Twitch collector if credentials are available
+                    if let (Some(client_id), Some(client_secret)) = (&settings.twitch.client_id, &settings.twitch.client_secret) {
+                        let collector = TwitchCollector::new(client_id.clone(), client_secret.clone());
+                        poller.register_collector("twitch".to_string(), Arc::new(collector));
+                        println!("Twitch collector initialized successfully");
+                    } else {
+                        println!("Twitch credentials not configured, skipping collector initialization");
+                    }
+
+                    // Initialize YouTube collector if credentials are available
+                    if let (Some(client_id), Some(client_secret)) = (&settings.youtube.client_id, &settings.youtube.client_secret) {
+                        match YouTubeCollector::new(client_id.clone(), client_secret.clone(), "http://localhost:8081/callback".to_string()).await {
+                            Ok(collector) => {
+                                poller.register_collector("youtube".to_string(), Arc::new(collector));
+                                println!("YouTube collector initialized successfully");
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to initialize YouTube collector: {}", e);
+                            }
+                        }
+                    } else {
+                        println!("YouTube credentials not configured, skipping collector initialization");
+                    }
+                });
+            });
+
+            // Start polling for existing enabled channels in a separate task
+            let app_handle = app.handle().clone();
+            let poller_clone = poller_arc.clone();
+            std::thread::spawn(move || {
+                tauri::async_runtime::block_on(async {
+                    if let Ok(conn) = get_connection(&app_handle) {
+                        // Get all enabled channels
+                        let mut stmt = match conn.prepare(
+                            "SELECT id, platform, channel_id, channel_name, enabled, poll_interval, created_at, updated_at
+                             FROM channels WHERE enabled = 1"
+                        ) {
+                            Ok(stmt) => stmt,
+                            Err(e) => {
+                                eprintln!("Failed to prepare channels query: {}", e);
+                                return;
+                            }
+                        };
+
+                        let channels: Vec<Channel> = match stmt.query_map([], |row| {
+                            Ok(Channel {
+                                id: Some(row.get(0)?),
+                                platform: row.get(1)?,
+                                channel_id: row.get(2)?,
+                                channel_name: row.get(3)?,
+                                enabled: row.get(4)?,
+                                poll_interval: row.get(5)?,
+                                created_at: Some(row.get(6)?),
+                                updated_at: Some(row.get(7)?),
+                            })
+                        }) {
+                            Ok(channels_iter) => match channels_iter.collect::<Result<Vec<_>, _>>() {
+                                Ok(channels) => channels,
+                                Err(e) => {
+                                    eprintln!("Failed to collect channels: {}", e);
+                                    return;
+                                }
+                            },
+                            Err(e) => {
+                                eprintln!("Failed to query channels: {}", e);
+                                return;
+                            }
+                        };
+
+                        // Start polling for each enabled channel
+                        let mut poller = poller_clone.lock().await;
+                        for channel in channels {
+                            if let Err(e) = poller.start_polling(channel) {
+                                eprintln!("Failed to start polling for existing channel: {}", e);
+                                // Continue with other channels even if one fails
+                            }
+                        }
+                    } else {
+                        eprintln!("Failed to get database connection during startup");
+                    }
+                });
+            });
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
             // Channel commands

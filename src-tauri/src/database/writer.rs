@@ -1,10 +1,8 @@
 use crate::database::models::{Stream, StreamStats};
 use duckdb::Connection;
 
-#[allow(dead_code)]
 pub struct DatabaseWriter;
 
-#[allow(dead_code)]
 impl DatabaseWriter {
     pub fn insert_or_update_stream(
         conn: &Connection,
