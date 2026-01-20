@@ -35,3 +35,44 @@ pub fn get_connection_with_path(path: PathBuf) -> Result<Connection, Box<dyn std
         .map_err(|e| format!("Failed to initialize schema: {}", e))?;
     Ok(conn)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_database_connection() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        
+        let conn = get_connection_with_path(db_path.clone()).unwrap();
+        
+        // データベースが作成されていることを確認
+        assert!(db_path.exists());
+        
+        // テーブルが作成されていることを確認
+        let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table'").unwrap();
+        let tables: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        
+        assert!(tables.contains(&"channels".to_string()));
+        assert!(tables.contains(&"streams".to_string()));
+        assert!(tables.contains(&"stream_stats".to_string()));
+    }
+
+    #[test]
+    fn test_database_schema_initialization() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_schema.db");
+        
+        // 2回初期化してもエラーにならないことを確認
+        let _conn1 = get_connection_with_path(db_path.clone()).unwrap();
+        let _conn2 = get_connection_with_path(db_path.clone()).unwrap();
+        
+        assert!(db_path.exists());
+    }
+}

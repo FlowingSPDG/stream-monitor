@@ -40,3 +40,47 @@ pub struct ChannelWithStats {
     pub current_viewers: Option<i32>,
     pub current_title: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_channel_serialization() {
+        let channel = Channel {
+            id: Some(1),
+            platform: "twitch".to_string(),
+            channel_id: "test_channel".to_string(),
+            channel_name: "Test Channel".to_string(),
+            enabled: true,
+            poll_interval: 60,
+            created_at: Some("2024-01-01T00:00:00Z".to_string()),
+            updated_at: Some("2024-01-01T00:00:00Z".to_string()),
+        };
+
+        let json = serde_json::to_string(&channel).unwrap();
+        let deserialized: Channel = serde_json::from_str(&json).unwrap();
+        
+        assert_eq!(channel.id, deserialized.id);
+        assert_eq!(channel.platform, deserialized.platform);
+        assert_eq!(channel.channel_id, deserialized.channel_id);
+        assert_eq!(channel.channel_name, deserialized.channel_name);
+    }
+
+    #[test]
+    fn test_stream_stats_serialization() {
+        let stats = StreamStats {
+            id: Some(1),
+            stream_id: 1,
+            collected_at: "2024-01-01T00:00:00Z".to_string(),
+            viewer_count: Some(100),
+            chat_rate_1min: 10,
+        };
+
+        let json = serde_json::to_string(&stats).unwrap();
+        let deserialized: StreamStats = serde_json::from_str(&json).unwrap();
+        
+        assert_eq!(stats.viewer_count, deserialized.viewer_count);
+        assert_eq!(stats.chat_rate_1min, deserialized.chat_rate_1min);
+    }
+}

@@ -45,4 +45,7 @@ google-youtube3 = "6"
 hyper-rustls = { version = "0.26", features = ["native-tokio"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "tokio"] }
 yup-oauth2 = "9"
+# Test dependencies
+[dev-dependencies]
+tempfile = "3"
 
