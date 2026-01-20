@@ -38,6 +38,8 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libappindicator3-dev \
             librsvg2-dev \
+            libglib2.0-dev \
+            libgobject-2.0-dev \
             patchelf \
             build-essential \
             curl \
@@ -76,6 +78,16 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      - name: Install Tauri CLI
+        run: |
+          if ! command -v cargo-tauri &> /dev/null; then
+            echo "Installing Tauri CLI..."
+            cargo install tauri-cli --locked
+          else
+            echo "Tauri CLI already installed"
+            cargo tauri --version
+          fi
 
       - name: Install frontend dependencies
         run: npm ci
