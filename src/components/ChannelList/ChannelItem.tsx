@@ -8,11 +8,6 @@ interface ChannelItemProps {
 }
 
 export function ChannelItem({ channel, onEdit, onDelete, onToggle }: ChannelItemProps) {
-  const platformColors = {
-    twitch: "bg-purple-100 text-purple-800",
-    youtube: "bg-red-100 text-red-800",
-  };
-
   const platformNames = {
     twitch: "Twitch",
     youtube: "YouTube",
