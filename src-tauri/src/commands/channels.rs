@@ -153,7 +153,7 @@ pub async fn list_channels(app_handle: AppHandle) -> Result<Vec<Channel>, String
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
     let mut stmt = conn
-        .prepare("SELECT id, platform, channel_id, channel_name, enabled, poll_interval, created_at, updated_at FROM channels ORDER BY created_at DESC")
+        .prepare("SELECT id, platform, channel_id, channel_name, enabled, poll_interval, CAST(created_at AS VARCHAR) as created_at, CAST(updated_at AS VARCHAR) as updated_at FROM channels ORDER BY created_at DESC")
         .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
     let channels: Result<Vec<Channel>, _> = stmt
@@ -216,7 +216,7 @@ pub async fn toggle_channel(app_handle: AppHandle, id: i64) -> Result<Channel, S
 
 fn get_channel_by_id(conn: &Connection, id: i64) -> Option<Channel> {
     let mut stmt = conn
-        .prepare("SELECT id, platform, channel_id, channel_name, enabled, poll_interval, created_at, updated_at FROM channels WHERE id = ?")
+        .prepare("SELECT id, platform, channel_id, channel_name, enabled, poll_interval, CAST(created_at AS VARCHAR) as created_at, CAST(updated_at AS VARCHAR) as updated_at FROM channels WHERE id = ?")
         .ok()?;
 
     let id_str = id.to_string();

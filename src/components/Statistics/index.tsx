@@ -103,9 +103,12 @@ export function Statistics() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">統計閲覧</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">統計閲覧</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">過去の統計データを閲覧・分析</p>
+        </div>
         <DateRangePicker
           startDate={dateRange.start}
           endDate={dateRange.end}
@@ -117,40 +120,40 @@ export function Statistics() {
       <div className="flex space-x-2">
         <button
           onClick={() => setViewMode('overview')}
-          className={`px-4 py-2 rounded-md text-sm font-medium ${
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
             viewMode === 'overview'
-              ? 'bg-blue-100 text-blue-800'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-md'
+              : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600'
           }`}
         >
           概要
         </button>
         <button
           onClick={() => setViewMode('channel')}
-          className={`px-4 py-2 rounded-md text-sm font-medium ${
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
             viewMode === 'channel'
-              ? 'bg-blue-100 text-blue-800'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-md'
+              : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600'
           }`}
         >
           チャンネル別
         </button>
         <button
           onClick={() => setViewMode('session')}
-          className={`px-4 py-2 rounded-md text-sm font-medium ${
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
             viewMode === 'session'
-              ? 'bg-blue-100 text-blue-800'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-md'
+              : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600'
           }`}
         >
           セッション別
         </button>
         <button
           onClick={() => setViewMode('chat')}
-          className={`px-4 py-2 rounded-md text-sm font-medium ${
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
             viewMode === 'chat'
-              ? 'bg-blue-100 text-blue-800'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-md'
+              : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600'
           }`}
         >
           チャット分析
@@ -159,14 +162,14 @@ export function Statistics() {
 
       {/* チャンネル選択（チャンネル別ビュー時） */}
       {(viewMode === 'channel' || viewMode === 'session') && (
-        <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div className="card p-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             チャンネル選択
           </label>
           <select
             value={selectedChannelId || ''}
             onChange={(e) => setSelectedChannelId(e.target.value ? parseInt(e.target.value) : null)}
-            className="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="input-field w-full max-w-xs"
           >
             <option value="">すべてのチャンネル</option>
             {channels?.map((channel) => (
@@ -182,8 +185,8 @@ export function Statistics() {
       {viewMode === 'overview' && (
         <div className="space-y-6">
           {/* 視聴者数推移グラフ */}
-          <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">視聴者数推移</h3>
+          <div className="card p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">視聴者数推移</h3>
             {chartData.length > 0 ? (
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
@@ -203,29 +206,36 @@ export function Statistics() {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-80 flex items-center justify-center text-gray-500">
+              <div className="h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
                 データがありません
               </div>
             )}
           </div>
 
           {/* チャット速度グラフ */}
-          <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">チャット速度推移</h3>
+          <div className="card p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">チャット速度推移</h3>
             {chartData.length > 0 ? (
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis />
-                    <Tooltip />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="time" stroke="#64748b" style={{ fontSize: '12px' }} />
+                    <YAxis stroke="#64748b" style={{ fontSize: '12px' }} />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      }}
+                    />
                     <Bar dataKey="chatRate" fill="#10b981" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-80 flex items-center justify-center text-gray-500">
+              <div className="h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
                 データがありません
               </div>
             )}
@@ -255,7 +265,7 @@ export function Statistics() {
       )}
 
       {/* データ件数表示 */}
-      <div className="text-sm text-gray-500 text-center">
+      <div className="text-sm text-gray-500 dark:text-gray-400 text-center">
         期間: {dateRange.start} 〜 {dateRange.end} |
         データ件数: {stats?.length || 0}件
       </div>

@@ -78,7 +78,7 @@ pub async fn get_live_channels(
 
     let sql = r#"
         SELECT 
-            c.id, c.platform, c.channel_id, c.channel_name, c.enabled, c.poll_interval, c.created_at, c.updated_at,
+            c.id, c.platform, c.channel_id, c.channel_name, c.enabled, c.poll_interval, CAST(c.created_at AS VARCHAR) as created_at, CAST(c.updated_at AS VARCHAR) as updated_at,
             CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END as is_live,
             ss.viewer_count as current_viewers,
             s.title as current_title

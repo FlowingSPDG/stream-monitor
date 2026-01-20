@@ -123,10 +123,11 @@ impl ChannelPoller {
     }
 
     fn get_channel(conn: &Connection, channel_id: i64) -> Result<Option<Channel>, duckdb::Error> {
-        let mut stmt = conn.prepare("SELECT id, platform, channel_id, channel_name, enabled, poll_interval, created_at, updated_at FROM channels WHERE id = ?")?;
+        let mut stmt = conn.prepare("SELECT id, platform, channel_id, channel_name, enabled, poll_interval, CAST(created_at AS VARCHAR) as created_at, CAST(updated_at AS VARCHAR) as updated_at FROM channels WHERE id = ?")?;
 
+        let channel_id_str = channel_id.to_string();
         let rows: Result<Vec<_>, _> = stmt
-            .query_map([channel_id], |row| {
+            .query_map([channel_id_str.as_str()], |row| {
                 Ok(Channel {
                     id: Some(row.get(0)?),
                     platform: row.get(1)?,

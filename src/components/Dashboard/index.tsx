@@ -132,6 +132,8 @@ export function Dashboard() {
       return await invoke<ChannelWithStats[]>("get_live_channels");
     },
     refetchInterval: 30000, // 30秒ごとに更新
+    staleTime: 10000, // 10秒間はキャッシュを使用
+    gcTime: 60000, // 1分間キャッシュを保持
   });
 
   // 最新の統計データを取得

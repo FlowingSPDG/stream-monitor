@@ -103,4 +103,7 @@ jobs:
 
       - name: Build Tauri app (no bundle)
         working-directory: src-tauri
+        env:
+          # WindowsでのDuckDBビルド最適化
+          DUCKDB_BUILD_SINGLE_THREADED: 1
         run: cargo tauri build --target ${{ matrix.target }} --no-bundle || echo "Build check completed (bundle skipped)"

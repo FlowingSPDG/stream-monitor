@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Settings } from "./components/Settings";
 import { Dashboard } from "./components/Dashboard";
@@ -7,6 +7,7 @@ import { Statistics } from "./components/Statistics";
 import { Export } from "./components/Export";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import { SplashScreen } from "./components/common/SplashScreen";
+import { useThemeStore } from "./stores/themeStore";
 import "./App.css";
 
 const queryClient = new QueryClient();
@@ -16,6 +17,21 @@ type Tab = "dashboard" | "channels" | "statistics" | "export" | "settings";
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [showSplash, setShowSplash] = useState(true);
+  const { theme } = useThemeStore();
+
+  useEffect(() => {
+    // テーマを適用
+    const root = document.documentElement;
+    const effectiveTheme = theme === 'system' 
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : theme;
+    
+    if (effectiveTheme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [theme]);
 
   const tabs: { id: Tab; label: string; component: React.ReactNode }[] = [
     {
