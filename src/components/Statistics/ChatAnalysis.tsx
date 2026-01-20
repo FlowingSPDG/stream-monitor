@@ -50,10 +50,9 @@ export function ChatAnalysis({ dateRange, selectedChannelId }: ChatAnalysisProps
       const query: ChatStatsQuery = {
         start_time: new Date(dateRange.start).toISOString(),
         end_time: new Date(dateRange.end + 'T23:59:59').toISOString(),
+        channel_id: selectedChannelId || undefined,
+        stream_id: selectedStreamId || undefined,
       };
-
-      if (selectedChannelId) query.channel_id = selectedChannelId;
-      if (selectedStreamId) query.stream_id = selectedStreamId;
 
       return await invoke<ChatStats>("get_chat_stats", { query });
     },
@@ -67,22 +66,21 @@ export function ChatAnalysis({ dateRange, selectedChannelId }: ChatAnalysisProps
         start_time: new Date(dateRange.start).toISOString(),
         end_time: new Date(dateRange.end + 'T23:59:59').toISOString(),
         interval_minutes: 5,
+        channel_id: selectedChannelId || undefined,
+        stream_id: selectedStreamId || undefined,
       };
-
-      if (selectedChannelId) query.channel_id = selectedChannelId;
-      if (selectedStreamId) query.stream_id = selectedStreamId;
 
       return await invoke<ChatRateData[]>("get_chat_rate", { query });
     },
   });
 
-  // チャンネル一覧取得（ストリーム選択用）
-  const { data: channels } = useQuery({
-    queryKey: ["channels"],
-    queryFn: async () => {
-      return await invoke<Array<{ id: number; channel_name: string; platform: string }>>("list_channels");
-    },
-  });
+  // チャンネル一覧取得（ストリーム選択用）- 将来的に使用予定
+  // const { data: channels } = useQuery({
+  //   queryKey: ["channels"],
+  //   queryFn: async () => {
+  //     return await invoke<Array<{ id: number; channel_name: string; platform: string }>>("list_channels");
+  //   },
+  // });
 
   if (statsLoading || ratesLoading) {
     return (

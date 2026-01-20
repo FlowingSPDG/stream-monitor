@@ -47,22 +47,25 @@ export function Statistics() {
 
   // チャート用データ変換（メモ化）
   const chartData = useMemo(() => {
-    return stats?.map(stat => ({
-      time: new Date(stat.collected_at).toLocaleString('ja-JP', {
+    return stats?.map(stat => {
+      const time = new Date(stat.collected_at).toLocaleString('ja-JP', {
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
-      }),
-      viewers: stat.viewer_count || 0,
-      chatRate: stat.chat_rate_1min,
-    })) || [];
+      });
+      return {
+        time,
+        viewers: stat.viewer_count || 0,
+        chatRate: stat.chat_rate_1min,
+      };
+    }) || [];
   }, [stats]);
 
   // チャンネル別統計データ（メモ化）
   const channelStats = useMemo(() => {
     return channels?.map(channel => {
-      const channelStatsData = stats?.filter(stat => {
+      const channelStatsData = stats?.filter(_stat => {
         // 実際のデータ構造に基づいてフィルタリング（stream_idからchannel_idを取得する必要がある）
         // 現時点では簡易的な実装
         return true;

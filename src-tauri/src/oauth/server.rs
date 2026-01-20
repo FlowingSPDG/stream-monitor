@@ -157,6 +157,7 @@ impl OAuthServer {
         }
     }
 
+    #[allow(dead_code)]
     pub fn callback_url(&self) -> String {
         format!("http://localhost:{}/callback", self.port)
     }

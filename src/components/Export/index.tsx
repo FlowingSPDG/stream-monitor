@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Channel } from "../../types";
 import { ExportForm } from "./ExportForm";
 
-type ExportFormat = 'csv' | 'json' | 'parquet';
+type ExportFormat = 'csv' | 'json';
 type AggregationType = 'raw' | '1min' | '5min' | '1hour';
 
 interface ExportConfig {
@@ -64,13 +64,6 @@ export function Export() {
     },
   });
 
-  // Parquetエクスポートミューテーション（実装予定）
-  const parquetExportMutation = useMutation({
-    mutationFn: async (_config: ExportConfig) => {
-      // TODO: Parquetエクスポート実装
-      throw new Error("Parquetエクスポートはまだ実装されていません");
-    },
-  });
 
   const handleExport = async () => {
     if (exportConfig.channelIds.length === 0) {
@@ -86,16 +79,13 @@ export function Export() {
         case 'json':
           await jsonExportMutation.mutateAsync(exportConfig);
           break;
-        case 'parquet':
-          await parquetExportMutation.mutateAsync(exportConfig);
-          break;
       }
     } catch (error) {
       console.error("Export failed:", error);
     }
   };
 
-  const isExporting = csvExportMutation.isPending || jsonExportMutation.isPending || parquetExportMutation.isPending;
+  const isExporting = csvExportMutation.isPending || jsonExportMutation.isPending;
 
   return (
     <div className="p-6 space-y-6">
@@ -153,13 +143,6 @@ export function Export() {
           <div className="text-xs text-yellow-600 font-medium">🔄 開発中</div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Parquet形式</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            ビッグデータ向けの高効率形式です。大量データの保存と高速なクエリに最適です。
-          </p>
-          <div className="text-xs text-yellow-600 font-medium">🔄 開発中</div>
-        </div>
       </div>
 
       {/* 集計オプションの説明 */}
@@ -188,7 +171,6 @@ export function Export() {
           <li>• 大量のデータをエクスポートする場合、時間がかかる可能性があります</li>
           <li>• エクスポートしたデータはローカル環境に保存されます</li>
           <li>• チャットデータを含む場合、ファイルサイズが大きくなる可能性があります</li>
-          <li>• JSON/Parquet形式は現在開発中です</li>
         </ul>
       </div>
     </div>

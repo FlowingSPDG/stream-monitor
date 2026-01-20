@@ -3,6 +3,7 @@ export interface Channel {
   platform: 'twitch' | 'youtube';
   channel_id: string;
   channel_name: string;
+  display_name?: string;
   enabled: boolean;
   poll_interval: number;
   created_at?: string;

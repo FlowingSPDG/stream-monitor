@@ -1,11 +1,15 @@
 use crate::collectors::collector_trait::Collector;
-use crate::database::{get_connection, models::{Channel, Stream, StreamStats}, writer::DatabaseWriter};
+use crate::database::{
+    get_connection,
+    models::{Channel, Stream, StreamStats},
+    writer::DatabaseWriter,
+};
+use chrono::Utc;
 use duckdb::Connection;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::time::{interval, Duration, MissedTickBehavior};
-use chrono::Utc;
 
 pub struct ChannelPoller {
     app_handle: AppHandle,
@@ -92,7 +96,10 @@ impl ChannelPoller {
                     Ok(Some(stats)) => {
                         // ストリーム情報をデータベースに保存
                         if let Err(e) = Self::save_stream_stats(&conn, channel_id, &stats) {
-                            eprintln!("Failed to save stream stats for channel {}: {}", channel_id, e);
+                            eprintln!(
+                                "Failed to save stream stats for channel {}: {}",
+                                channel_id, e
+                            );
                         }
                     }
                     Ok(None) => {
@@ -125,6 +132,7 @@ impl ChannelPoller {
                     platform: row.get(1)?,
                     channel_id: row.get(2)?,
                     channel_name: row.get(3)?,
+                    display_name: None,
                     enabled: row.get(4)?,
                     poll_interval: row.get(5)?,
                     created_at: Some(row.get(6)?),
@@ -140,7 +148,11 @@ impl ChannelPoller {
     }
 
     /// ストリーム統計情報をデータベースに保存する
-    fn save_stream_stats(conn: &Connection, channel_id: i64, stats: &StreamStats) -> Result<(), Box<dyn std::error::Error>> {
+    fn save_stream_stats(
+        conn: &Connection,
+        channel_id: i64,
+        stats: &StreamStats,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // ストリームを作成または更新（現在は簡易実装：channel_id + timestampをstream_idとして使用）
         let stream_id = format!("{}_{}", channel_id, Utc::now().timestamp());
 
@@ -148,8 +160,8 @@ impl ChannelPoller {
             id: None,
             channel_id,
             stream_id: stream_id.clone(),
-            title: None, // 現在はタイトル情報なし
-            category: None, // 現在はカテゴリ情報なし
+            title: None,         // 現在はタイトル情報なし
+            category: None,      // 現在はカテゴリ情報なし
             thumbnail_url: None, // 現在はサムネイル情報なし
             started_at: stats.collected_at.clone(),
             ended_at: None, // ライブ中なのでNone
@@ -169,54 +181,60 @@ impl ChannelPoller {
     }
 
     /// チャット収集を開始する（ストリーム開始時に呼び出し）
-    pub async fn start_chat_collection(&self, channel: &Channel, stream_id: i64, video_id: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-        match channel.platform.as_str() {
-            "twitch" => {
-                // Twitch IRCチャット収集を開始
-                if let Some(twitch_collector) = self.collectors.get("twitch") {
-                    if let Ok(twitch_collector) = twitch_collector.as_ref().downcast_ref::<crate::collectors::twitch::TwitchCollector>() {
-                        // TODO: アクセストークンを取得して渡す
-                        twitch_collector.start_chat_collection(stream_id, &channel.channel_name, "oauth_token_here").await?;
-                    }
-                }
-            }
-            "youtube" => {
-                // YouTube Live Chat収集を開始
-                if let Some(youtube_collector) = self.collectors.get("youtube") {
-                    if let Ok(youtube_collector) = youtube_collector.as_ref().downcast_ref::<crate::collectors::youtube::YouTubeCollector>() {
-                        if let Some(video_id) = video_id {
-                            youtube_collector.start_chat_collection(stream_id, video_id, 30).await?; // 30秒間隔
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
+    /// TODO: チャット機能実装中
+    #[allow(dead_code)]
+    pub async fn start_chat_collection(
+        &self,
+        _channel: &Channel,
+        _stream_id: i64,
+        _video_id: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // チャット機能は現在無効化中
+        // match channel.platform.as_str() {
+        //     "twitch" => {
+        //         if let Some(twitch_collector) = self.collectors.get("twitch") {
+        //             if let Ok(twitch_collector) = twitch_collector.as_ref().downcast_ref::<crate::collectors::twitch::TwitchCollector>() {
+        //                 twitch_collector.start_chat_collection(stream_id, &channel.channel_name, "oauth_token_here").await?;
+        //             }
+        //         }
+        //     }
+        //     "youtube" => {
+        //         if let Some(youtube_collector) = self.collectors.get("youtube") {
+        //             if let Ok(youtube_collector) = youtube_collector.as_ref().downcast_ref::<crate::collectors::youtube::YouTubeCollector>() {
+        //                 if let Some(video_id) = video_id {
+        //                     youtube_collector.start_chat_collection(stream_id, video_id, 30).await?;
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     _ => {}
+        // }
         Ok(())
     }
 
     /// チャット収集を停止する（ストリーム終了時に呼び出し）
-    pub async fn stop_chat_collection(&self, channel: &Channel, video_id: Option<&str>) {
-        match channel.platform.as_str() {
-            "twitch" => {
-                // Twitch IRCチャット収集を停止
-                if let Some(twitch_collector) = self.collectors.get("twitch") {
-                    if let Ok(twitch_collector) = twitch_collector.as_ref().downcast_ref::<crate::collectors::twitch::TwitchCollector>() {
-                        twitch_collector.stop_chat_collection(&channel.channel_name).await;
-                    }
-                }
-            }
-            "youtube" => {
-                // YouTube Live Chat収集を停止
-                if let Some(youtube_collector) = self.collectors.get("youtube") {
-                    if let Ok(youtube_collector) = youtube_collector.as_ref().downcast_ref::<crate::collectors::youtube::YouTubeCollector>() {
-                        if let Some(video_id) = video_id {
-                            youtube_collector.stop_chat_collection(video_id).await;
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
+    /// TODO: チャット機能実装中
+    #[allow(dead_code)]
+    pub async fn stop_chat_collection(&self, _channel: &Channel, _video_id: Option<&str>) {
+        // チャット機能は現在無効化中
+        // match channel.platform.as_str() {
+        //     "twitch" => {
+        //         if let Some(twitch_collector) = self.collectors.get("twitch") {
+        //             if let Ok(twitch_collector) = twitch_collector.as_ref().downcast_ref::<crate::collectors::twitch::TwitchCollector>() {
+        //                 twitch_collector.stop_chat_collection(&channel.channel_name).await;
+        //             }
+        //         }
+        //     }
+        //     "youtube" => {
+        //         if let Some(youtube_collector) = self.collectors.get("youtube") {
+        //             if let Ok(youtube_collector) = youtube_collector.as_ref().downcast_ref::<crate::collectors::youtube::YouTubeCollector>() {
+        //                 if let Some(video_id) = video_id {
+        //                     youtube_collector.stop_chat_collection(video_id).await;
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     _ => {}
+        // }
     }
 }

@@ -9,6 +9,7 @@ use tungstenite::protocol::Message;
 use url::Url;
 
 /// Twitch IRC接続管理構造体
+#[allow(dead_code)]
 pub struct TwitchIrcClient {
     stream_id: i64,
     channel_name: String,
@@ -16,6 +17,7 @@ pub struct TwitchIrcClient {
     shutdown_tx: Option<mpsc::UnboundedSender<()>>,
 }
 
+#[allow(dead_code)]
 impl TwitchIrcClient {
     pub fn new(stream_id: i64, channel_name: String, access_token: String) -> Self {
         Self {
@@ -39,30 +41,69 @@ impl TwitchIrcClient {
         let (mut socket, _response) = connect(url)?;
 
         // 認証
-        socket.write_message(Message::Text(format!("PASS oauth:{}", self.access_token)))?;
-        socket.write_message(Message::Text("NICK justinfan12345".to_string()))?;
-        socket.write_message(Message::Text(format!("JOIN #{}", self.channel_name)))?;
+        socket.send(Message::Text(format!("PASS oauth:{}", self.access_token)))?;
+        socket.send(Message::Text("NICK justinfan12345".to_string()))?;
+        socket.send(Message::Text(format!("JOIN #{}", self.channel_name)))?;
 
         println!("Connected to Twitch IRC for channel: {}", self.channel_name);
 
+        let channel_name = self.channel_name.clone();
+        let stream_id = self.stream_id;
+        let socket = Arc::new(tokio::sync::Mutex::new(socket));
+
         loop {
+            let socket_clone = Arc::clone(&socket);
             tokio::select! {
-                message = tokio::task::spawn_blocking(move || socket.read_message()) => {
+                message = tokio::task::spawn_blocking(move || {
+                    let mut socket = socket_clone.blocking_lock();
+                    socket.read()
+                }) => {
                     match message?? {
                         Message::Text(text) => {
                             // デバッグログ（本番環境では削除）
                             if text.contains("PRIVMSG") {
-                                println!("Received chat message for channel: {}", self.channel_name);
+                                println!("Received chat message for channel: {}", channel_name);
                             }
 
-                            if let Some(chat_message) = self.parse_irc_message(&text) {
+                            let chat_message_opt = {
+                                let text_clone = text.clone();
+                                // parse_irc_messageは&selfを必要とするが、ここではselfにアクセスできない
+                                // 一時的な解決策として、直接パースする
+                                if let Some(privmsg_start) = text_clone.find("PRIVMSG") {
+                                    let after_privmsg = &text_clone[privmsg_start..];
+                                    if let Some(user_end) = text_clone.find('!') {
+                                        let user_name = text_clone[1..user_end].to_string();
+                                        if let Some(msg_start) = after_privmsg.find(" :") {
+                                            let message_content = after_privmsg[msg_start + 2..].to_string();
+                                            Some(ChatMessage {
+                                                id: None,
+                                                stream_id,
+                                                timestamp: Utc::now().to_rfc3339(),
+                                                platform: "twitch".to_string(),
+                                                user_id: None,
+                                                user_name,
+                                                message: message_content,
+                                                message_type: "normal".to_string(),
+                                            })
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            };
+
+                            if let Some(chat_message) = chat_message_opt {
                                 let conn = db_conn.lock().await;
                                 match DatabaseWriter::insert_chat_message(&conn, &chat_message) {
                                     Ok(_) => {
                                         // 正常に保存された場合は何もしない
                                     }
                                     Err(e) => {
-                                        eprintln!("Failed to save chat message for channel {}: {}", self.channel_name, e);
+                                        eprintln!("Failed to save chat message for channel {}: {}", channel_name, e);
                                         // エラーが発生しても接続を継続
                                     }
                                 }
@@ -71,21 +112,32 @@ impl TwitchIrcClient {
                             // PINGに応答して接続を維持
                             if text.starts_with("PING") {
                                 let pong_response = "PONG :tmi.twitch.tv\r\n".to_string();
-                                if let Err(e) = socket.write_message(Message::Text(pong_response)) {
-                                    eprintln!("Failed to send PONG for channel {}: {}", self.channel_name, e);
-                                    break;
+                                let socket_clone = Arc::clone(&socket);
+                                match tokio::task::spawn_blocking(move || {
+                                    let mut socket = socket_clone.blocking_lock();
+                                    socket.send(Message::Text(pong_response))
+                                }).await {
+                                    Ok(Ok(_)) => {}
+                                    Ok(Err(e)) => {
+                                        eprintln!("Failed to send PONG for channel {}: {}", channel_name, e);
+                                        break;
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Failed to spawn blocking task for PONG: {}", e);
+                                        break;
+                                    }
                                 }
                             }
                         }
                         Message::Close(_) => {
-                            println!("Twitch IRC connection closed for channel: {}", self.channel_name);
+                            println!("Twitch IRC connection closed for channel: {}", channel_name);
                             break;
                         }
                         _ => {}
                     }
                 }
                 _ = shutdown_rx.recv() => {
-                    println!("Shutting down Twitch IRC connection for channel: {}", self.channel_name);
+                    println!("Shutting down Twitch IRC connection for channel: {}", channel_name);
                     break;
                 }
             }
@@ -134,11 +186,13 @@ impl TwitchIrcClient {
 }
 
 /// 複数のTwitch IRC接続を管理するマネージャー
+#[allow(dead_code)]
 pub struct TwitchIrcManager {
     connections: Arc<Mutex<std::collections::HashMap<String, TwitchIrcClient>>>,
     db_conn: Arc<Mutex<duckdb::Connection>>,
 }
 
+#[allow(dead_code)]
 impl TwitchIrcManager {
     pub fn new(db_conn: Arc<Mutex<duckdb::Connection>>) -> Self {
         Self {
@@ -160,7 +214,7 @@ impl TwitchIrcManager {
             return Ok(()); // 既に接続中
         }
 
-        let mut client = TwitchIrcClient::new(
+        let client = TwitchIrcClient::new(
             stream_id,
             channel_name.to_string(),
             access_token.to_string(),
@@ -168,10 +222,18 @@ impl TwitchIrcManager {
 
         let db_conn_clone = Arc::clone(&self.db_conn);
         let channel_name_clone = channel_name.to_string();
+        let mut client_for_task = TwitchIrcClient::new(
+            stream_id,
+            channel_name.to_string(),
+            access_token.to_string(),
+        );
 
         tokio::spawn(async move {
-            if let Err(e) = client.connect_and_collect(db_conn_clone).await {
-                eprintln!("Twitch IRC collection failed for {}: {}", channel_name_clone, e);
+            if let Err(e) = client_for_task.connect_and_collect(db_conn_clone).await {
+                eprintln!(
+                    "Twitch IRC collection failed for {}: {}",
+                    channel_name_clone, e
+                );
             }
         });
 

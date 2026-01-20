@@ -78,6 +78,51 @@ where
     }
 }
 
+pub fn query_row_with_params<T, F>(
+    conn: &Connection,
+    sql: &str,
+    params: &[String],
+    f: F,
+) -> DuckResult<T>
+where
+    F: FnOnce(&duckdb::Row) -> DuckResult<T>,
+{
+    match params.len() {
+        0 => conn.query_row(sql, [], f),
+        1 => conn.query_row(sql, [params[0].as_str()], f),
+        2 => conn.query_row(sql, [params[0].as_str(), params[1].as_str()], f),
+        3 => conn.query_row(
+            sql,
+            [params[0].as_str(), params[1].as_str(), params[2].as_str()],
+            f,
+        ),
+        4 => conn.query_row(
+            sql,
+            [
+                params[0].as_str(),
+                params[1].as_str(),
+                params[2].as_str(),
+                params[3].as_str(),
+            ],
+            f,
+        ),
+        5 => conn.query_row(
+            sql,
+            [
+                params[0].as_str(),
+                params[1].as_str(),
+                params[2].as_str(),
+                params[3].as_str(),
+                params[4].as_str(),
+            ],
+            f,
+        ),
+        _ => Err(duckdb::Error::InvalidParameterName(
+            "Too many parameters (max 5 supported)".to_string(),
+        )),
+    }
+}
+
 /// RowからChatMessageを作成するヘルパー関数
 pub fn row_to_chat_message(row: &Row) -> DuckResult<ChatMessage> {
     Ok(ChatMessage {

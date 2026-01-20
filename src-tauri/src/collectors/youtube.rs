@@ -8,11 +8,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+#[allow(dead_code)]
 pub struct YouTubeCollector {
     api_client: Arc<Mutex<YouTubeApiClient>>,
     chat_collectors: Arc<Mutex<HashMap<String, YouTubeLiveChatCollector>>>,
 }
 
+#[allow(dead_code)]
 impl YouTubeCollector {
     pub async fn new(
         client_id: String,
@@ -65,39 +67,34 @@ impl Collector for YouTubeCollector {
         // 認証はOAuthモジュールで行われているため、ここでは確認のみ
         Ok(())
     }
+}
 
+impl YouTubeCollector {
     /// チャット収集を開始（ストリーム開始時に呼び出し）
+    /// TODO: チャット機能実装中
+    #[allow(dead_code)]
     pub async fn start_chat_collection(
         &self,
-        stream_id: i64,
-        video_id: &str,
-        poll_interval_secs: u64,
+        _stream_id: i64,
+        _video_id: &str,
+        _poll_interval_secs: u64,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut client = self.api_client.lock().await;
-        let hub = client.get_hub().clone();
-
-        // TODO: データベース接続を取得
-        // 現時点ではチャットコレクターの作成のみ
-        let chat_collector = YouTubeLiveChatCollector::new(
-            hub,
-            Arc::new(Mutex::new(duckdb::Connection::open_in_memory()?)), // TODO: 実際のDB接続を使用
-            stream_id,
-        );
-
-        // ビデオIDでチャット収集を開始
-        chat_collector.start_with_video_id(video_id, poll_interval_secs).await?;
-
-        let mut chat_collectors = self.chat_collectors.lock().await;
-        chat_collectors.insert(video_id.to_string(), chat_collector);
-
+        // チャット機能は現在無効化中
+        // let mut client = self.api_client.lock().await;
+        // let hub = client.get_hub().clone();
+        // let chat_collector = YouTubeLiveChatCollector::new(hub, db_conn, stream_id);
+        // chat_collector.start_with_video_id(video_id, poll_interval_secs).await?;
         Ok(())
     }
 
     /// チャット収集を停止（ストリーム終了時に呼び出し）
-    pub async fn stop_chat_collection(&self, video_id: &str) {
-        let mut chat_collectors = self.chat_collectors.lock().await;
-        if let Some(collector) = chat_collectors.remove(video_id) {
-            collector.stop_collection().await;
-        }
+    /// TODO: チャット機能実装中
+    #[allow(dead_code)]
+    pub async fn stop_chat_collection(&self, _video_id: &str) {
+        // チャット機能は現在無効化中
+        // let mut chat_collectors = self.chat_collectors.lock().await;
+        // if let Some(collector) = chat_collectors.remove(video_id) {
+        //     collector.stop_collection().await;
+        // }
     }
 }

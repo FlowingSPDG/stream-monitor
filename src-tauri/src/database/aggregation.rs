@@ -1,11 +1,12 @@
-use crate::database::models::{StreamStats, ChatMessage};
+use crate::database::models::{ChatMessage, StreamStats};
+use chrono::TimeZone;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// 集計されたストリーム統計データ
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregatedStreamStats {
-    pub timestamp: String, // 集計期間の開始時刻
+    pub timestamp: String,     // 集計期間の開始時刻
     pub interval_minutes: i32, // 集計間隔（分）
     pub avg_viewer_count: Option<f64>,
     pub max_viewer_count: Option<i32>,
@@ -17,7 +18,7 @@ pub struct AggregatedStreamStats {
 /// 集計されたチャット統計データ
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregatedChatStats {
-    pub timestamp: String, // 集計期間の開始時刻
+    pub timestamp: String,     // 集計期間の開始時刻
     pub interval_minutes: i32, // 集計間隔（分）
     pub message_count: i64,
     pub unique_users: i64,
@@ -45,7 +46,7 @@ impl DataAggregator {
 
         for stat in &sorted_stats {
             let interval_start = Self::get_interval_start(&stat.collected_at, interval_minutes);
-            grouped_data.entry(interval_start).or_insert_with(Vec::new).push(stat);
+            grouped_data.entry(interval_start).or_default().push(stat);
         }
 
         // 各グループを集計
@@ -63,6 +64,12 @@ impl DataAggregator {
     }
 
     /// チャットメッセージデータを指定した間隔で集計
+    ///
+    /// # 注意
+    /// この関数は現在、テストでのみ使用されています。
+    /// 実際のコマンド（`chat.rs`など）では直接SQLで集計を行っています。
+    /// 将来的にチャット集計機能を実装する際に使用予定です。
+    #[allow(dead_code)]
     pub fn aggregate_chat_messages(
         messages: &[ChatMessage],
         interval_minutes: i32,
@@ -80,11 +87,14 @@ impl DataAggregator {
 
         for message in &sorted_messages {
             let interval_start = Self::get_interval_start(&message.timestamp, interval_minutes);
-            grouped_data.entry(interval_start).or_insert_with(Vec::new).push(message);
+            grouped_data
+                .entry(interval_start)
+                .or_default()
+                .push(message);
         }
 
         // 各グループを集計
-        let mut result: AggregatedChatStats> = grouped_data
+        let mut result: Vec<AggregatedChatStats> = grouped_data
             .into_iter()
             .map(|(timestamp, group_messages)| {
                 Self::aggregate_chat_messages_group(&timestamp, interval_minutes, &group_messages)
@@ -105,10 +115,14 @@ impl DataAggregator {
 
             // 分単位で丸める
             let minutes_since_epoch = dt_utc.timestamp() / 60;
-            let interval_start_minutes = (minutes_since_epoch / interval_minutes as i64) * interval_minutes as i64;
-            let interval_start = chrono::Utc.timestamp_opt(interval_start_minutes * 60, 0).unwrap();
+            let interval_start_minutes =
+                (minutes_since_epoch / interval_minutes as i64) * interval_minutes as i64;
+            let interval_start = chrono::Utc
+                .timestamp_opt(interval_start_minutes * 60, 0)
+                .unwrap();
 
-            interval_start.to_rfc3339()
+            // RFC3339形式で出力（+00:00をZに変換）
+            interval_start.to_rfc3339().replace("+00:00", "Z")
         } else {
             // パース失敗時は元のタイムスタンプを返す
             timestamp.to_string()
@@ -124,10 +138,7 @@ impl DataAggregator {
         let data_points = stats.len() as i32;
 
         // 視聴者数の統計
-        let viewer_counts: Vec<i32> = stats
-            .iter()
-            .filter_map(|stat| stat.viewer_count)
-            .collect();
+        let viewer_counts: Vec<i32> = stats.iter().filter_map(|stat| stat.viewer_count).collect();
 
         let avg_viewer_count = if viewer_counts.is_empty() {
             None
@@ -139,7 +150,10 @@ impl DataAggregator {
         let min_viewer_count = viewer_counts.iter().min().copied();
 
         // チャットレートの平均
-        let chat_rates: Vec<f64> = stats.iter().map(|stat| stat.chat_rate_1min as f64).collect();
+        let chat_rates: Vec<f64> = stats
+            .iter()
+            .map(|stat| stat.chat_rate_1min as f64)
+            .collect();
         let chat_rate_avg = if chat_rates.is_empty() {
             0.0
         } else {
@@ -158,6 +172,11 @@ impl DataAggregator {
     }
 
     /// チャットメッセージのグループを集計
+    ///
+    /// # 注意
+    /// この関数は`aggregate_chat_messages`の内部関数です。
+    /// 将来的にチャット集計機能を実装する際に使用予定です。
+    #[allow(dead_code)]
     fn aggregate_chat_messages_group(
         timestamp: &str,
         interval_minutes: i32,
@@ -200,16 +219,28 @@ impl DataAggregator {
     }
 
     /// チャットメッセージを1分間隔で集計（便利関数）
+    ///
+    /// # 注意
+    /// この関数は将来使用予定です。現在はテストでのみ使用されています。
+    #[allow(dead_code)]
     pub fn aggregate_chat_to_1min(messages: &[ChatMessage]) -> Vec<AggregatedChatStats> {
         Self::aggregate_chat_messages(messages, 1)
     }
 
     /// チャットメッセージを5分間隔で集計（便利関数）
+    ///
+    /// # 注意
+    /// この関数は将来使用予定です。現在はテストでのみ使用されています。
+    #[allow(dead_code)]
     pub fn aggregate_chat_to_5min(messages: &[ChatMessage]) -> Vec<AggregatedChatStats> {
         Self::aggregate_chat_messages(messages, 5)
     }
 
     /// チャットメッセージを1時間間隔で集計（便利関数）
+    ///
+    /// # 注意
+    /// この関数は将来使用予定です。現在はテストでのみ使用されています。
+    #[allow(dead_code)]
     pub fn aggregate_chat_to_1hour(messages: &[ChatMessage]) -> Vec<AggregatedChatStats> {
         Self::aggregate_chat_messages(messages, 60)
     }
@@ -218,7 +249,7 @@ impl DataAggregator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::models::{StreamStats, ChatMessage};
+    use crate::database::models::{ChatMessage, StreamStats};
 
     #[test]
     fn test_aggregate_stream_stats_empty() {

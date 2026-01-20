@@ -1,6 +1,12 @@
-use crate::database::{aggregation::DataAggregator, get_connection, models::{ChatMessage, StreamStats}, utils};
+use crate::database::{
+    aggregation::DataAggregator,
+    get_connection,
+    models::{ChatMessage, StreamStats},
+    utils,
+};
 use duckdb::Connection;
 use serde::{Deserialize, Serialize};
+use serde_json;
 use tauri::AppHandle;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -65,7 +71,23 @@ pub async fn export_to_json(
             "1min" => DataAggregator::aggregate_to_1min(&stats),
             "5min" => DataAggregator::aggregate_to_5min(&stats),
             "1hour" => DataAggregator::aggregate_to_1hour(&stats),
-            _ => stats.into_iter().map(|s| crate::database::aggregation::AggregatedStreamStats {
+            _ => stats
+                .into_iter()
+                .map(|s| crate::database::aggregation::AggregatedStreamStats {
+                    timestamp: s.collected_at,
+                    interval_minutes: 0,
+                    avg_viewer_count: s.viewer_count.map(|v| v as f64),
+                    max_viewer_count: s.viewer_count,
+                    min_viewer_count: s.viewer_count,
+                    chat_rate_avg: s.chat_rate_1min as f64,
+                    data_points: 1,
+                })
+                .collect(),
+        }
+    } else {
+        stats
+            .into_iter()
+            .map(|s| crate::database::aggregation::AggregatedStreamStats {
                 timestamp: s.collected_at,
                 interval_minutes: 0,
                 avg_viewer_count: s.viewer_count.map(|v| v as f64),
@@ -73,34 +95,33 @@ pub async fn export_to_json(
                 min_viewer_count: s.viewer_count,
                 chat_rate_avg: s.chat_rate_1min as f64,
                 data_points: 1,
-            }).collect(),
-        }
-    } else {
-        stats.into_iter().map(|s| crate::database::aggregation::AggregatedStreamStats {
-            timestamp: s.collected_at,
-            interval_minutes: 0,
-            avg_viewer_count: s.viewer_count.map(|v| v as f64),
-            max_viewer_count: s.viewer_count,
-            min_viewer_count: s.viewer_count,
-            chat_rate_avg: s.chat_rate_1min as f64,
-            data_points: 1,
-        }).collect()
+            })
+            .collect()
     };
 
     let mut export_data = serde_json::Map::new();
-    export_data.insert("stream_stats".to_string(), serde_json::to_value(&processed_stats).unwrap());
+    export_data.insert(
+        "stream_stats".to_string(),
+        serde_json::to_value(&processed_stats).unwrap(),
+    );
 
     // チャットデータを含む場合
     if query.include_chat.unwrap_or(false) {
         let chat_messages = get_chat_messages_internal(&conn, &query)
             .map_err(|e| format!("Failed to query chat messages: {}", e))?;
 
-        export_data.insert("chat_messages".to_string(), serde_json::to_value(&chat_messages).unwrap());
+        export_data.insert(
+            "chat_messages".to_string(),
+            serde_json::to_value(&chat_messages).unwrap(),
+        );
     }
 
     // メタデータを追加
     let mut metadata = serde_json::Map::new();
-    metadata.insert("exported_at".to_string(), chrono::Utc::now().to_rfc3339().into());
+    metadata.insert(
+        "exported_at".to_string(),
+        chrono::Utc::now().to_rfc3339().into(),
+    );
     metadata.insert("total_records".to_string(), processed_stats.len().into());
     if query.include_chat.unwrap_or(false) {
         let chat_count = if let Some(chat_data) = export_data.get("chat_messages") {
@@ -124,16 +145,6 @@ pub async fn export_to_json(
         .map_err(|e| format!("Failed to write JSON file: {}", e))?;
 
     Ok(format!("Exported data to {}", file_path))
-}
-
-#[tauri::command]
-pub async fn export_to_parquet(
-    _app_handle: AppHandle,
-    _query: ExportQuery,
-    _file_path: String,
-) -> Result<String, String> {
-    // Parquetエクスポートは高度な機能のため、現時点では未実装としてエラーを返す
-    Err("Parquet export is not yet implemented. Please use CSV or JSON export.".to_string())
 }
 
 fn get_stream_stats_internal(

@@ -88,6 +88,7 @@ impl SettingsManager {
         Ok(settings)
     }
 
+    #[allow(dead_code)]
     pub fn save_settings(
         app_handle: &AppHandle,
         settings: &AppSettings,

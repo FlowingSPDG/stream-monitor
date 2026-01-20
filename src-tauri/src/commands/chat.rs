@@ -170,9 +170,9 @@ pub async fn get_chat_stats(
         where_clause
     );
 
-    let total_messages: i64 = conn
-        .query_row(&total_sql, params.clone(), |row| row.get(0))
-        .map_err(|e| format!("Failed to get total messages: {}", e))?;
+    let total_messages: i64 =
+        utils::query_row_with_params(&conn, &total_sql, &params, |row| row.get(0))
+            .map_err(|e| format!("Failed to get total messages: {}", e))?;
 
     // ユニークユーザー数を取得
     let unique_users_sql = format!(
@@ -185,9 +185,9 @@ pub async fn get_chat_stats(
         where_clause
     );
 
-    let unique_users: i64 = conn
-        .query_row(&unique_users_sql, params.clone(), |row| row.get(0))
-        .map_err(|e| format!("Failed to get unique users: {}", e))?;
+    let unique_users: i64 =
+        utils::query_row_with_params(&conn, &unique_users_sql, &params, |row| row.get(0))
+            .map_err(|e| format!("Failed to get unique users: {}", e))?;
 
     // 1分あたりのメッセージ数を計算（期間内の総メッセージ数 ÷ 期間の分数）
     let messages_per_minute = if total_messages > 0 {
@@ -204,8 +204,10 @@ pub async fn get_chat_stats(
             where_clause
         );
 
-        let (start_time, end_time): (Option<String>, Option<String>) = conn
-            .query_row(&time_range_sql, params.clone(), |row| Ok((row.get(0)?, row.get(1)?)))
+        let (start_time, end_time): (Option<String>, Option<String>) =
+            utils::query_row_with_params(&conn, &time_range_sql, &params, |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
             .unwrap_or((None, None));
 
         if let (Some(start), Some(end)) = (start_time, end_time) {
@@ -247,18 +249,15 @@ pub async fn get_chat_stats(
         .prepare(&top_users_sql)
         .map_err(|e| format!("Failed to prepare top users query: {}", e))?;
 
-    let top_users: Result<Vec<UserMessageCount>, _> = utils::query_map_with_params(
-        &mut top_users_stmt,
-        &params,
-        |row| {
+    let top_users: Result<Vec<UserMessageCount>, _> =
+        utils::query_map_with_params(&mut top_users_stmt, &params, |row| {
             Ok(UserMessageCount {
                 user_name: row.get(0)?,
                 message_count: row.get(1)?,
             })
-        },
-    )
-    .map_err(|e| format!("Failed to query top users: {}", e))?
-    .collect();
+        })
+        .map_err(|e| format!("Failed to query top users: {}", e))?
+        .collect();
 
     let top_users = top_users.map_err(|e| format!("Failed to collect top users: {}", e))?;
 
@@ -279,20 +278,18 @@ pub async fn get_chat_stats(
         .prepare(&message_types_sql)
         .map_err(|e| format!("Failed to prepare message types query: {}", e))?;
 
-    let message_types: Result<Vec<MessageTypeCount>, _> = utils::query_map_with_params(
-        &mut message_types_stmt,
-        &params,
-        |row| {
+    let message_types: Result<Vec<MessageTypeCount>, _> =
+        utils::query_map_with_params(&mut message_types_stmt, &params, |row| {
             Ok(MessageTypeCount {
                 message_type: row.get(0)?,
                 count: row.get(1)?,
             })
-        },
-    )
-    .map_err(|e| format!("Failed to query message types: {}", e))?
-    .collect();
+        })
+        .map_err(|e| format!("Failed to query message types: {}", e))?
+        .collect();
 
-    let message_types = message_types.map_err(|e| format!("Failed to collect message types: {}", e))?;
+    let message_types =
+        message_types.map_err(|e| format!("Failed to collect message types: {}", e))?;
 
     // 時間帯別分布
     let hourly_sql = format!(
@@ -313,20 +310,18 @@ pub async fn get_chat_stats(
         .prepare(&hourly_sql)
         .map_err(|e| format!("Failed to prepare hourly query: {}", e))?;
 
-    let hourly_distribution: Result<Vec<HourlyStats>, _> = utils::query_map_with_params(
-        &mut hourly_stmt,
-        &params,
-        |row| {
+    let hourly_distribution: Result<Vec<HourlyStats>, _> =
+        utils::query_map_with_params(&mut hourly_stmt, &params, |row| {
             Ok(HourlyStats {
                 hour: row.get(0)?,
                 message_count: row.get(1)?,
             })
-        },
-    )
-    .map_err(|e| format!("Failed to query hourly distribution: {}", e))?
-    .collect();
+        })
+        .map_err(|e| format!("Failed to query hourly distribution: {}", e))?
+        .collect();
 
-    let hourly_distribution = hourly_distribution.map_err(|e| format!("Failed to collect hourly distribution: {}", e))?;
+    let hourly_distribution =
+        hourly_distribution.map_err(|e| format!("Failed to collect hourly distribution: {}", e))?;
 
     Ok(ChatStats {
         total_messages,
@@ -397,19 +392,16 @@ pub async fn get_chat_rate(
         .prepare(&sql)
         .map_err(|e| format!("Failed to prepare chat rate query: {}", e))?;
 
-    let chat_rates: Result<Vec<ChatRateData>, _> = utils::query_map_with_params(
-        &mut stmt,
-        &params,
-        |row| {
+    let chat_rates: Result<Vec<ChatRateData>, _> =
+        utils::query_map_with_params(&mut stmt, &params, |row| {
             Ok(ChatRateData {
                 timestamp: row.get(0)?,
                 message_count: row.get(1)?,
                 interval_minutes,
             })
-        },
-    )
-    .map_err(|e| format!("Failed to query chat rates: {}", e))?
-    .collect();
+        })
+        .map_err(|e| format!("Failed to query chat rates: {}", e))?
+        .collect();
 
     chat_rates.map_err(|e| format!("Failed to collect chat rates: {}", e))
 }

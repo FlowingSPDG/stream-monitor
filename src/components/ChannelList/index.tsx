@@ -11,13 +11,16 @@ export function ChannelList() {
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
   const [filter, setFilter] = useState<'all' | 'twitch' | 'youtube'>('all');
 
-  const { channels, loading, error, fetchChannels } = useChannelStore();
+  const { channels, error, fetchChannels } = useChannelStore();
   const queryClient = useQueryClient();
 
   // チャンネル取得
   const { isLoading } = useQuery({
     queryKey: ["channels"],
-    queryFn: fetchChannels,
+    queryFn: async () => {
+      await fetchChannels();
+      return channels;
+    },
     initialData: channels,
   });
 

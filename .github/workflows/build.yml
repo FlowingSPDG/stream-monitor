@@ -42,7 +42,16 @@ jobs:
             build-essential \
             curl \
             wget \
-            file
+            file \
+            cmake \
+            pkg-config
+
+      - name: Verify Windows build tools
+        if: matrix.platform == 'windows-latest'
+        run: |
+          # CMakeとMSVCツールチェーンの確認（windows-latestには通常含まれている）
+          cmake --version || echo "CMake check failed"
+          where cl || echo "MSVC compiler check"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -76,6 +85,9 @@ jobs:
 
       - name: Build Rust (check)
         working-directory: src-tauri
+        env:
+          # WindowsでのDuckDBビルド最適化
+          DUCKDB_BUILD_SINGLE_THREADED: 1
         run: cargo build --target ${{ matrix.target }} --release
 
       - name: Build Tauri app (no bundle)

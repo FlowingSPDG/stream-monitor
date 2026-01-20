@@ -1,6 +1,6 @@
 import { Channel } from "../../types";
 
-type ExportFormat = 'csv' | 'json' | 'parquet';
+type ExportFormat = 'csv' | 'json';
 type AggregationType = 'raw' | '1min' | '5min' | '1hour';
 
 interface ExportConfig {
@@ -42,7 +42,6 @@ export function ExportForm({ config, onConfigChange, channels }: ExportFormProps
   const formatOptions = [
     { value: 'csv' as const, label: 'CSV', description: '表計算ソフト対応' },
     { value: 'json' as const, label: 'JSON', description: '構造化データ' },
-    { value: 'parquet' as const, label: 'Parquet', description: 'ビッグデータ対応' },
   ];
 
   const aggregationOptions = [

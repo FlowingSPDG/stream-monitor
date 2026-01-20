@@ -103,6 +103,7 @@ pub async fn get_live_channels(
                     platform: row.get(1)?,
                     channel_id: row.get(2)?,
                     channel_name: row.get(3)?,
+                    display_name: None,
                     enabled: row.get(4)?,
                     poll_interval: row.get(5)?,
                     created_at: Some(row.get(6)?),

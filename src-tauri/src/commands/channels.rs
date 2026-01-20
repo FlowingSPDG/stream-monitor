@@ -50,7 +50,10 @@ pub async fn add_channel(
         if let Some(poller) = app_handle.try_state::<Arc<Mutex<ChannelPoller>>>() {
             let mut poller = poller.lock().await;
             if let Err(e) = poller.start_polling(channel.clone()) {
-                eprintln!("Failed to start polling for new channel {}: {}", channel_id, e);
+                eprintln!(
+                    "Failed to start polling for new channel {}: {}",
+                    channel_id, e
+                );
                 // エラーが発生してもチャンネル作成は成功とする
             }
         }
@@ -89,7 +92,8 @@ pub async fn update_channel(
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
     // 更新前の状態を取得（有効状態の変更を検知するため）
-    let old_channel = get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
+    let old_channel =
+        get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
 
     let mut updates = Vec::new();
     let mut params: Vec<String> = Vec::new();
@@ -121,7 +125,8 @@ pub async fn update_channel(
     utils::execute_with_params(&conn, &query, &params)
         .map_err(|e| format!("Failed to update channel: {}", e))?;
 
-    let updated_channel = get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
+    let updated_channel =
+        get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
 
     // 有効状態が変更された場合、ポーリングを開始/停止
     if let Some(enabled) = enabled {
@@ -158,6 +163,7 @@ pub async fn list_channels(app_handle: AppHandle) -> Result<Vec<Channel>, String
                 platform: row.get(1)?,
                 channel_id: row.get(2)?,
                 channel_name: row.get(3)?,
+                display_name: None,
                 enabled: row.get(4)?,
                 poll_interval: row.get(5)?,
                 created_at: Some(row.get(6)?),
@@ -188,7 +194,8 @@ pub async fn toggle_channel(app_handle: AppHandle, id: i64) -> Result<Channel, S
     )
     .map_err(|e| format!("Failed to update channel: {}", e))?;
 
-    let updated_channel = get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
+    let updated_channel =
+        get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
 
     // ポーリングの開始/停止
     if let Some(poller) = app_handle.try_state::<Arc<Mutex<ChannelPoller>>>() {
@@ -220,6 +227,7 @@ fn get_channel_by_id(conn: &Connection, id: i64) -> Option<Channel> {
                 platform: row.get(1)?,
                 channel_id: row.get(2)?,
                 channel_name: row.get(3)?,
+                display_name: None, // TODO: データベースから取得
                 enabled: row.get(4)?,
                 poll_interval: row.get(5)?,
                 created_at: Some(row.get(6)?),

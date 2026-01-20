@@ -12,17 +12,6 @@ interface StreamSessionViewProps {
   dateRange: DateRange;
 }
 
-interface Stream {
-  id?: number;
-  channel_id: number;
-  stream_id: string;
-  title?: string;
-  category?: string;
-  thumbnail_url?: string;
-  started_at: string;
-  ended_at?: string;
-}
-
 interface StreamStats {
   id?: number;
   stream_id: number;
