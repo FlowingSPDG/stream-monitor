@@ -8,10 +8,7 @@ pub struct OAuthConfig {
 }
 
 #[tauri::command]
-pub async fn login_with_twitch(
-    config: OAuthConfig,
-    port: Option<u16>,
-) -> Result<String, String> {
+pub async fn login_with_twitch(config: OAuthConfig, port: Option<u16>) -> Result<String, String> {
     let port = port.unwrap_or(8080);
     let redirect_uri = format!("http://localhost:{}/callback", port);
 
@@ -25,10 +22,7 @@ pub async fn login_with_twitch(
 }
 
 #[tauri::command]
-pub async fn login_with_youtube(
-    config: OAuthConfig,
-    port: Option<u16>,
-) -> Result<String, String> {
+pub async fn login_with_youtube(config: OAuthConfig, port: Option<u16>) -> Result<String, String> {
     let port = port.unwrap_or(8081);
     let redirect_uri = format!("http://localhost:{}/callback", port);
 

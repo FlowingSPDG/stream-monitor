@@ -9,8 +9,8 @@ mod oauth;
 use commands::{
     channels::{add_channel, list_channels, remove_channel, toggle_channel, update_channel},
     config::{delete_token, get_token, has_token, save_token, verify_token},
-    oauth::{login_with_twitch, login_with_youtube},
     export::export_to_csv,
+    oauth::{login_with_twitch, login_with_youtube},
     stats::{get_channel_stats, get_live_channels, get_stream_stats},
 };
 

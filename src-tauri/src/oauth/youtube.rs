@@ -102,14 +102,17 @@ impl YouTubeOAuth {
         }
 
         let token_response: YouTubeTokenResponse = response.json().await?;
-        
+
         // アクセストークンを保存
         CredentialManager::save_token("youtube", &token_response.access_token)?;
 
         Ok(token_response.access_token)
     }
 
-    pub async fn authenticate(&self, server: OAuthServer) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn authenticate(
+        &self,
+        server: OAuthServer,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         // PKCE用のコード生成
         let code_verifier = Self::generate_code_verifier();
         let code_challenge = Self::generate_code_challenge(&code_verifier);
@@ -127,9 +130,7 @@ impl YouTubeOAuth {
         }
         #[cfg(target_os = "macos")]
         {
-            std::process::Command::new("open")
-                .arg(&auth_url)
-                .spawn()?;
+            std::process::Command::new("open").arg(&auth_url).spawn()?;
         }
         #[cfg(target_os = "linux")]
         {

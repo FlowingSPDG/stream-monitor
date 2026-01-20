@@ -39,8 +39,7 @@ pub async fn export_to_csv(
     }
 
     // ファイルに書き込み
-    std::fs::write(&file_path, csv)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+    std::fs::write(&file_path, csv).map_err(|e| format!("Failed to write file: {}", e))?;
 
     Ok(format!("Exported {} records to {}", stats_len, file_path))
 }
@@ -77,19 +76,16 @@ fn get_stream_stats_internal(
 
     let mut stmt = conn.prepare(&sql)?;
 
-    let stats: Result<Vec<StreamStats>, _> = utils::query_map_with_params(
-        &mut stmt,
-        &params,
-        |row| {
-                Ok(StreamStats {
-                    id: Some(row.get(0)?),
-                    stream_id: row.get(1)?,
-                    collected_at: row.get(2)?,
-                    viewer_count: row.get(3)?,
-                    chat_rate_1min: row.get(4)?,
-                })
-            },
-        )?
+    let stats: Result<Vec<StreamStats>, _> =
+        utils::query_map_with_params(&mut stmt, &params, |row| {
+            Ok(StreamStats {
+                id: Some(row.get(0)?),
+                stream_id: row.get(1)?,
+                collected_at: row.get(2)?,
+                viewer_count: row.get(3)?,
+                chat_rate_1min: row.get(4)?,
+            })
+        })?
         .collect();
 
     stats

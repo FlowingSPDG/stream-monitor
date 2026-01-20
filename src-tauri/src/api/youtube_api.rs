@@ -1,13 +1,15 @@
 use crate::config::credentials::CredentialManager;
-use google_youtube3::{hyper, hyper_rustls, hyper_util, YouTube, yup_oauth2};
+use google_youtube3::{hyper_rustls, hyper_util, yup_oauth2, YouTube};
 use hyper_util::client::legacy::connect::HttpConnector;
 use std::sync::Arc;
 
+#[allow(dead_code)]
 pub struct YouTubeApiClient {
     hub: Arc<YouTube<hyper_rustls::HttpsConnector<HttpConnector>>>,
     access_token: Option<String>,
 }
 
+#[allow(dead_code)]
 impl YouTubeApiClient {
     pub async fn new(
         client_id: String,
@@ -37,20 +39,16 @@ impl YouTubeApiClient {
             .enable_http1()
             .build();
 
-        let client = hyper_util::client::legacy::Client::builder(
-            hyper_util::rt::TokioExecutor::new()
-        )
-        .build(https_connector);
+        let client =
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                .build(https_connector);
 
         let hub = Arc::new(YouTube::new(client, auth));
 
         // 既存のトークンを取得
         let access_token = CredentialManager::get_token("youtube").ok();
 
-        Ok(Self {
-            hub,
-            access_token,
-        })
+        Ok(Self { hub, access_token })
     }
 
     // アクセストークンの取得は不要（hubに組み込まれている）
@@ -63,7 +61,11 @@ impl YouTubeApiClient {
         username: &str,
     ) -> Result<Option<google_youtube3::api::Channel>, Box<dyn std::error::Error>> {
         // 認証はhubに組み込まれているため、直接呼び出す
-        let part = vec!["id".to_string(), "snippet".to_string(), "contentDetails".to_string()];
+        let part = vec![
+            "id".to_string(),
+            "snippet".to_string(),
+            "contentDetails".to_string(),
+        ];
         let (_, response) = self
             .hub
             .channels()
@@ -110,7 +112,9 @@ impl YouTubeApiClient {
                         .doit()
                         .await?;
 
-                    return Ok(video_response.items.and_then(|items| items.into_iter().next()));
+                    return Ok(video_response
+                        .items
+                        .and_then(|items| items.into_iter().next()));
                 }
             }
         }
@@ -122,7 +126,11 @@ impl YouTubeApiClient {
         &mut self,
         channel_id: &str,
     ) -> Result<Option<google_youtube3::api::Channel>, Box<dyn std::error::Error>> {
-        let part = vec!["id".to_string(), "snippet".to_string(), "statistics".to_string()];
+        let part = vec![
+            "id".to_string(),
+            "snippet".to_string(),
+            "statistics".to_string(),
+        ];
         let (_, response) = self
             .hub
             .channels()
@@ -140,7 +148,10 @@ impl YouTubeApiClient {
         self.access_token = Some(token);
     }
 
-    pub async fn authenticate_with_token(&mut self, token: String) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn authenticate_with_token(
+        &mut self,
+        token: String,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         self.set_access_token(token);
         Ok(())
     }

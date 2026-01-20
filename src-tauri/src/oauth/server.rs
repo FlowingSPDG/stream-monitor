@@ -29,9 +29,11 @@ impl OAuthServer {
         }
     }
 
-    pub async fn start_and_wait_for_callback(&self) -> Result<OAuthCallback, Box<dyn std::error::Error>> {
+    pub async fn start_and_wait_for_callback(
+        &self,
+    ) -> Result<OAuthCallback, Box<dyn std::error::Error>> {
         let (tx, rx) = oneshot::channel();
-        
+
         {
             let mut callback_tx = self.callback_tx.lock().await;
             *callback_tx = Some(tx);
@@ -76,7 +78,7 @@ impl OAuthServer {
     </div>
 </body>
 </html>"#;
-        
+
         let error_html = r#"<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -119,7 +121,7 @@ impl OAuthServer {
                 get(move |query: Query<OAuthCallback>| async move {
                     let callback = query.0;
                     let mut callback_tx = callback_tx_clone.lock().await;
-                    
+
                     if let Some(tx) = callback_tx.take() {
                         let _ = tx.send(callback.clone());
                     }
@@ -137,11 +139,9 @@ impl OAuthServer {
 
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
         let listener = tokio::net::TcpListener::bind(addr).await?;
-        
+
         // サーバーをバックグラウンドで起動
-        let server_handle = tokio::spawn(async move {
-            axum::serve(listener, app).await
-        });
+        let server_handle = tokio::spawn(async move { axum::serve(listener, app).await });
 
         // コールバックを待つ
         match rx.await {
@@ -157,6 +157,7 @@ impl OAuthServer {
         }
     }
 
+    #[allow(dead_code)]
     pub fn callback_url(&self) -> String {
         format!("http://localhost:{}/callback", self.port)
     }

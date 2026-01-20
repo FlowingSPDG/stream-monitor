@@ -60,7 +60,7 @@ mod tests {
 
         let json = serde_json::to_string(&channel).unwrap();
         let deserialized: Channel = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(channel.id, deserialized.id);
         assert_eq!(channel.platform, deserialized.platform);
         assert_eq!(channel.channel_id, deserialized.channel_id);
@@ -79,7 +79,7 @@ mod tests {
 
         let json = serde_json::to_string(&stats).unwrap();
         let deserialized: StreamStats = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(stats.viewer_count, deserialized.viewer_count);
         assert_eq!(stats.chat_rate_1min, deserialized.chat_rate_1min);
     }

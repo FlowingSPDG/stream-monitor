@@ -35,7 +35,8 @@ pub async fn add_channel(
     .map_err(|e| format!("Failed to insert channel: {}", e))?;
 
     // DuckDBでは、last_insert_rowid()を直接取得できないため、SELECTを使用
-    let channel_id: i64 = conn.query_row("SELECT last_insert_rowid()", [], |row| row.get(0))
+    let channel_id: i64 = conn
+        .query_row("SELECT last_insert_rowid()", [], |row| row.get(0))
         .map_err(|e| format!("Failed to get last insert rowid: {}", e))?;
 
     let channel = get_channel_by_id(&conn, channel_id)
@@ -86,23 +87,18 @@ pub async fn update_channel(
     }
 
     if updates.is_empty() {
-        return get_channel_by_id(&conn, id)
-            .ok_or_else(|| "Channel not found".to_string());
+        return get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string());
     }
 
     updates.push("updated_at = CURRENT_TIMESTAMP");
     params.push(id.to_string());
 
-    let query = format!(
-        "UPDATE channels SET {} WHERE id = ?",
-        updates.join(", ")
-    );
+    let query = format!("UPDATE channels SET {} WHERE id = ?", updates.join(", "));
 
     utils::execute_with_params(&conn, &query, &params)
         .map_err(|e| format!("Failed to update channel: {}", e))?;
 
-    get_channel_by_id(&conn, id)
-        .ok_or_else(|| "Channel not found".to_string())
+    get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())
 }
 
 #[tauri::command]
@@ -139,8 +135,7 @@ pub async fn toggle_channel(app_handle: AppHandle, id: i64) -> Result<Channel, S
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
     // 現在の状態を取得
-    let current = get_channel_by_id(&conn, id)
-        .ok_or_else(|| "Channel not found".to_string())?;
+    let current = get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
 
     let new_enabled = !current.enabled;
 
@@ -152,8 +147,7 @@ pub async fn toggle_channel(app_handle: AppHandle, id: i64) -> Result<Channel, S
     )
     .map_err(|e| format!("Failed to update channel: {}", e))?;
 
-    get_channel_by_id(&conn, id)
-        .ok_or_else(|| "Channel not found".to_string())
+    get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())
 }
 
 fn get_channel_by_id(conn: &Connection, id: i64) -> Option<Channel> {
@@ -162,18 +156,20 @@ fn get_channel_by_id(conn: &Connection, id: i64) -> Option<Channel> {
         .ok()?;
 
     let id_str = id.to_string();
-    let mut rows = stmt.query_map([id_str.as_str()], |row| {
-        Ok(Channel {
-            id: Some(row.get(0)?),
-            platform: row.get(1)?,
-            channel_id: row.get(2)?,
-            channel_name: row.get(3)?,
-            enabled: row.get(4)?,
-            poll_interval: row.get(5)?,
-            created_at: Some(row.get(6)?),
-            updated_at: Some(row.get(7)?),
+    let mut rows = stmt
+        .query_map([id_str.as_str()], |row| {
+            Ok(Channel {
+                id: Some(row.get(0)?),
+                platform: row.get(1)?,
+                channel_id: row.get(2)?,
+                channel_name: row.get(3)?,
+                enabled: row.get(4)?,
+                poll_interval: row.get(5)?,
+                created_at: Some(row.get(6)?),
+                updated_at: Some(row.get(7)?),
+            })
         })
-    }).ok()?;
+        .ok()?;
 
     rows.next()?.ok()
 }

@@ -5,10 +5,12 @@ use async_trait::async_trait;
 use chrono::Utc;
 use std::sync::Arc;
 
+#[allow(dead_code)]
 pub struct TwitchCollector {
     api_client: Arc<TwitchApiClient>,
 }
 
+#[allow(dead_code)]
 impl TwitchCollector {
     pub fn new(client_id: String, client_secret: String) -> Self {
         Self {
@@ -19,10 +21,10 @@ impl TwitchCollector {
     async fn get_client_id_and_secret() -> Result<(String, String), Box<dyn std::error::Error>> {
         // TODO: 設定から取得する
         // 現時点では環境変数または設定ファイルから取得する必要がある
-        let client_id = std::env::var("TWITCH_CLIENT_ID")
-            .map_err(|_| "TWITCH_CLIENT_ID not set")?;
-        let client_secret = std::env::var("TWITCH_CLIENT_SECRET")
-            .map_err(|_| "TWITCH_CLIENT_SECRET not set")?;
+        let client_id =
+            std::env::var("TWITCH_CLIENT_ID").map_err(|_| "TWITCH_CLIENT_ID not set")?;
+        let client_secret =
+            std::env::var("TWITCH_CLIENT_SECRET").map_err(|_| "TWITCH_CLIENT_SECRET not set")?;
         Ok((client_id, client_secret))
     }
 
@@ -34,7 +36,10 @@ impl TwitchCollector {
 
 #[async_trait]
 impl Collector for TwitchCollector {
-    async fn poll_channel(&self, channel: &Channel) -> Result<Option<StreamStats>, Box<dyn std::error::Error>> {
+    async fn poll_channel(
+        &self,
+        channel: &Channel,
+    ) -> Result<Option<StreamStats>, Box<dyn std::error::Error>> {
         // ユーザー情報を取得
         let user = self
             .api_client

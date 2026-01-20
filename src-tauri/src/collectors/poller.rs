@@ -3,15 +3,17 @@ use crate::database::{get_connection, models::Channel};
 use duckdb::Connection;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::time::{interval, Duration, MissedTickBehavior};
 use tauri::AppHandle;
+use tokio::time::{interval, Duration, MissedTickBehavior};
 
+#[allow(dead_code)]
 pub struct ChannelPoller {
     app_handle: AppHandle,
     collectors: HashMap<String, Arc<dyn Collector + Send + Sync>>,
     tasks: HashMap<i64, tokio::task::JoinHandle<()>>,
 }
 
+#[allow(dead_code)]
 impl ChannelPoller {
     pub fn new(app_handle: AppHandle) -> Self {
         Self {
@@ -21,7 +23,11 @@ impl ChannelPoller {
         }
     }
 
-    pub fn register_collector(&mut self, platform: String, collector: Arc<dyn Collector + Send + Sync>) {
+    pub fn register_collector(
+        &mut self,
+        platform: String,
+        collector: Arc<dyn Collector + Send + Sync>,
+    ) {
         self.collectors.insert(platform, collector);
     }
 
@@ -46,7 +52,10 @@ impl ChannelPoller {
 
             // 初回認証
             if let Err(e) = collector.start_collection(&channel).await {
-                eprintln!("Failed to start collection for channel {}: {}", channel_id, e);
+                eprintln!(
+                    "Failed to start collection for channel {}: {}",
+                    channel_id, e
+                );
                 return;
             }
 
@@ -107,7 +116,7 @@ impl ChannelPoller {
 
     fn get_channel(conn: &Connection, channel_id: i64) -> Result<Option<Channel>, duckdb::Error> {
         let mut stmt = conn.prepare("SELECT id, platform, channel_id, channel_name, enabled, poll_interval, created_at, updated_at FROM channels WHERE id = ?")?;
-        
+
         let rows: Result<Vec<_>, _> = stmt
             .query_map([channel_id], |row| {
                 Ok(Channel {

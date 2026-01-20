@@ -6,10 +6,12 @@ use chrono::Utc;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+#[allow(dead_code)]
 pub struct YouTubeCollector {
     api_client: Arc<Mutex<YouTubeApiClient>>,
 }
 
+#[allow(dead_code)]
 impl YouTubeCollector {
     pub async fn new(
         client_id: String,
@@ -25,7 +27,10 @@ impl YouTubeCollector {
 
 #[async_trait]
 impl Collector for YouTubeCollector {
-    async fn poll_channel(&self, channel: &Channel) -> Result<Option<StreamStats>, Box<dyn std::error::Error>> {
+    async fn poll_channel(
+        &self,
+        channel: &Channel,
+    ) -> Result<Option<StreamStats>, Box<dyn std::error::Error>> {
         let mut client = self.api_client.lock().await;
 
         // チャンネルIDからライブストリームを取得

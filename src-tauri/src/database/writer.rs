@@ -1,8 +1,10 @@
 use crate::database::models::{Stream, StreamStats};
 use duckdb::Connection;
 
+#[allow(dead_code)]
 pub struct DatabaseWriter;
 
+#[allow(dead_code)]
 impl DatabaseWriter {
     pub fn insert_or_update_stream(
         conn: &Connection,
@@ -10,16 +12,15 @@ impl DatabaseWriter {
         stream: &Stream,
     ) -> Result<i64, duckdb::Error> {
         // 既存のストリームを確認
-        let mut stmt = conn.prepare(
-            "SELECT id FROM streams WHERE channel_id = ? AND stream_id = ?"
-        )?;
-        
+        let mut stmt =
+            conn.prepare("SELECT id FROM streams WHERE channel_id = ? AND stream_id = ?")?;
+
         let channel_id_str = channel_id.to_string();
         let stream_id_str = stream.id.unwrap_or(0).to_string();
-        
+
         let existing_id: Option<i64> = stmt
             .query_map([&channel_id_str as &str, &stream_id_str as &str], |row| {
-                Ok(row.get(0)?)
+                row.get(0)
             })?
             .next()
             .transpose()?;
@@ -52,11 +53,7 @@ impl DatabaseWriter {
             )?;
             // DuckDBでは、last_insert_rowid()を直接取得できないため、SELECTを使用
             // DuckDBでは、last_insert_rowid()を直接取得できないため、SELECTを使用
-            let id: i64 = conn.query_row(
-                "SELECT last_insert_rowid()", 
-                [], 
-                |row| row.get(0)
-            )?;
+            let id: i64 = conn.query_row("SELECT last_insert_rowid()", [], |row| row.get(0))?;
             Ok(id)
         }
     }
@@ -71,7 +68,10 @@ impl DatabaseWriter {
             [
                 &stats.stream_id.to_string(),
                 &stats.collected_at,
-                &stats.viewer_count.map(|v| v.to_string()).unwrap_or_default(),
+                &stats
+                    .viewer_count
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
                 &stats.chat_rate_1min.to_string(),
             ],
         )?;

@@ -58,22 +58,28 @@ impl Default for AppSettings {
     }
 }
 
+#[allow(dead_code)]
 pub struct SettingsManager;
 
+#[allow(dead_code)]
 impl SettingsManager {
-    pub fn get_settings_path(_app_handle: &AppHandle) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    pub fn get_settings_path(
+        _app_handle: &AppHandle,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         // Tauri 2.xのapp_data_dir()を取得
         // 一時的な実装：現在のディレクトリに設定ファイルを作成
         let app_data_dir = std::env::current_dir()
             .or_else(|_| std::path::PathBuf::from(".").canonicalize())
             .map_err(|e| format!("Failed to get current directory: {}", e))?;
-        
+
         Ok(app_data_dir.join("settings.json"))
     }
 
-    pub fn load_settings(app_handle: &AppHandle) -> Result<AppSettings, Box<dyn std::error::Error>> {
+    pub fn load_settings(
+        app_handle: &AppHandle,
+    ) -> Result<AppSettings, Box<dyn std::error::Error>> {
         let settings_path = Self::get_settings_path(app_handle)?;
-        
+
         if !settings_path.exists() {
             return Ok(AppSettings::default());
         }
@@ -88,7 +94,7 @@ impl SettingsManager {
         settings: &AppSettings,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let settings_path = Self::get_settings_path(app_handle)?;
-        
+
         // ディレクトリが存在しない場合は作成
         if let Some(parent) = settings_path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -115,7 +121,7 @@ pub mod youtube_scraping {
         // 2. YouTubeページをロード
         // 3. ゲームタイトル該当の要素を取得
         // 4. 文字列を抽出して返す
-        
+
         Err("YouTube scraping feature not yet implemented".into())
     }
 
@@ -125,7 +131,7 @@ pub mod youtube_scraping {
         // Windows: "C:\Program Files\Google\Chrome\Application\chrome.exe" など
         // macOS: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" など
         // Linux: "google-chrome" または "chromium-browser" など
-        
+
         None
     }
 }

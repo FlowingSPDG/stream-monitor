@@ -11,7 +11,7 @@ pub struct TokenResponse {
 pub async fn save_token(platform: String, token: String) -> Result<TokenResponse, String> {
     CredentialManager::save_token(&platform, &token)
         .map_err(|e| format!("Failed to save token: {}", e))?;
-    
+
     Ok(TokenResponse {
         success: true,
         message: "Token saved successfully".to_string(),
@@ -20,15 +20,14 @@ pub async fn save_token(platform: String, token: String) -> Result<TokenResponse
 
 #[tauri::command]
 pub async fn get_token(platform: String) -> Result<String, String> {
-    CredentialManager::get_token(&platform)
-        .map_err(|e| format!("Failed to get token: {}", e))
+    CredentialManager::get_token(&platform).map_err(|e| format!("Failed to get token: {}", e))
 }
 
 #[tauri::command]
 pub async fn delete_token(platform: String) -> Result<TokenResponse, String> {
     CredentialManager::delete_token(&platform)
         .map_err(|e| format!("Failed to delete token: {}", e))?;
-    
+
     Ok(TokenResponse {
         success: true,
         message: "Token deleted successfully".to_string(),

@@ -53,10 +53,8 @@ pub async fn get_stream_stats(
         .prepare(&sql)
         .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-    let stats: Result<Vec<StreamStats>, _> = utils::query_map_with_params(
-        &mut stmt,
-        &params,
-        |row| {
+    let stats: Result<Vec<StreamStats>, _> =
+        utils::query_map_with_params(&mut stmt, &params, |row| {
             Ok(StreamStats {
                 id: Some(row.get(0)?),
                 stream_id: row.get(1)?,
@@ -64,16 +62,17 @@ pub async fn get_stream_stats(
                 viewer_count: row.get(3)?,
                 chat_rate_1min: row.get(4)?,
             })
-        },
-    )
-    .map_err(|e| format!("Failed to query stats: {}", e))?
-    .collect();
+        })
+        .map_err(|e| format!("Failed to query stats: {}", e))?
+        .collect();
 
     stats.map_err(|e| format!("Failed to collect stats: {}", e))
 }
 
 #[tauri::command]
-pub async fn get_live_channels(app_handle: AppHandle) -> Result<Vec<crate::database::models::ChannelWithStats>, String> {
+pub async fn get_live_channels(
+    app_handle: AppHandle,
+) -> Result<Vec<crate::database::models::ChannelWithStats>, String> {
     let conn = get_connection(&app_handle)
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
 

@@ -13,7 +13,7 @@ interface ChannelStore {
   toggleChannel: (id: number) => Promise<void>;
 }
 
-export const useChannelStore = create<ChannelStore>((set, get) => ({
+export const useChannelStore = create<ChannelStore>((set) => ({
   channels: [],
   loading: false,
   error: null,

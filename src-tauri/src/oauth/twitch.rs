@@ -19,22 +19,22 @@ impl TwitchOAuth {
         }
     }
 
-    pub async fn authenticate(&self, server: OAuthServer) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn authenticate(
+        &self,
+        server: OAuthServer,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         let redirect_url = Url::parse(&self.redirect_uri)?;
-        
+
         // UserTokenBuilderを作成
         let mut builder = UserTokenBuilder::new(
             self.client_id.clone(),
             self.client_secret.clone(),
             redirect_url.clone(),
         );
-        
+
         // 必要なスコープを設定
-        builder = builder.set_scopes(vec![
-            Scope::UserReadEmail,
-            Scope::ChannelReadStreamKey,
-        ]);
-        
+        builder = builder.set_scopes(vec![Scope::UserReadEmail, Scope::ChannelReadStreamKey]);
+
         // 認証URLとCSRFステートを生成
         let (auth_url, csrf_state) = builder.generate_url();
 
@@ -80,13 +80,15 @@ impl TwitchOAuth {
 
         // アクセストークンに交換
         let http_client = Client::new();
-        let token = builder.get_user_token(&http_client, &csrf_state.secret(), &code).await?;
-        
+        let token = builder
+            .get_user_token(&http_client, csrf_state.secret(), &code)
+            .await?;
+
         let access_token = token.access_token.secret().to_string();
-        
+
         // アクセストークンを保存
         CredentialManager::save_token("twitch", &access_token)?;
-        
+
         // リフレッシュトークンがある場合は保存（将来的に使用可能）
         if let Some(refresh_token) = &token.refresh_token {
             // リフレッシュトークンも保存（別のキーで）

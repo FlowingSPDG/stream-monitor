@@ -23,7 +23,7 @@ impl CredentialManager {
         // keyring 3.xでは delete_password ではなく delete_password() または別の方法
         // 実際のAPIを確認する必要がありますが、一旦エラーを回避
         let _ = entry.get_password(); // 存在確認
-        // TODO: 削除機能の実装
+                                      // TODO: 削除機能の実装
         Ok(())
     }
 

@@ -2,11 +2,7 @@ use duckdb::{Connection, Result as DuckResult};
 
 /// DuckDBの動的パラメータを処理するヘルパー関数
 /// パラメータが0-15個の場合にのみサポート
-pub fn execute_with_params(
-    conn: &Connection,
-    sql: &str,
-    params: &[String],
-) -> DuckResult<usize> {
+pub fn execute_with_params(conn: &Connection, sql: &str, params: &[String]) -> DuckResult<usize> {
     match params.len() {
         0 => conn.execute(sql, []),
         1 => conn.execute(sql, [params[0].as_str()]),

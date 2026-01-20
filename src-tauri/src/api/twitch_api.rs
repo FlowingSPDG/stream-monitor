@@ -9,14 +9,16 @@ use twitch_api::{
     twitch_oauth2::{AccessToken, UserToken as TwitchApiUserToken},
     types,
 };
-use twitch_oauth2::{AccessToken as OAuth2AccessToken, AppAccessToken, ClientId, ClientSecret, UserToken};
+use twitch_oauth2::{AppAccessToken, ClientId, ClientSecret};
 
+#[allow(dead_code)]
 pub struct TwitchApiClient {
     client: Arc<HelixClient<'static, reqwest::Client>>,
     client_id: String,
     client_secret: String,
 }
 
+#[allow(dead_code)]
 impl TwitchApiClient {
     pub fn new(client_id: String, client_secret: String) -> Self {
         let client = Arc::new(HelixClient::default());
@@ -39,22 +41,18 @@ impl TwitchApiClient {
         let client_secret = ClientSecret::new(self.client_secret.clone());
 
         let http_client = reqwest::Client::new();
-        let app_token = AppAccessToken::get_app_access_token(
-            &http_client,
-            client_id,
-            client_secret,
-            vec![],
-        )
-        .await?;
+        let app_token =
+            AppAccessToken::get_app_access_token(&http_client, client_id, client_secret, vec![])
+                .await?;
 
         let access_token_str = app_token.access_token.secret().to_string();
-        
+
         // トークンを保存
         CredentialManager::save_token("twitch", &access_token_str)?;
-        
+
         Ok(AccessToken::from(access_token_str))
     }
-    
+
     async fn get_user_token(&self) -> Result<TwitchApiUserToken, Box<dyn std::error::Error>> {
         let access_token = self.get_access_token().await?;
         // twitch_apiのUserTokenに変換
@@ -71,12 +69,12 @@ impl TwitchApiClient {
 
     pub async fn get_user_by_login(&self, login: &str) -> Result<User, Box<dyn std::error::Error>> {
         let token = self.get_user_token().await?;
-        
-        let login_refs: &[&types::UserNameRef] = &[login.try_into()?];
+
+        let login_refs: &[&types::UserNameRef] = &[login.into()];
         let request = GetUsersRequest::logins(login_refs);
-        
+
         let response = self.client.req_get(request, &token).await?;
-        
+
         response
             .data
             .into_iter()
@@ -84,12 +82,15 @@ impl TwitchApiClient {
             .ok_or_else(|| "User not found".into())
     }
 
-    pub async fn get_stream_by_user_id(&self, user_id: &str) -> Result<Option<Stream>, Box<dyn std::error::Error>> {
+    pub async fn get_stream_by_user_id(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<Stream>, Box<dyn std::error::Error>> {
         let token = self.get_user_token().await?;
-        
-        let user_id_refs: &[&types::UserIdRef] = &[user_id.try_into()?];
+
+        let user_id_refs: &[&types::UserIdRef] = &[user_id.into()];
         let request = GetStreamsRequest::user_ids(user_id_refs);
-        
+
         let response = self.client.req_get(request, &token).await?;
         Ok(response.data.into_iter().next())
     }

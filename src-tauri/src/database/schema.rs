@@ -57,17 +57,17 @@ pub fn init_database(conn: &Connection) -> Result<(), duckdb::Error> {
         "CREATE INDEX IF NOT EXISTS idx_streams_channel_id ON streams(channel_id)",
         [],
     )?;
-    
+
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_streams_started_at ON streams(started_at)",
         [],
     )?;
-    
+
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_stream_stats_stream_id ON stream_stats(stream_id)",
         [],
     )?;
-    
+
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_stream_stats_collected_at ON stream_stats(collected_at)",
         [],
