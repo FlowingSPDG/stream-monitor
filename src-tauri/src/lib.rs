@@ -15,8 +15,9 @@ use commands::{
     channels::{add_channel, list_channels, remove_channel, toggle_channel, update_channel},
     chat::{get_chat_messages, get_chat_rate, get_chat_stats},
     config::{
-        delete_token, get_build_info, get_database_init_status, get_token, has_token,
-        initialize_database, recreate_database, save_token, verify_token,
+        delete_oauth_config, delete_token, get_build_info, get_database_init_status,
+        get_oauth_config, get_token, has_oauth_config, has_token, initialize_database,
+        recreate_database, save_oauth_config, save_token, verify_token,
     },
     export::{export_to_csv, export_to_json},
     logs::get_logs,
@@ -158,6 +159,10 @@ pub fn run() {
             get_database_init_status,
             initialize_database,
             recreate_database,
+            get_oauth_config,
+            save_oauth_config,
+            delete_oauth_config,
+            has_oauth_config,
             // OAuth commands
             login_with_twitch,
             login_with_youtube,

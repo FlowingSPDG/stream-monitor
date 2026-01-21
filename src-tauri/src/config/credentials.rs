@@ -40,6 +40,44 @@ impl CredentialManager {
     pub fn has_token(platform: &str) -> bool {
         Self::get_token(platform).is_ok()
     }
+
+    /// OAuth Client Secretを保存（keyringを使用）
+    pub fn save_oauth_secret(platform: &str, secret: &str) -> Result<(), Box<dyn Error>> {
+        let entry = Entry::new(SERVICE_NAME, &format!("{}_oauth_secret", platform))?;
+        entry.set_password(secret)?;
+        Ok(())
+    }
+
+    /// OAuth Client Secretを取得（keyringから）
+    pub fn get_oauth_secret(platform: &str) -> Result<String, Box<dyn Error>> {
+        let entry = Entry::new(SERVICE_NAME, &format!("{}_oauth_secret", platform))?;
+        let secret = entry.get_password()?;
+        Ok(secret)
+    }
+
+    /// OAuth Client Secretを削除（keyringから）
+    pub fn delete_oauth_secret(platform: &str) -> Result<(), Box<dyn Error>> {
+        let entry = Entry::new(SERVICE_NAME, &format!("{}_oauth_secret", platform))?;
+        match entry.delete_credential() {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                // 既に存在しない場合は正常終了
+                if e.to_string().contains("No such credential")
+                    || e.to_string().contains("not found")
+                    || e.to_string().contains("does not exist")
+                {
+                    Ok(())
+                } else {
+                    Err(Box::new(e))
+                }
+            }
+        }
+    }
+
+    /// OAuth Client Secretが存在するか確認
+    pub fn has_oauth_secret(platform: &str) -> bool {
+        Self::get_oauth_secret(platform).is_ok()
+    }
 }
 
 #[cfg(test)]

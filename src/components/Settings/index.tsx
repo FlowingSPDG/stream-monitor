@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
 import { OAuthLogin } from './OAuthLogin';
+import { OAuthConfigForm } from './OAuthConfigForm';
 import { TokenForm } from './TokenForm';
 import { useConfigStore } from '../../stores/configStore';
 import { useThemeStore } from '../../stores/themeStore';
@@ -14,10 +15,10 @@ interface BuildInfo {
 }
 
 export function Settings() {
-  const [twitchAuthMethod, setTwitchAuthMethod] = useState<'token' | 'oauth' | null>(null);
-  const [youtubeAuthMethod, setYoutubeAuthMethod] = useState<'token' | 'oauth' | null>(null);
+  const [twitchAuthMethod, setTwitchAuthMethod] = useState<'token' | 'oauth' | 'config' | null>(null);
+  const [youtubeAuthMethod, setYoutubeAuthMethod] = useState<'token' | 'oauth' | 'config' | null>(null);
 
-  const { hasTwitchToken, hasYouTubeToken, checkTokens } = useConfigStore();
+  const { hasTwitchToken, hasYouTubeToken, hasTwitchOAuth, hasYouTubeOAuth, checkTokens } = useConfigStore();
   const { theme, setTheme } = useThemeStore();
 
   // ビルド情報取得
@@ -102,19 +103,57 @@ export function Settings() {
             >
               トークン
             </button>
+            {hasTwitchOAuth ? (
+              <button
+                onClick={() => {
+                  // OAuthログインを実行
+                  const performLogin = async () => {
+                    try {
+                      await invoke('login_with_twitch');
+                      // トークンの確認を更新
+                      await checkTokens();
+                    } catch (error) {
+                      console.error('Twitch login failed:', error);
+                      alert(`Twitchログインに失敗しました: ${error}`);
+                    }
+                  };
+                  performLogin();
+                }}
+                className="px-3 py-1.5 rounded text-xs font-medium transition-all duration-200 bg-green-600 hover:bg-green-700 text-white shadow-sm"
+              >
+                Twitchにログイン
+              </button>
+            ) : (
+              <button
+                onClick={() => setTwitchAuthMethod(twitchAuthMethod === 'config' ? null : 'config')}
+                className={`px-3 py-1.5 rounded text-xs font-medium transition-all duration-200 ${
+                  twitchAuthMethod === 'config'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600'
+                }`}
+              >
+                OAuth設定
+              </button>
+            )}
             <button
               onClick={() => setTwitchAuthMethod(twitchAuthMethod === 'oauth' ? null : 'oauth')}
               className={`px-3 py-1.5 rounded text-xs font-medium transition-all duration-200 ${
                 twitchAuthMethod === 'oauth'
-                  ? 'bg-purple-600 text-white shadow-sm'
+                  ? 'bg-orange-600 text-white shadow-sm'
                   : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600'
               }`}
             >
-              OAuth
+              OAuth詳細
             </button>
           </div>
           {twitchAuthMethod === 'token' && (
             <TokenForm
+              platform="twitch"
+              onClose={() => setTwitchAuthMethod(null)}
+            />
+          )}
+          {twitchAuthMethod === 'config' && (
+            <OAuthConfigForm
               platform="twitch"
               onClose={() => setTwitchAuthMethod(null)}
             />
@@ -131,7 +170,7 @@ export function Settings() {
         <section className="card p-4 space-y-3">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">YouTube API</h2>
           <div className="flex items-center space-x-2">
-            <div className={`w-2 h-2 rounded-full ${hasYouTubeToken ? 'bg-green-500' : 'bg-red-400'}`}></div>
+            <div className={`w-2 h-2 rounded-full ${hasYouTubeToken ? 'bg-green-500' : 'bg-gray-400'}`}></div>
             <span className="text-xs text-gray-600 dark:text-gray-400">
               {hasYouTubeToken ? '接続済み' : '未接続'}
             </span>
@@ -147,19 +186,57 @@ export function Settings() {
             >
               トークン
             </button>
+            {hasYouTubeOAuth ? (
+              <button
+                onClick={() => {
+                  // OAuthログインを実行
+                  const performLogin = async () => {
+                    try {
+                      await invoke('login_with_youtube');
+                      // トークンの確認を更新
+                      await checkTokens();
+                    } catch (error) {
+                      console.error('YouTube login failed:', error);
+                      alert(`YouTubeログインに失敗しました: ${error}`);
+                    }
+                  };
+                  performLogin();
+                }}
+                className="px-3 py-1.5 rounded text-xs font-medium transition-all duration-200 bg-green-600 hover:bg-green-700 text-white shadow-sm"
+              >
+                YouTubeにログイン
+              </button>
+            ) : (
+              <button
+                onClick={() => setYoutubeAuthMethod(youtubeAuthMethod === 'config' ? null : 'config')}
+                className={`px-3 py-1.5 rounded text-xs font-medium transition-all duration-200 ${
+                  youtubeAuthMethod === 'config'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600'
+                }`}
+              >
+                OAuth設定
+              </button>
+            )}
             <button
               onClick={() => setYoutubeAuthMethod(youtubeAuthMethod === 'oauth' ? null : 'oauth')}
               className={`px-3 py-1.5 rounded text-xs font-medium transition-all duration-200 ${
                 youtubeAuthMethod === 'oauth'
-                  ? 'bg-purple-600 text-white shadow-sm'
+                  ? 'bg-orange-600 text-white shadow-sm'
                   : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600'
               }`}
             >
-              OAuth
+              OAuth詳細
             </button>
           </div>
           {youtubeAuthMethod === 'token' && (
             <TokenForm
+              platform="youtube"
+              onClose={() => setYoutubeAuthMethod(null)}
+            />
+          )}
+          {youtubeAuthMethod === 'config' && (
+            <OAuthConfigForm
               platform="youtube"
               onClose={() => setYoutubeAuthMethod(null)}
             />
