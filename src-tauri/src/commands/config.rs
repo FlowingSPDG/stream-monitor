@@ -1,4 +1,5 @@
 use crate::config::credentials::CredentialManager;
+use crate::config::settings::SettingsManager;
 use crate::database::{get_connection, DatabaseManager};
 use serde::{Deserialize, Serialize};
 use tauri::{command, AppHandle, Manager, State};
@@ -29,6 +30,18 @@ pub struct DatabaseInitResult {
     pub message: String,
     pub backup_created: Option<String>,
     pub error_type: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OAuthConfig {
+    pub client_id: Option<String>,
+    pub client_secret: Option<String>, // 注意: レスポンスではマスキングされる
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OAuthConfigResponse {
+    pub success: bool,
+    pub message: String,
 }
 
 #[tauri::command]
@@ -68,6 +81,116 @@ pub async fn verify_token(platform: String) -> Result<bool, String> {
     // TODO: 実際のAPIを呼び出してトークンを検証する
     // ここでは一旦、トークンが存在するかどうかのみを確認
     Ok(CredentialManager::has_token(&platform))
+}
+
+#[tauri::command]
+pub async fn get_oauth_config(app_handle: AppHandle, platform: String) -> Result<OAuthConfig, String> {
+    // 設定ファイルからClient IDを取得
+    let settings = SettingsManager::load_settings(&app_handle)
+        .map_err(|e| format!("Failed to load settings: {}", e))?;
+
+    let client_id = match platform.as_str() {
+        "twitch" => settings.twitch.client_id,
+        "youtube" => settings.youtube.client_id,
+        _ => return Err(format!("Unsupported platform: {}", platform)),
+    };
+
+    // keyringからClient Secretを取得
+    let client_secret = match CredentialManager::get_oauth_secret(&platform) {
+        Ok(secret) => Some(secret),
+        Err(_) => None, // Secretが存在しない場合はNone
+    };
+
+    Ok(OAuthConfig {
+        client_id,
+        client_secret,
+    })
+}
+
+#[tauri::command]
+pub async fn save_oauth_config(
+    app_handle: AppHandle,
+    platform: String,
+    client_id: String,
+    client_secret: String,
+) -> Result<OAuthConfigResponse, String> {
+    // 現在の設定を読み込み
+    let mut settings = SettingsManager::load_settings(&app_handle)
+        .map_err(|e| format!("Failed to load settings: {}", e))?;
+
+    // Client IDを設定ファイルに保存
+    match platform.as_str() {
+        "twitch" => {
+            settings.twitch.client_id = Some(client_id);
+        }
+        "youtube" => {
+            settings.youtube.client_id = Some(client_id);
+        }
+        _ => return Err(format!("Unsupported platform: {}", platform)),
+    }
+
+    // 設定ファイルを保存
+    SettingsManager::save_settings(&app_handle, &settings)
+        .map_err(|e| format!("Failed to save settings: {}", e))?;
+
+    // Client Secretをkeyringに保存
+    CredentialManager::save_oauth_secret(&platform, &client_secret)
+        .map_err(|e| format!("Failed to save OAuth secret: {}", e))?;
+
+    Ok(OAuthConfigResponse {
+        success: true,
+        message: format!("OAuth configuration saved for {}", platform),
+    })
+}
+
+#[tauri::command]
+pub async fn delete_oauth_config(app_handle: AppHandle, platform: String) -> Result<OAuthConfigResponse, String> {
+    // 現在の設定を読み込み
+    let mut settings = SettingsManager::load_settings(&app_handle)
+        .map_err(|e| format!("Failed to load settings: {}", e))?;
+
+    // Client IDを設定ファイルから削除
+    match platform.as_str() {
+        "twitch" => {
+            settings.twitch.client_id = None;
+        }
+        "youtube" => {
+            settings.youtube.client_id = None;
+        }
+        _ => return Err(format!("Unsupported platform: {}", platform)),
+    }
+
+    // 設定ファイルを保存
+    SettingsManager::save_settings(&app_handle, &settings)
+        .map_err(|e| format!("Failed to save settings: {}", e))?;
+
+    // Client Secretをkeyringから削除
+    CredentialManager::delete_oauth_secret(&platform)
+        .map_err(|e| format!("Failed to delete OAuth secret: {}", e))?;
+
+    Ok(OAuthConfigResponse {
+        success: true,
+        message: format!("OAuth configuration deleted for {}", platform),
+    })
+}
+
+#[tauri::command]
+pub async fn has_oauth_config(app_handle: AppHandle, platform: String) -> Result<bool, String> {
+    // 設定ファイルからClient IDの存在を確認
+    let settings = SettingsManager::load_settings(&app_handle)
+        .map_err(|e| format!("Failed to load settings: {}", e))?;
+
+    let has_client_id = match platform.as_str() {
+        "twitch" => settings.twitch.client_id.is_some(),
+        "youtube" => settings.youtube.client_id.is_some(),
+        _ => return Err(format!("Unsupported platform: {}", platform)),
+    };
+
+    // keyringからClient Secretの存在を確認
+    let has_client_secret = CredentialManager::has_oauth_secret(&platform);
+
+    // 両方が存在する場合のみtrue
+    Ok(has_client_id && has_client_secret)
 }
 
 #[command]

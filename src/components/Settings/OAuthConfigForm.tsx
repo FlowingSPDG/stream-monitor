@@ -1,23 +1,23 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { useConfigStore } from '../../stores/configStore';
 
-interface OAuthLoginProps {
+interface OAuthConfigFormProps {
   platform: 'twitch' | 'youtube';
   onClose?: () => void;
 }
 
-export function OAuthLogin({ platform, onClose }: OAuthLoginProps) {
+export function OAuthConfigForm({ platform, onClose }: OAuthConfigFormProps) {
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const { getOAuthConfig, saveOAuthConfig, checkTokens } = useConfigStore();
+
+  const { getOAuthConfig, saveOAuthConfig, deleteOAuthConfig } = useConfigStore();
 
   const platformName = platform === 'twitch' ? 'Twitch' : 'YouTube';
 
-  // 既存設定の自動読み込み
+  // コンポーネントマウント時に既存設定を読み込み
   useEffect(() => {
     const loadExistingConfig = async () => {
       try {
@@ -50,6 +50,9 @@ export function OAuthLogin({ platform, onClose }: OAuthLoginProps) {
     try {
       await saveOAuthConfig(platform, clientId.trim(), clientSecret.trim());
       setSuccess(`${platformName} OAuth設定を保存しました`);
+      if (onClose) {
+        setTimeout(() => onClose(), 2000); // 2秒後に閉じる
+      }
     } catch (err) {
       const errorMessage = String(err);
       setError(errorMessage);
@@ -58,10 +61,8 @@ export function OAuthLogin({ platform, onClose }: OAuthLoginProps) {
     }
   };
 
-  const handleLogin = async () => {
-    // 設定ファイルから読み込んだ値を使用するため、入力チェックは最小限に
-    if (!clientId.trim()) {
-      setError('Client ID が設定されていません。先に保存してください。');
+  const handleDelete = async () => {
+    if (!confirm(`${platformName}のOAuth設定を削除しますか？\n\n注意: この操作により、保存されたClient IDとClient Secretが完全に削除されます。`)) {
       return;
     }
 
@@ -70,36 +71,22 @@ export function OAuthLogin({ platform, onClose }: OAuthLoginProps) {
     setSuccess(null);
 
     try {
-      // ブラウザが自動で開かれることを通知
-      setSuccess(`ブラウザで${platformName}認証ページを開いています...`);
-
-      const command = platform === 'twitch' ? 'login_with_twitch' : 'login_with_youtube';
-      await invoke<string>(command, {
-        port: platform === 'twitch' ? 8080 : 8081,
-      });
-
-      // トークンの存在を確認
-      await checkTokens();
-      setSuccess(`${platformName}に接続しました！`);
+      await deleteOAuthConfig(platform);
+      setSuccess(`${platformName} OAuth設定を削除しました`);
+      setClientId('');
+      setClientSecret('');
       if (onClose) {
         setTimeout(() => onClose(), 2000); // 2秒後に閉じる
       }
     } catch (err) {
       const errorMessage = String(err);
-      if (errorMessage.includes('timeout') || errorMessage.includes('cancelled')) {
-        setError('認証がタイムアウトしました。再度お試しください。');
-      } else if (errorMessage.includes('Client ID is not configured')) {
-        setError('Client ID が設定されていません。先にOAuth設定を保存してください。');
-      } else {
-        setError(errorMessage);
-      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   const handleClose = () => {
-    // 閉じる時は入力値をクリア（次回開いた時に再読み込みされる）
     setClientId('');
     setClientSecret('');
     setError(null);
@@ -113,7 +100,7 @@ export function OAuthLogin({ platform, onClose }: OAuthLoginProps) {
     <div className="space-y-4 p-4 border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-800">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          {platformName} OAuth認証
+          {platformName} OAuth設定
         </h3>
         {onClose && (
           <button
@@ -123,6 +110,10 @@ export function OAuthLogin({ platform, onClose }: OAuthLoginProps) {
             ✕
           </button>
         )}
+      </div>
+
+      <div className="text-sm text-gray-600 dark:text-gray-400">
+        {platformName} APIを使用するには、{platformName} Developer ConsoleでOAuthアプリケーションを作成し、Client IDとClient Secretを取得してください。
       </div>
 
       <div className="space-y-4">
@@ -153,16 +144,16 @@ export function OAuthLogin({ platform, onClose }: OAuthLoginProps) {
           <button
             onClick={handleSave}
             disabled={loading || !clientId.trim() || !clientSecret.trim()}
-            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors text-sm font-medium"
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors text-sm font-medium"
           >
-            {loading ? '保存中...' : '設定を保存'}
+            {loading ? '保存中...' : '保存'}
           </button>
           <button
-            onClick={handleLogin}
-            disabled={loading || !clientId.trim()}
-            className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white rounded-lg transition-colors text-sm font-medium"
+            onClick={handleDelete}
+            disabled={loading}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg transition-colors text-sm font-medium"
           >
-            {loading ? `${platformName}に接続中...` : `${platformName}でログイン`}
+            {loading ? '削除中...' : '削除'}
           </button>
         </div>
 
