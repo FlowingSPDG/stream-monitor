@@ -95,10 +95,14 @@ pub async fn get_oauth_config(app_handle: AppHandle, platform: String) -> Result
         _ => return Err(format!("Unsupported platform: {}", platform)),
     };
 
-    // keyringからClient Secretを取得
-    let client_secret = match CredentialManager::get_oauth_secret(&platform) {
-        Ok(secret) => Some(secret),
-        Err(_) => None, // Secretが存在しない場合はNone
+    // YouTubeの場合のみkeyringからClient Secretを取得（TwitchはDevice Code FlowでClient Secret不要）
+    let client_secret = if platform == "youtube" {
+        match CredentialManager::get_oauth_secret(&platform) {
+            Ok(secret) => Some(secret),
+            Err(_) => None, // Secretが存在しない場合はNone
+        }
+    } else {
+        None
     };
 
     Ok(OAuthConfig {
@@ -112,7 +116,7 @@ pub async fn save_oauth_config(
     app_handle: AppHandle,
     platform: String,
     client_id: String,
-    client_secret: String,
+    client_secret: Option<String>,
 ) -> Result<OAuthConfigResponse, String> {
     // 現在の設定を読み込み
     let mut settings = SettingsManager::load_settings(&app_handle)
@@ -133,9 +137,15 @@ pub async fn save_oauth_config(
     SettingsManager::save_settings(&app_handle, &settings)
         .map_err(|e| format!("Failed to save settings: {}", e))?;
 
-    // Client Secretをkeyringに保存
-    CredentialManager::save_oauth_secret(&platform, &client_secret)
-        .map_err(|e| format!("Failed to save OAuth secret: {}", e))?;
+    // YouTubeの場合のみClient Secretをkeyringに保存（TwitchはDevice Code FlowでClient Secret不要）
+    if platform == "youtube" {
+        if let Some(secret) = client_secret {
+            if !secret.trim().is_empty() {
+                CredentialManager::save_oauth_secret(&platform, &secret)
+                    .map_err(|e| format!("Failed to save OAuth secret: {}", e))?;
+            }
+        }
+    }
 
     Ok(OAuthConfigResponse {
         success: true,
@@ -164,9 +174,11 @@ pub async fn delete_oauth_config(app_handle: AppHandle, platform: String) -> Res
     SettingsManager::save_settings(&app_handle, &settings)
         .map_err(|e| format!("Failed to save settings: {}", e))?;
 
-    // Client Secretをkeyringから削除
-    CredentialManager::delete_oauth_secret(&platform)
-        .map_err(|e| format!("Failed to delete OAuth secret: {}", e))?;
+    // YouTubeの場合のみClient Secretをkeyringから削除（TwitchはDevice Code FlowでClient Secret不要）
+    if platform == "youtube" {
+        CredentialManager::delete_oauth_secret(&platform)
+            .map_err(|e| format!("Failed to delete OAuth secret: {}", e))?;
+    }
 
     Ok(OAuthConfigResponse {
         success: true,
@@ -186,11 +198,16 @@ pub async fn has_oauth_config(app_handle: AppHandle, platform: String) -> Result
         _ => return Err(format!("Unsupported platform: {}", platform)),
     };
 
-    // keyringからClient Secretの存在を確認
-    let has_client_secret = CredentialManager::has_oauth_secret(&platform);
-
-    // 両方が存在する場合のみtrue
-    Ok(has_client_id && has_client_secret)
+    // Twitchの場合はDevice Code Flowを使用するため、Client IDのみで十分
+    // YouTubeの場合はClient Secretも必要
+    match platform.as_str() {
+        "twitch" => Ok(has_client_id),
+        "youtube" => {
+            let has_client_secret = CredentialManager::has_oauth_secret(&platform);
+            Ok(has_client_id && has_client_secret)
+        }
+        _ => Err(format!("Unsupported platform: {}", platform)),
+    }
 }
 
 #[command]

@@ -3,17 +3,14 @@ use reqwest::Client;
 use twitch_oauth2::Scope;
 use twitch_oauth2::ClientId;
 
-// TODO: 環境変数から取得するように変更予定
-const TWITCH_CLIENT_ID: &str = "YOUR_CLIENT_ID_HERE"; // ビルド時に env!("TWITCH_CLIENT_ID") から取得
-
 pub struct TwitchOAuth {
     client_id: ClientId,
 }
 
 impl TwitchOAuth {
-    pub fn new() -> Self {
+    pub fn new(client_id: String) -> Self {
         Self {
-            client_id: ClientId::new(TWITCH_CLIENT_ID.to_string()),
+            client_id: ClientId::new(client_id),
         }
     }
 

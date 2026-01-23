@@ -13,8 +13,15 @@ pub struct DeviceCodeResponse {
 
 /// Device Code Flowを開始してユーザーコードを取得
 #[tauri::command]
-pub async fn start_twitch_device_flow() -> Result<DeviceCodeResponse, String> {
-    let oauth = TwitchOAuth::new();
+pub async fn start_twitch_device_flow(app_handle: AppHandle) -> Result<DeviceCodeResponse, String> {
+    // 設定ファイルからClient IDを取得
+    let settings = SettingsManager::load_settings(&app_handle)
+        .map_err(|e| format!("Failed to load settings: {}", e))?;
+
+    let client_id = settings.twitch.client_id
+        .ok_or_else(|| "Twitch Client ID is not configured. Please set it in settings first.".to_string())?;
+
+    let oauth = TwitchOAuth::new(client_id);
 
     let (user_code, verification_uri, device_code) = oauth
         .start_device_flow()
@@ -30,8 +37,15 @@ pub async fn start_twitch_device_flow() -> Result<DeviceCodeResponse, String> {
 
 /// デバイスコードをポーリングしてトークンを取得
 #[tauri::command]
-pub async fn poll_twitch_token(device_code: String) -> Result<String, String> {
-    let oauth = TwitchOAuth::new();
+pub async fn poll_twitch_token(app_handle: AppHandle, device_code: String) -> Result<String, String> {
+    // 設定ファイルからClient IDを取得
+    let settings = SettingsManager::load_settings(&app_handle)
+        .map_err(|e| format!("Failed to load settings: {}", e))?;
+
+    let client_id = settings.twitch.client_id
+        .ok_or_else(|| "Twitch Client ID is not configured. Please set it in settings first.".to_string())?;
+
+    let oauth = TwitchOAuth::new(client_id);
 
     oauth
         .poll_for_token(&device_code)

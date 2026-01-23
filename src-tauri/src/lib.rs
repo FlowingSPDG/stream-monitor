@@ -105,8 +105,9 @@ pub fn run() {
                         let mut poller = poller_for_collectors.lock().await;
 
                         // Initialize Twitch collector if credentials are available
-                        if let (Some(client_id), Some(client_secret)) = (&settings.twitch.client_id, &settings.twitch.client_secret) {
-                            let collector = TwitchCollector::new(client_id.clone(), client_secret.clone());
+                        // Device Code Flow uses only client_id (no client_secret required)
+                        if let Some(client_id) = &settings.twitch.client_id {
+                            let collector = TwitchCollector::new(client_id.clone(), None);
                             poller.register_collector("twitch".to_string(), Arc::new(collector));
                             println!("Twitch collector initialized successfully");
                         } else {

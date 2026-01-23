@@ -14,11 +14,15 @@ use twitch_oauth2::{AppAccessToken, ClientId, ClientSecret};
 pub struct TwitchApiClient {
     client: Arc<HelixClient<'static, reqwest::Client>>,
     client_id: String,
-    client_secret: String,
+    client_secret: Option<String>,
 }
 
 impl TwitchApiClient {
-    pub fn new(client_id: String, client_secret: String) -> Self {
+    /// Create a new TwitchApiClient
+    ///
+    /// For Device Code Flow (user authentication), client_secret can be None.
+    /// For App Access Token (client credentials flow), client_secret is required.
+    pub fn new(client_id: String, client_secret: Option<String>) -> Self {
         let client = Arc::new(HelixClient::default());
 
         Self {
@@ -29,26 +33,31 @@ impl TwitchApiClient {
     }
 
     async fn get_access_token(&self) -> Result<AccessToken, Box<dyn std::error::Error>> {
-        // OS キーチェーンからトークンを取得を試みる
+        // OS キーチェーンからトークンを取得を試みる（Device Code Flowで取得したユーザートークン）
         if let Ok(token_str) = CredentialManager::get_token("twitch") {
             return Ok(AccessToken::from(token_str));
         }
 
-        // OAuth 2.0 Client Credentials Flow
-        let client_id = ClientId::new(self.client_id.clone());
-        let client_secret = ClientSecret::new(self.client_secret.clone());
+        // Client Secretがある場合のみ、OAuth 2.0 Client Credentials Flowを試行
+        if let Some(ref client_secret) = self.client_secret {
+            let client_id = ClientId::new(self.client_id.clone());
+            let client_secret = ClientSecret::new(client_secret.clone());
 
-        let http_client = reqwest::Client::new();
-        let app_token =
-            AppAccessToken::get_app_access_token(&http_client, client_id, client_secret, vec![])
-                .await?;
+            let http_client = reqwest::Client::new();
+            let app_token =
+                AppAccessToken::get_app_access_token(&http_client, client_id, client_secret, vec![])
+                    .await?;
 
-        let access_token_str = app_token.access_token.secret().to_string();
+            let access_token_str = app_token.access_token.secret().to_string();
 
-        // トークンを保存
-        CredentialManager::save_token("twitch", &access_token_str)?;
+            // トークンを保存
+            CredentialManager::save_token("twitch", &access_token_str)?;
 
-        Ok(AccessToken::from(access_token_str))
+            return Ok(AccessToken::from(access_token_str));
+        }
+
+        // トークンが見つからず、Client Secretもない場合はエラー
+        Err("No Twitch access token found. Please authenticate using Device Code Flow first.".into())
     }
 
     async fn get_user_token(&self) -> Result<TwitchApiUserToken, Box<dyn std::error::Error>> {

@@ -38,8 +38,16 @@ export function OAuthConfigForm({ platform, onClose }: OAuthConfigFormProps) {
   }, [platform, getOAuthConfig, platformName]);
 
   const handleSave = async () => {
-    if (!clientId.trim() || !clientSecret.trim()) {
-      setError('Client ID と Client Secret の両方が必要です');
+    // Client IDは必須
+    if (!clientId.trim()) {
+      setError('Client ID は必須です');
+      return;
+    }
+
+    // Twitchの場合、Device Code FlowではClient Secretは不要
+    // YouTubeの場合、Client Secretは必須
+    if (platform === 'youtube' && !clientSecret.trim()) {
+      setError('YouTube OAuth では Client ID と Client Secret の両方が必要です');
       return;
     }
 
@@ -48,7 +56,9 @@ export function OAuthConfigForm({ platform, onClose }: OAuthConfigFormProps) {
     setSuccess(null);
 
     try {
-      await saveOAuthConfig(platform, clientId.trim(), clientSecret.trim());
+      // Client Secretが空でない場合のみ送信
+      const secret = clientSecret.trim() || undefined;
+      await saveOAuthConfig(platform, clientId.trim(), secret);
       setSuccess(`${platformName} OAuth設定を保存しました`);
       if (onClose) {
         setTimeout(() => onClose(), 2000); // 2秒後に閉じる
@@ -113,7 +123,17 @@ export function OAuthConfigForm({ platform, onClose }: OAuthConfigFormProps) {
       </div>
 
       <div className="text-sm text-gray-600 dark:text-gray-400">
-        {platformName} APIを使用するには、{platformName} Developer ConsoleでOAuthアプリケーションを作成し、Client IDとClient Secretを取得してください。
+        {platform === 'twitch' ? (
+          <>
+            Twitch APIを使用するには、Twitch Developer ConsoleでOAuthアプリケーションを作成し、Client IDを取得してください。
+            <br />
+            <span className="text-xs">
+              💡 Device Code Flowを使用するため、Client Secretは不要です（オプション）。
+            </span>
+          </>
+        ) : (
+          `${platformName} APIを使用するには、${platformName} Developer ConsoleでOAuthアプリケーションを作成し、Client IDとClient Secretを取得してください。`
+        )}
       </div>
 
       <div className="space-y-4">
@@ -129,13 +149,13 @@ export function OAuthConfigForm({ platform, onClose }: OAuthConfigFormProps) {
           />
         </label>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-          Client Secret
+          Client Secret {platform === 'twitch' && <span className="text-xs text-gray-500">(オプション)</span>}
           <input
             type="password"
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
             className="input-field mt-1"
-            placeholder={`${platformName} Client Secretを入力`}
+            placeholder={platform === 'twitch' ? 'Twitch Client Secret (不要)' : `${platformName} Client Secretを入力`}
             disabled={loading}
           />
         </label>
@@ -143,7 +163,7 @@ export function OAuthConfigForm({ platform, onClose }: OAuthConfigFormProps) {
         <div className="flex space-x-3">
           <button
             onClick={handleSave}
-            disabled={loading || !clientId.trim() || !clientSecret.trim()}
+            disabled={loading || !clientId.trim() || (platform === 'youtube' && !clientSecret.trim())}
             className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors text-sm font-medium"
           >
             {loading ? '保存中...' : '保存'}

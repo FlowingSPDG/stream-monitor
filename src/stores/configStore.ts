@@ -18,7 +18,7 @@ interface ConfigStore {
   deleteToken: (platform: string) => Promise<void>;
   verifyToken: (platform: string) => Promise<boolean>;
   getOAuthConfig: (platform: string) => Promise<OAuthConfig>;
-  saveOAuthConfig: (platform: string, clientId: string, clientSecret: string) => Promise<void>;
+  saveOAuthConfig: (platform: string, clientId: string, clientSecret?: string) => Promise<void>;
   deleteOAuthConfig: (platform: string) => Promise<void>;
   hasOAuthConfig: (platform: string) => Promise<boolean>;
   checkOAuthConfigs: () => Promise<void>;
@@ -103,8 +103,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     try {
       await invoke('save_oauth_config', {
         platform,
-        client_id: clientId,
-        client_secret: clientSecret,
+        clientId,
+        clientSecret: clientSecret || null,
       });
       // OAuth設定が存在することを反映
       if (platform === 'twitch') {

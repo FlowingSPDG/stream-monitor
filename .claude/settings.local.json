@@ -3,7 +3,15 @@
     "allow": [
       "WebFetch(domain:dev.twitch.tv)",
       "WebFetch(domain:docs.rs)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(if [ -f settings.json ])",
+      "Bash(then cat settings.json)",
+      "Bash(else echo \"settings.json not found\")",
+      "Bash(fi)",
+      "Bash(cargo check:*)",
+      "Bash(npm run check:*)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
