@@ -7,15 +7,38 @@ pub struct CredentialManager;
 
 impl CredentialManager {
     pub fn save_token(platform: &str, token: &str) -> Result<(), Box<dyn Error>> {
-        let entry = Entry::new(SERVICE_NAME, &format!("{}_token", platform))?;
-        entry.set_password(token)?;
-        Ok(())
+        let key_name = format!("{}_token", platform);
+        eprintln!("[CredentialManager] Saving token for platform: '{}', key: '{}', service: '{}'", platform, key_name, SERVICE_NAME);
+        eprintln!("[CredentialManager] Token length: {}", token.len());
+        
+        let entry = Entry::new(SERVICE_NAME, &key_name)?;
+        match entry.set_password(token) {
+            Ok(_) => {
+                eprintln!("[CredentialManager] Token saved successfully");
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("[CredentialManager] ERROR: Failed to save token: {}", e);
+                Err(Box::new(e))
+            }
+        }
     }
 
     pub fn get_token(platform: &str) -> Result<String, Box<dyn Error>> {
-        let entry = Entry::new(SERVICE_NAME, &format!("{}_token", platform))?;
-        let token = entry.get_password()?;
-        Ok(token)
+        let key_name = format!("{}_token", platform);
+        eprintln!("[CredentialManager] Attempting to get token for platform: '{}', key: '{}', service: '{}'", platform, key_name, SERVICE_NAME);
+        
+        let entry = Entry::new(SERVICE_NAME, &key_name)?;
+        match entry.get_password() {
+            Ok(token) => {
+                eprintln!("[CredentialManager] Token retrieved successfully, length: {}", token.len());
+                Ok(token)
+            }
+            Err(e) => {
+                eprintln!("[CredentialManager] ERROR: Failed to get token: {}", e);
+                Err(Box::new(e))
+            }
+        }
     }
 
     pub fn delete_token(platform: &str) -> Result<(), Box<dyn Error>> {

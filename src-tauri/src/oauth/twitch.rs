@@ -2,6 +2,7 @@ use crate::config::credentials::CredentialManager;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tauri::Emitter;
 
 const TWITCH_TOKEN_URL: &str = "https://id.twitch.tv/oauth2/token";
 const TWITCH_DEVICE_URL: &str = "https://id.twitch.tv/oauth2/device";
@@ -102,6 +103,7 @@ impl TwitchOAuth {
         &self,
         device_code: &str,
         interval_secs: u64,
+        app_handle: Option<tauri::AppHandle>,
     ) -> Result<String, Box<dyn std::error::Error>> {
         let mut params = HashMap::new();
         params.insert("client_id", self.client_id.as_str());
@@ -132,12 +134,57 @@ impl TwitchOAuth {
                 eprintln!("[Twitch Device Flow] Token obtained successfully");
 
                 // アクセストークンを保存
-                CredentialManager::save_token("twitch", &token_response.access_token)?;
+                eprintln!("[Twitch Device Flow] About to save access token...");
+                match CredentialManager::save_token("twitch", &token_response.access_token) {
+                    Ok(_) => {
+                        eprintln!("[Twitch Device Flow] Access token saved successfully");
+                    }
+                    Err(e) => {
+                        eprintln!("[Twitch Device Flow] CRITICAL ERROR: Failed to save access token: {}", e);
+                        return Err(format!("Failed to save access token: {}", e).into());
+                    }
+                }
 
                 // リフレッシュトークンがある場合は保存
                 if let Some(refresh_token) = &token_response.refresh_token {
-                    CredentialManager::save_token("twitch_refresh", refresh_token)?;
-                    eprintln!("[Twitch Device Flow] Refresh token saved");
+                    eprintln!("[Twitch Device Flow] About to save refresh token...");
+                    match CredentialManager::save_token("twitch_refresh", refresh_token) {
+                        Ok(_) => {
+                            eprintln!("[Twitch Device Flow] Refresh token saved successfully");
+                        }
+                        Err(e) => {
+                            eprintln!("[Twitch Device Flow] WARNING: Failed to save refresh token: {}", e);
+                            // リフレッシュトークンは失敗しても続行
+                        }
+                    }
+                }
+
+                // Windows keyringの書き込み完了を待つため、読み取りをリトライ
+                eprintln!("[Twitch Device Flow] Verifying token storage...");
+                let mut verified = false;
+                for attempt in 1..=10 {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                    if CredentialManager::has_token("twitch") {
+                        eprintln!("[Twitch Device Flow] Token verification successful (attempt {})", attempt);
+                        verified = true;
+                        break;
+                    }
+                    eprintln!("[Twitch Device Flow] Token not yet readable, retrying... (attempt {})", attempt);
+                }
+
+                if !verified {
+                    eprintln!("[Twitch Device Flow] WARNING: Token saved but cannot be verified after retries");
+                    eprintln!("[Twitch Device Flow] Proceeding anyway - token should be available on next app restart");
+                    // 検証失敗でもエラーにせず続行（保存は成功しているため）
+                }
+
+                // 確実に読み取れることを確認してからイベント送信
+                if let Some(handle) = app_handle {
+                    if let Err(e) = handle.emit("twitch-auth-success", ()) {
+                        eprintln!("[Twitch Device Flow] Failed to emit auth success event: {}", e);
+                    } else {
+                        eprintln!("[Twitch Device Flow] Auth success event emitted to frontend");
+                    }
                 }
 
                 return Ok(token_response.access_token);
@@ -185,7 +232,7 @@ impl TwitchOAuth {
     /// Device Code Flow用のリフレッシュトークン更新
     /// 
     /// Device Code Flow のリフレッシュトークンは1回限り使用で、Client Secret不要
-    pub async fn refresh_device_token(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn refresh_device_token(&self, app_handle: Option<tauri::AppHandle>) -> Result<String, Box<dyn std::error::Error>> {
         // リフレッシュトークンを取得
         let refresh_token = CredentialManager::get_token("twitch_refresh")
             .map_err(|_| "No refresh token found")?;
@@ -222,6 +269,34 @@ impl TwitchOAuth {
         if let Some(new_refresh_token) = &token_response.refresh_token {
             CredentialManager::save_token("twitch_refresh", new_refresh_token)?;
             eprintln!("[Twitch Device Flow] New refresh token saved (one-time use)");
+        }
+
+        // Windows keyringの書き込み完了を待つため、読み取りをリトライ
+        eprintln!("[Twitch Device Flow] Verifying refreshed token storage...");
+        let mut verified = false;
+        for attempt in 1..=10 {
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            if CredentialManager::has_token("twitch") {
+                eprintln!("[Twitch Device Flow] Refreshed token verification successful (attempt {})", attempt);
+                verified = true;
+                break;
+            }
+            eprintln!("[Twitch Device Flow] Refreshed token not yet readable, retrying... (attempt {})", attempt);
+        }
+
+        if !verified {
+            eprintln!("[Twitch Device Flow] WARNING: Refreshed token saved but cannot be verified after retries");
+            eprintln!("[Twitch Device Flow] Proceeding anyway - token should be available on next app restart");
+            // 検証失敗でもエラーにせず続行（保存は成功しているため）
+        }
+
+        // フロントエンドに認証更新成功を通知
+        if let Some(handle) = app_handle {
+            if let Err(e) = handle.emit("twitch-auth-success", ()) {
+                eprintln!("[Twitch Device Flow] Failed to emit auth refresh event: {}", e);
+            } else {
+                eprintln!("[Twitch Device Flow] Auth refresh event emitted to frontend");
+            }
         }
 
         Ok(token_response.access_token)

@@ -64,14 +64,14 @@ export function TwitchAuthPanel({ onClose, onSuccess }: TwitchAuthPanelProps) {
         clientId: await getClientId(),
       });
 
-      // トークン取得成功
+      // トークン取得成功 - バックエンドでの保存が完了している
       setPollingActive(false);
       setDeviceAuth(null);
       setSuccess('Twitch認証に成功しました！');
 
-      // 親コンポーネントにトークン状態の更新を依頼
+      // invokeが完了した時点でトークンは保存済みなので、直接状態を更新
       if (onSuccess) {
-        onSuccess();
+        await onSuccess();
       }
 
       // 2秒後に画面を閉じる

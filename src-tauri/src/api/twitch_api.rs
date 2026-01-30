@@ -21,7 +21,7 @@ pub struct TwitchApiClient {
 impl TwitchApiClient {
     /// Create a new TwitchApiClient
     ///
-    /// For PKCE authentication (user authentication), client_secret can be None.
+    /// For Device Code Flow (user authentication), client_secret can be None.
     /// For App Access Token (client credentials flow), client_secret is required.
     pub fn new(client_id: String, client_secret: Option<String>) -> Self {
         let client = Arc::new(HelixClient::default());
@@ -34,7 +34,7 @@ impl TwitchApiClient {
     }
 
     async fn get_access_token(&self) -> Result<AccessToken, Box<dyn std::error::Error>> {
-        // keyringからトークンを取得を試みる（PKCE認証で取得したユーザートークン）
+        // keyringからトークンを取得を試みる（Device Code Flowで取得したユーザートークン）
         if let Ok(token_str) = CredentialManager::get_token("twitch") {
             return Ok(AccessToken::from(token_str));
         }
@@ -58,7 +58,7 @@ impl TwitchApiClient {
         }
 
         // トークンが見つからず、Client Secretもない場合はエラー
-        Err("No Twitch access token found. Please authenticate using PKCE flow first.".into())
+        Err("No Twitch access token found. Please authenticate using Device Code Flow first.".into())
     }
 
     /// トークンをリフレッシュ
@@ -69,7 +69,8 @@ impl TwitchApiClient {
             String::new(), // Device Code Flowでは不要
         );
 
-        let new_token = oauth.refresh_device_token().await?;
+        // リフレッシュ時はイベント通知なし（バックグラウンド処理のため）
+        let new_token = oauth.refresh_device_token(None).await?;
         Ok(AccessToken::from(new_token))
     }
 

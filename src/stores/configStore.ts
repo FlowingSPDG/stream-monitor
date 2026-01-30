@@ -41,6 +41,12 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         invoke<boolean>('has_oauth_config', { platform: 'twitch' }),
         invoke<boolean>('has_oauth_config', { platform: 'youtube' }),
       ]);
+      console.log('[ConfigStore] Token status updated:', {
+        hasTwitchToken: hasTwitch,
+        hasYouTubeToken: hasYouTube,
+        hasTwitchOAuth,
+        hasYouTubeOAuth,
+      });
       set({
         hasTwitchToken: hasTwitch,
         hasYouTubeToken: hasYouTube,
@@ -49,6 +55,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         loading: false,
       });
     } catch (error) {
+      console.error('[ConfigStore] Failed to check tokens:', error);
       set({ error: String(error), loading: false });
     }
   },

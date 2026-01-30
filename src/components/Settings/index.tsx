@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
-import { OAuthLogin } from './OAuthLogin';
 import { OAuthConfigForm } from './OAuthConfigForm';
 import { TokenForm } from './TokenForm';
 import { TwitchAuthPanel } from './TwitchAuthPanel';
@@ -17,10 +16,19 @@ interface BuildInfo {
 
 export function Settings() {
   const [twitchAuthMethod, setTwitchAuthMethod] = useState<'auth' | 'config' | null>(null);
-  const [youtubeAuthMethod, setYoutubeAuthMethod] = useState<'token' | 'oauth' | 'config' | null>(null);
+  const [youtubeAuthMethod, setYoutubeAuthMethod] = useState<'token' | 'config' | null>(null);
 
-  const { hasTwitchToken, hasYouTubeToken, hasYouTubeOAuth, hasTwitchOAuth, checkTokens } = useConfigStore();
+  const { hasTwitchToken, hasYouTubeToken, hasTwitchOAuth, checkTokens } = useConfigStore();
   const { theme, setTheme } = useThemeStore();
+
+  // デバッグ: 状態変化を監視
+  useEffect(() => {
+    console.log('[Settings] Token state changed:', {
+      hasTwitchToken,
+      hasYouTubeToken,
+      hasTwitchOAuth,
+    });
+  }, [hasTwitchToken, hasYouTubeToken, hasTwitchOAuth]);
 
   // ビルド情報取得
   const { data: buildInfo } = useQuery({
@@ -164,47 +172,15 @@ export function Settings() {
             >
               トークン
             </button>
-            {hasYouTubeOAuth ? (
-              <button
-                onClick={() => {
-                  // OAuthログインを実行
-                  const performLogin = async () => {
-                    try {
-                      await invoke('login_with_youtube');
-                      // トークンの確認を更新
-                      await checkTokens();
-                    } catch (error) {
-                      console.error('YouTube login failed:', error);
-                      alert(`YouTubeログインに失敗しました: ${error}`);
-                    }
-                  };
-                  performLogin();
-                }}
-                className="px-3 py-1.5 rounded text-xs font-medium transition-all duration-200 bg-green-600 hover:bg-green-700 text-white shadow-sm"
-              >
-                YouTubeにログイン
-              </button>
-            ) : (
-              <button
-                onClick={() => setYoutubeAuthMethod(youtubeAuthMethod === 'config' ? null : 'config')}
-                className={`px-3 py-1.5 rounded text-xs font-medium transition-all duration-200 ${
-                  youtubeAuthMethod === 'config'
-                    ? 'bg-purple-600 text-white shadow-sm'
-                    : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600'
-                }`}
-              >
-                OAuth設定
-              </button>
-            )}
             <button
-              onClick={() => setYoutubeAuthMethod(youtubeAuthMethod === 'oauth' ? null : 'oauth')}
+              onClick={() => setYoutubeAuthMethod(youtubeAuthMethod === 'config' ? null : 'config')}
               className={`px-3 py-1.5 rounded text-xs font-medium transition-all duration-200 ${
-                youtubeAuthMethod === 'oauth'
-                  ? 'bg-orange-600 text-white shadow-sm'
+                youtubeAuthMethod === 'config'
+                  ? 'bg-purple-600 text-white shadow-sm'
                   : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600'
               }`}
             >
-              OAuth詳細
+              OAuth設定
             </button>
           </div>
           {youtubeAuthMethod === 'token' && (
@@ -215,12 +191,6 @@ export function Settings() {
           )}
           {youtubeAuthMethod === 'config' && (
             <OAuthConfigForm
-              platform="youtube"
-              onClose={() => setYoutubeAuthMethod(null)}
-            />
-          )}
-          {youtubeAuthMethod === 'oauth' && (
-            <OAuthLogin
               platform="youtube"
               onClose={() => setYoutubeAuthMethod(null)}
             />
