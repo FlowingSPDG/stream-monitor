@@ -73,7 +73,7 @@ impl Collector for TwitchCollector {
                 title: Some(stream.title.to_string()),
                 category: Some(stream.game_name.to_string()),
                 thumbnail_url: Some(stream.thumbnail_url.to_string()),
-                started_at: stream.started_at.to_string(),
+                started_at: stream.started_at.as_str().to_string(),
                 viewer_count: Some(stream.viewer_count as i32),
                 chat_rate_1min: 0, // Phase 2で実装（チャット機能）
             }))

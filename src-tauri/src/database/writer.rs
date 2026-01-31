@@ -14,7 +14,7 @@ impl DatabaseWriter {
             conn.prepare("SELECT id FROM streams WHERE channel_id = ? AND stream_id = ?")?;
 
         let channel_id_str = channel_id.to_string();
-        let stream_id_str = stream.id.unwrap_or(0).to_string();
+        let stream_id_str = stream.stream_id.clone();
 
         let existing_id: Option<i64> = stmt
             .query_map([&channel_id_str as &str, &stream_id_str as &str], |row| {
@@ -25,28 +25,33 @@ impl DatabaseWriter {
 
         if let Some(id) = existing_id {
             // 更新
+            let ended_at_value = stream.ended_at.as_ref().map(|s| s.as_str());
+            
             conn.execute(
                 "UPDATE streams SET title = ?, category = ?, ended_at = ? WHERE id = ?",
-                [
-                    &stream.title.clone().unwrap_or_default(),
-                    &stream.category.clone().unwrap_or_default(),
-                    &stream.ended_at.clone().unwrap_or_default(),
-                    &id.to_string(),
+                duckdb::params![
+                    stream.title.as_deref().unwrap_or(""),
+                    stream.category.as_deref().unwrap_or(""),
+                    ended_at_value,
+                    id,
                 ],
             )?;
             Ok(id)
         } else {
             // 挿入 - DuckDBではRETURNING句を使用してINSERTと同時にIDを取得
+            // ended_atはOptionなので、Noneの場合はNULLとして扱う
+            let ended_at_value = stream.ended_at.as_ref().map(|s| s.as_str());
+            
             let id: i64 = conn.query_row(
                 "INSERT INTO streams (channel_id, stream_id, title, category, started_at, ended_at) 
                  VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
-                [
-                    &channel_id.to_string(),
+                duckdb::params![
+                    channel_id,
                     &stream.stream_id,
-                    &stream.title.clone().unwrap_or_default(),
-                    &stream.category.clone().unwrap_or_default(),
+                    stream.title.as_deref().unwrap_or(""),
+                    stream.category.as_deref().unwrap_or(""),
                     &stream.started_at,
-                    &stream.ended_at.clone().unwrap_or_default(),
+                    ended_at_value,
                 ],
                 |row| row.get(0)
             )?;

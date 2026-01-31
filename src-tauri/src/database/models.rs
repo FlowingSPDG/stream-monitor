@@ -89,6 +89,7 @@ mod tests {
             channel_id: "test_channel".to_string(),
             channel_name: "Test Channel".to_string(),
             display_name: None,
+            profile_image_url: None,
             enabled: true,
             poll_interval: 60,
             created_at: Some("2024-01-01T00:00:00Z".to_string()),

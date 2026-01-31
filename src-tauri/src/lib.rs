@@ -19,6 +19,7 @@ use commands::{
         get_oauth_config, get_token, has_oauth_config, has_token, initialize_database,
         recreate_database, save_oauth_config, save_token, verify_token,
     },
+    database::{create_database_backup, get_database_info},
     export::{export_to_csv, export_to_json},
     logs::get_logs,
     oauth::{start_twitch_device_auth, poll_twitch_device_token},
@@ -207,17 +208,12 @@ pub fn run() {
 
             Ok(())
         })
-        .on_window_event(|window, event| {
+        .on_window_event(|_window, event| {
             use tauri::WindowEvent;
             if let WindowEvent::CloseRequested { .. } = event {
-                eprintln!("Window close requested, initiating database shutdown...");
-                let app_handle = window.app_handle();
-                let db_manager: tauri::State<'_, DatabaseManager> = app_handle.state();
-                if let Err(e) = db_manager.shutdown() {
-                    eprintln!("Database shutdown error: {}", e);
-                } else {
-                    eprintln!("Database shutdown completed successfully");
-                }
+                eprintln!("Window close requested");
+                // Note: DatabaseManager now uses file-based DuckDB with WAL
+                // No explicit shutdown needed - DuckDB handles persistence automatically
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -246,6 +242,9 @@ pub fn run() {
             save_oauth_config,
             delete_oauth_config,
             has_oauth_config,
+            // Database commands
+            create_database_backup,
+            get_database_info,
             // OAuth commands
             start_twitch_device_auth,
             poll_twitch_device_token,
