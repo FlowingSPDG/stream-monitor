@@ -39,6 +39,7 @@ fn greet(name: &str) -> String {
 fn start_existing_channels_polling(
     db_manager: &tauri::State<'_, DatabaseManager>,
     poller: &mut ChannelPoller,
+    app_handle: &tauri::AppHandle,
 ) -> Result<usize, Box<dyn std::error::Error>> {
     let conn = db_manager.get_connection()?;
     
@@ -71,7 +72,7 @@ fn start_existing_channels_polling(
     
     // Start polling for each enabled channel
     for channel in channels {
-        if let Err(e) = poller.start_polling(channel.clone(), db_manager) {
+        if let Err(e) = poller.start_polling(channel.clone(), db_manager, app_handle.clone()) {
             eprintln!("Failed to start polling for channel {:?}: {}", channel.id, e);
         }
     }
@@ -190,7 +191,7 @@ pub fn run() {
 
                         // Start polling for existing enabled channels
                         eprintln!("Starting polling for existing enabled channels...");
-                        match start_existing_channels_polling(&db_manager, &mut poller) {
+                        match start_existing_channels_polling(&db_manager, &mut poller, &app_handle) {
                             Ok(count) => {
                                 eprintln!("Started polling for {} existing enabled channel(s)", count);
                             }
@@ -205,6 +206,19 @@ pub fn run() {
                 .expect("Failed to spawn thread for collector initialization");
 
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            use tauri::WindowEvent;
+            if let WindowEvent::CloseRequested { .. } = event {
+                eprintln!("Window close requested, initiating database shutdown...");
+                let app_handle = window.app_handle();
+                let db_manager: tauri::State<'_, DatabaseManager> = app_handle.state();
+                if let Err(e) = db_manager.shutdown() {
+                    eprintln!("Database shutdown error: {}", e);
+                } else {
+                    eprintln!("Database shutdown completed successfully");
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             greet,

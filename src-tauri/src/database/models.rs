@@ -56,6 +56,15 @@ pub struct ChannelWithStats {
     pub current_title: Option<String>,
 }
 
+/// Event payload for channel stats updates
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelStatsEvent {
+    pub channel_id: i64,
+    pub is_live: bool,
+    pub viewer_count: Option<i32>,
+    pub title: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub id: Option<i64>,

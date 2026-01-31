@@ -106,25 +106,42 @@ impl DatabaseWriter {
         // バッチインサート用のトランザクション開始
         conn.execute("BEGIN TRANSACTION", [])?;
 
-        // プリペアドステートメントを使用した効率的なバッチインサート
-        let mut stmt = conn.prepare(
-            "INSERT INTO chat_messages (stream_id, timestamp, platform, user_id, user_name, message, message_type)
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
-        )?;
+        // エラー時のROLLBACK処理を含むスコープ
+        let result = (|| {
+            // プリペアドステートメントを使用した効率的なバッチインサート
+            let mut stmt = conn.prepare(
+                "INSERT INTO chat_messages (stream_id, timestamp, platform, user_id, user_name, message, message_type)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)"
+            )?;
 
-        for message in messages {
-            stmt.execute([
-                &message.stream_id.to_string(),
-                &message.timestamp,
-                &message.platform,
-                &message.user_id.as_deref().unwrap_or("").to_string(),
-                &message.user_name,
-                &message.message,
-                &message.message_type,
-            ])?;
+            for message in messages {
+                stmt.execute([
+                    &message.stream_id.to_string(),
+                    &message.timestamp,
+                    &message.platform,
+                    &message.user_id.as_deref().unwrap_or("").to_string(),
+                    &message.user_name,
+                    &message.message,
+                    &message.message_type,
+                ])?;
+            }
+
+            Ok::<(), duckdb::Error>(())
+        })();
+
+        // エラーハンドリング: エラーの場合はROLLBACK、成功の場合はCOMMIT
+        match result {
+            Ok(_) => {
+                conn.execute("COMMIT", [])?;
+                Ok(())
+            }
+            Err(e) => {
+                // ROLLBACKを試行（ROLLBACKが失敗しても元のエラーを返す）
+                if let Err(rollback_err) = conn.execute("ROLLBACK", []) {
+                    eprintln!("Failed to rollback transaction: {}", rollback_err);
+                }
+                Err(e)
+            }
         }
-
-        conn.execute("COMMIT", [])?;
-        Ok(())
     }
 }

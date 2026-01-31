@@ -1,6 +1,6 @@
 use crate::collectors::collector_trait::Collector;
 use crate::database::{
-    models::{Channel, Stream, StreamData, StreamStats},
+    models::{Channel, ChannelStatsEvent, Stream, StreamData, StreamStats},
     writer::DatabaseWriter,
     DatabaseManager,
 };
@@ -8,7 +8,7 @@ use chrono::Utc;
 use duckdb::Connection;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use tokio::time::{interval, Duration, MissedTickBehavior};
 
 pub struct ChannelPoller {
@@ -36,6 +36,7 @@ impl ChannelPoller {
         &mut self,
         channel: Channel,
         db_manager: &State<'_, DatabaseManager>,
+        app_handle: AppHandle,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if !channel.enabled {
             return Ok(());
@@ -102,10 +103,26 @@ impl ChannelPoller {
                                 "Failed to save stream data for channel {}: {}",
                                 channel_id, e
                             );
+                        } else {
+                            // イベント発行: チャンネルがライブ中
+                            let event = ChannelStatsEvent {
+                                channel_id,
+                                is_live: true,
+                                viewer_count: stream_data.viewer_count,
+                                title: stream_data.title.clone(),
+                            };
+                            let _ = app_handle.emit("channel-stats-updated", event);
                         }
                     }
                     Ok(None) => {
-                        // 配信していない
+                        // 配信していない - オフラインイベントを発行
+                        let event = ChannelStatsEvent {
+                            channel_id,
+                            is_live: false,
+                            viewer_count: None,
+                            title: None,
+                        };
+                        let _ = app_handle.emit("channel-stats-updated", event);
                     }
                     Err(e) => {
                         eprintln!("Failed to poll channel {}: {}", channel_id, e);

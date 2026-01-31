@@ -8,18 +8,21 @@ use duckdb::Connection;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager};
+use tokio::sync::watch;
 
 // データベース接続を共有するための管理構造体
 #[derive(Clone)]
 pub struct DatabaseManager {
-    connection: Arc<Mutex<Option<Connection>>>,
-    db_path: PathBuf,
+    memory_conn: Arc<Mutex<Option<Connection>>>,  // インメモリDB接続
+    file_path: PathBuf,  // 永続化ファイルのパス
+    shutdown_tx: Arc<Mutex<Option<watch::Sender<bool>>>>,  // シャットダウンシグナル送信
+    sync_handle: Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>,  // 定期同期タスクハンドル
 }
 
 impl DatabaseManager {
     pub fn new(app_handle: &AppHandle) -> Result<Self, Box<dyn std::error::Error>> {
-        // データベースパスの取得
-        let db_path = if let Ok(app_data_dir) = app_handle.path().app_data_dir() {
+        // データベースファイルパスの取得
+        let file_path = if let Ok(app_data_dir) = app_handle.path().app_data_dir() {
             std::fs::create_dir_all(&app_data_dir)
                 .map_err(|e| format!("Failed to create app data directory: {}", e))?;
             app_data_dir.join("stream_stats.db")
@@ -35,19 +38,36 @@ impl DatabaseManager {
             db_dir.join("stream_stats.db")
         };
 
-        // 初期接続を作成（スレッドセーフ）
-        eprintln!("Creating initial database connection at: {}", db_path.display());
-        let initial_conn = Self::create_connection_internal(&db_path)?;
+        eprintln!("Initializing in-memory database with periodic sync to: {}", file_path.display());
+        
+        // インメモリDB接続を作成
+        let memory_conn = Self::create_memory_connection()?;
+        
+        // 既存のファイルからデータをロード
+        Self::load_from_file(&memory_conn, &file_path)?;
+
+        let memory_conn_arc = Arc::new(Mutex::new(Some(memory_conn)));
+        
+        // 定期同期タスクを開始
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        let sync_handle = Self::start_periodic_sync(
+            memory_conn_arc.clone(),
+            file_path.clone(),
+            shutdown_rx,
+        );
 
         Ok(DatabaseManager {
-            connection: Arc::new(Mutex::new(Some(initial_conn))),
-            db_path,
+            memory_conn: memory_conn_arc,
+            file_path,
+            shutdown_tx: Arc::new(Mutex::new(Some(shutdown_tx))),
+            sync_handle: Arc::new(Mutex::new(Some(sync_handle))),
         })
     }
 
-    // 接続を取得（必要に応じて作成）
+    // インメモリDB接続を取得
     pub fn get_connection(&self) -> Result<duckdb::Connection, Box<dyn std::error::Error>> {
-        let mut conn_guard = self.connection.lock().unwrap();
+        let mut conn_guard = self.memory_conn.lock()
+            .map_err(|e| format!("Failed to lock memory connection: {}", e))?;
 
         // 接続が既に存在する場合はそれを返す
         if let Some(ref conn) = *conn_guard {
@@ -59,18 +79,15 @@ impl DatabaseManager {
                         .map_err(|e| format!("Failed to clone connection: {}", e))?);
                 }
                 Err(_) => {
-                    eprintln!("Database connection is invalid, recreating...");
+                    eprintln!("In-memory database connection is invalid, recreating...");
                     *conn_guard = None;
                 }
             }
         }
 
-        // 新しい接続を作成
-        eprintln!(
-            "Creating new database connection at: {}",
-            self.db_path.display()
-        );
-        let conn = self.create_connection()?;
+        // 新しいインメモリ接続を作成
+        eprintln!("Creating new in-memory database connection");
+        let conn = Self::create_memory_connection()?;
         *conn_guard = Some(
             conn.try_clone()
                 .map_err(|e| format!("Failed to clone connection: {}", e))?,
@@ -79,12 +96,181 @@ impl DatabaseManager {
         Ok(conn)
     }
 
-    // 実際の接続作成処理（インスタンスメソッド）
-    fn create_connection(&self) -> Result<Connection, Box<dyn std::error::Error>> {
-        Self::create_connection_internal(&self.db_path)
+    // インメモリDB接続を作成
+    fn create_memory_connection() -> Result<Connection, Box<dyn std::error::Error>> {
+        eprintln!("Creating in-memory DuckDB connection...");
+        
+        let conn = Connection::open(":memory:")
+            .map_err(|e| format!("Failed to open in-memory database: {}", e))?;
+        
+        // DuckDBのメモリ設定
+        if let Err(e) = conn.execute("PRAGMA memory_limit='2GB'", []) {
+            eprintln!("Warning: Failed to set memory limit: {}", e);
+        }
+        if let Err(e) = conn.execute("PRAGMA threads=4", []) {
+            eprintln!("Warning: Failed to set thread count: {}", e);
+        }
+        
+        eprintln!("In-memory database connection created successfully");
+        Ok(conn)
     }
 
-    // 静的な接続作成処理（インスタンス不要）
+    // 既存のファイルDBからインメモリDBへデータをロード
+    fn load_from_file(memory_conn: &Connection, file_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+        if !file_path.exists() {
+            eprintln!("No existing database file found at: {}", file_path.display());
+            eprintln!("Initializing fresh database schema...");
+            // スキーマを初期化
+            schema::init_database(memory_conn)?;
+            return Ok(());
+        }
+
+        eprintln!("Loading existing data from: {}", file_path.display());
+        
+        // ファイルDBをアタッチ（READ_ONLY）
+        let attach_sql = format!("ATTACH '{}' AS file_db (READ_ONLY)", file_path.display());
+        memory_conn.execute(&attach_sql, [])
+            .map_err(|e| format!("Failed to attach file database: {}", e))?;
+
+        // テーブルが存在するか確認してからコピー
+        let tables = vec!["channels", "streams", "stream_stats", "chat_messages"];
+        for table in &tables {
+            let check_sql = format!("SELECT COUNT(*) FROM file_db.{}", table);
+            match memory_conn.query_row(&check_sql, [], |row| row.get::<_, i64>(0)) {
+                Ok(count) => {
+                    eprintln!("Loading {} rows from table: {}", count, table);
+                    let copy_sql = format!("INSERT INTO memory.main.{} SELECT * FROM file_db.{}", table, table);
+                    memory_conn.execute(&copy_sql, [])
+                        .map_err(|e| format!("Failed to copy table {}: {}", table, e))?;
+                }
+                Err(_) => {
+                    eprintln!("Table {} not found in file database, skipping", table);
+                }
+            }
+        }
+
+        // デタッチ
+        memory_conn.execute("DETACH file_db", [])
+            .map_err(|e| format!("Failed to detach file database: {}", e))?;
+
+        eprintln!("Data loaded successfully from file database");
+        Ok(())
+    }
+
+    // インメモリDBをファイルに同期
+    fn sync_to_file(memory_conn: &Connection, file_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+        eprintln!("Starting database sync to file: {}", file_path.display());
+        
+        // 一時ファイルに書き出し（アトミックリネームのため）
+        let temp_path = file_path.with_extension("db.tmp");
+        
+        // 一時ファイルが既に存在する場合は削除
+        if temp_path.exists() {
+            std::fs::remove_file(&temp_path)
+                .map_err(|e| format!("Failed to remove existing temp file: {}", e))?;
+        }
+
+        // 一時ファイルにアタッチ
+        let attach_sql = format!("ATTACH '{}' AS file_db", temp_path.display());
+        memory_conn.execute(&attach_sql, [])
+            .map_err(|e| format!("Failed to attach temp file: {}", e))?;
+
+        // データベース全体をコピー
+        memory_conn.execute("COPY FROM DATABASE memory TO file_db", [])
+            .map_err(|e| format!("Failed to copy database: {}", e))?;
+
+        // CHECKPOINTを実行してWALをフラッシュ
+        memory_conn.execute("CHECKPOINT file_db", [])
+            .map_err(|e| format!("Failed to checkpoint: {}", e))?;
+
+        // デタッチ
+        memory_conn.execute("DETACH file_db", [])
+            .map_err(|e| format!("Failed to detach file database: {}", e))?;
+
+        // アトミックにリネーム
+        std::fs::rename(&temp_path, file_path)
+            .map_err(|e| format!("Failed to rename temp file: {}", e))?;
+
+        eprintln!("Database synced successfully to: {}", file_path.display());
+        Ok(())
+    }
+
+    // 定期同期タスクを開始
+    fn start_periodic_sync(
+        memory_conn: Arc<Mutex<Option<Connection>>>,
+        file_path: PathBuf,
+        mut shutdown_rx: watch::Receiver<bool>,
+    ) -> tauri::async_runtime::JoinHandle<()> {
+        // Tauriの非同期ランタイムを使用してspawn
+        tauri::async_runtime::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+            
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        // 定期同期を実行
+                        if let Ok(conn_guard) = memory_conn.lock() {
+                            if let Some(ref conn) = *conn_guard {
+                                if let Err(e) = Self::sync_to_file(conn, &file_path) {
+                                    eprintln!("Periodic sync error: {}", e);
+                                }
+                            }
+                        }
+                    }
+                    _ = shutdown_rx.changed() => {
+                        // シャットダウンシグナルを受信
+                        eprintln!("Shutdown signal received, performing final sync...");
+                        if let Ok(conn_guard) = memory_conn.lock() {
+                            if let Some(ref conn) = *conn_guard {
+                                if let Err(e) = Self::sync_to_file(conn, &file_path) {
+                                    eprintln!("Final sync error: {}", e);
+                                } else {
+                                    eprintln!("Final sync completed successfully");
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            eprintln!("Periodic sync task terminated");
+        })
+    }
+
+    // 明示的なシャットダウン処理
+    pub fn shutdown(&self) -> Result<(), Box<dyn std::error::Error>> {
+        eprintln!("DatabaseManager shutdown initiated...");
+        
+        // シャットダウンシグナルを送信
+        if let Ok(mut tx_guard) = self.shutdown_tx.lock() {
+            if let Some(tx) = tx_guard.take() {
+                let _ = tx.send(true);
+            }
+        }
+
+        // 同期タスクの完了を待機
+        if let Ok(mut handle_guard) = self.sync_handle.lock() {
+            if let Some(handle) = handle_guard.take() {
+                // ブロッキング待機（Tauriの非同期ランタイムを使用）
+                tauri::async_runtime::block_on(async {
+                    let _ = handle.await;
+                });
+            }
+        }
+
+        eprintln!("DatabaseManager shutdown completed");
+        Ok(())
+    }
+
+    // 実際の接続作成処理（インスタンスメソッド）- 後方互換性のため保持
+    #[allow(dead_code)]
+    fn create_connection(&self) -> Result<Connection, Box<dyn std::error::Error>> {
+        Self::create_connection_internal(&self.file_path)
+    }
+
+    // 静的な接続作成処理（インスタンス不要）- 後方互換性のため保持
+    #[allow(dead_code)]
     fn create_connection_internal(db_path: &PathBuf) -> Result<Connection, Box<dyn std::error::Error>> {
         // データベースファイルの存在チェック
         let file_exists = db_path.exists();
@@ -153,6 +339,15 @@ impl DatabaseManager {
         eprintln!("Thread count set");
 
         Ok(conn)
+    }
+}
+
+impl Drop for DatabaseManager {
+    fn drop(&mut self) {
+        eprintln!("DatabaseManager dropping, initiating shutdown...");
+        if let Err(e) = self.shutdown() {
+            eprintln!("Error during DatabaseManager drop: {}", e);
+        }
     }
 }
 

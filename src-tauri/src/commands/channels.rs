@@ -84,7 +84,7 @@ pub async fn add_channel(
     if channel.enabled {
         if let Some(poller) = app_handle.try_state::<Arc<Mutex<ChannelPoller>>>() {
             let mut poller = poller.lock().await;
-            if let Err(e) = poller.start_polling(channel.clone(), &db_manager) {
+            if let Err(e) = poller.start_polling(channel.clone(), &db_manager, app_handle.clone()) {
                 eprintln!(
                     "Failed to start polling for new channel {}: {}",
                     channel_id, e
@@ -176,7 +176,7 @@ pub async fn update_channel(
             let mut poller = poller.lock().await;
             if enabled && !old_channel.enabled {
                 // 無効→有効になった場合、ポーリングを開始
-                if let Err(e) = poller.start_polling(updated_channel.clone(), &db_manager) {
+                if let Err(e) = poller.start_polling(updated_channel.clone(), &db_manager, app_handle.clone()) {
                     eprintln!("Failed to start polling for updated channel {}: {}", id, e);
                 }
             } else if !enabled && old_channel.enabled {
@@ -254,7 +254,7 @@ pub async fn toggle_channel(
         let mut poller = poller.lock().await;
         if new_enabled {
             // 有効化された場合、ポーリングを開始
-            if let Err(e) = poller.start_polling(updated_channel.clone(), &db_manager) {
+            if let Err(e) = poller.start_polling(updated_channel.clone(), &db_manager, app_handle.clone()) {
                 eprintln!("Failed to start polling for channel {}: {}", id, e);
             }
         } else {
