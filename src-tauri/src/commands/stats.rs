@@ -82,21 +82,28 @@ pub async fn get_live_channels(
         .get_connection()
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
+    // 最新のstream_statsを明示的に取得するように修正
     let sql = r#"
+        WITH latest_stats AS (
+            SELECT 
+                stream_id,
+                viewer_count,
+                collected_at,
+                ROW_NUMBER() OVER (PARTITION BY stream_id ORDER BY collected_at DESC) as rn
+            FROM stream_stats
+        )
         SELECT 
             c.id, c.platform, c.channel_id, c.channel_name, c.display_name, c.profile_image_url, c.enabled, c.poll_interval, 
             c.follower_count, c.broadcaster_type, c.view_count,
             CAST(c.created_at AS VARCHAR) as created_at, CAST(c.updated_at AS VARCHAR) as updated_at,
-            CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END as is_live,
-            ss.viewer_count as current_viewers,
+            TRUE as is_live,
+            ls.viewer_count as current_viewers,
             s.title as current_title
         FROM channels c
-        LEFT JOIN streams s ON c.id = s.channel_id AND s.ended_at IS NULL
-        LEFT JOIN stream_stats ss ON s.id = ss.stream_id
-        WHERE c.enabled = 1
-        GROUP BY c.id, s.id
-        HAVING is_live = 1
-        ORDER BY ss.collected_at DESC
+        INNER JOIN streams s ON c.id = s.channel_id AND s.ended_at IS NULL
+        LEFT JOIN latest_stats ls ON s.id = ls.stream_id AND ls.rn = 1
+        WHERE c.enabled = TRUE
+        ORDER BY COALESCE(ls.collected_at, s.started_at) DESC
     "#;
 
     let mut stmt = conn
