@@ -10,6 +10,9 @@ pub struct Channel {
     pub profile_image_url: Option<String>,
     pub enabled: bool,
     pub poll_interval: i32,
+    pub follower_count: Option<i32>,
+    pub broadcaster_type: Option<String>,
+    pub view_count: Option<i32>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
 }

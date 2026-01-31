@@ -4,6 +4,7 @@ mod collectors;
 mod commands;
 mod config;
 mod database;
+mod logger;
 mod oauth;
 mod websocket;
 
@@ -23,12 +24,13 @@ use commands::{
     export::{export_to_csv, export_to_json},
     logs::get_logs,
     oauth::{start_twitch_device_auth, poll_twitch_device_token},
-    stats::{get_channel_stats, get_live_channels, get_stream_stats},
+    stats::{get_channel_stats, get_collector_status, get_live_channels, get_stream_stats},
     twitch::validate_twitch_channel,
     utils::open_url,
 };
 use config::settings::SettingsManager;
 use database::DatabaseManager;
+use logger::AppLogger;
 use std::sync::Arc;
 
 #[tauri::command]
@@ -46,7 +48,7 @@ fn start_existing_channels_polling(
     
     // Get all enabled channels
     let mut stmt = conn.prepare(
-        "SELECT id, platform, channel_id, channel_name, display_name, profile_image_url, enabled, poll_interval, \
+        "SELECT id, platform, channel_id, channel_name, display_name, profile_image_url, enabled, poll_interval, follower_count, broadcaster_type, view_count, \
          CAST(created_at AS VARCHAR) as created_at, CAST(updated_at AS VARCHAR) as updated_at \
          FROM channels WHERE enabled = true"
     )?;
@@ -62,8 +64,11 @@ fn start_existing_channels_polling(
                 profile_image_url: row.get(5)?,
                 enabled: row.get(6)?,
                 poll_interval: row.get(7)?,
-                created_at: Some(row.get(8)?),
-                updated_at: Some(row.get(9)?),
+                follower_count: row.get(8).ok(),
+                broadcaster_type: row.get(9).ok(),
+                view_count: row.get(10).ok(),
+                created_at: Some(row.get(11)?),
+                updated_at: Some(row.get(12)?),
             })
         })?
         .collect();
@@ -75,6 +80,8 @@ fn start_existing_channels_polling(
     for channel in channels {
         if let Err(e) = poller.start_polling(channel.clone(), db_manager, app_handle.clone()) {
             eprintln!("Failed to start polling for channel {:?}: {}", channel.id, e);
+            // Note: ここではloggerを渡していないため、eprintln!のままにする
+            // start_pollingメソッド内でloggerを使用するように変更する
         }
     }
     
@@ -93,6 +100,16 @@ pub fn run() {
                 .plugin(tauri_plugin_keyring::init())
                 .expect("failed to initialize keyring plugin");
 
+            // Initialize AppLogger
+            let log_path = app_handle
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data directory")
+                .join("logs.txt");
+            let logger = AppLogger::new(log_path).expect("Failed to create AppLogger");
+            logger.info("Application starting...");
+            app.manage(logger.clone());
+
             // DatabaseManagerを初期化して管理
             let db_manager = DatabaseManager::new(&app_handle)
                 .expect("Failed to create DatabaseManager");
@@ -104,8 +121,9 @@ pub fn run() {
             app.manage(poller_arc.clone());
 
             // データベース初期化を起動時に実行
-            eprintln!("Starting database initialization on startup...");
+            logger.info("Starting database initialization on startup...");
             let poller_for_init = poller_arc.clone();
+            let logger_for_init = logger.clone();
             std::thread::Builder::new()
                 .stack_size(512 * 1024 * 1024) // 512MB stack for DuckDB initialization
                 .spawn(move || {
@@ -116,7 +134,7 @@ pub fn run() {
                     let conn = match db_manager.get_connection() {
                         Ok(conn) => conn,
                         Err(e) => {
-                            eprintln!("Database connection failed: {}", e);
+                            logger_for_init.error(&format!("Database connection failed: {}", e));
                             // フロントエンドにDB初期化失敗を通知
                             let _ = app_handle.emit("database-init-error", e.to_string());
                             return; // DB接続失敗時は以降の処理を中止
@@ -126,14 +144,14 @@ pub fn run() {
                     // 次にスキーマを初期化（初回起動時のみ）
                     match crate::database::schema::init_database(&conn) {
                         Ok(_) => {
-                            eprintln!("Database schema initialization successful, notifying frontend...");
+                            logger_for_init.info("Database schema initialization successful, notifying frontend...");
                             // フロントエンドのイベントリスナーが準備されるまで少し待つ
                             std::thread::sleep(std::time::Duration::from_millis(500));
                             // フロントエンドにDB初期化成功を通知
                             let _ = app_handle.emit("database-init-success", ());
                         }
                         Err(e) => {
-                            eprintln!("Database schema initialization failed: {}", e);
+                            logger_for_init.error(&format!("Database schema initialization failed: {}", e));
                             // フロントエンドにDB初期化失敗を通知
                             let _ = app_handle.emit("database-init-error", format!("Schema initialization failed: {}", e));
                             return; // DBスキーマ初期化失敗時は以降の処理を中止
@@ -141,7 +159,7 @@ pub fn run() {
                     }
 
                     // DB初期化成功時のみ、コレクターとチャンネルポーリングを初期化
-                    eprintln!("Initializing application daemons...");
+                    logger_for_init.info("Initializing application daemons...");
 
                     // Initialize collectors from settings
                     tauri::async_runtime::block_on(async {
@@ -149,7 +167,7 @@ pub fn run() {
                         let settings = match SettingsManager::load_settings(&app_handle) {
                             Ok(settings) => settings,
                             Err(e) => {
-                                eprintln!("Failed to load settings: {}", e);
+                                logger_for_init.error(&format!("Failed to load settings: {}", e));
                                 return;
                             }
                         };
@@ -161,9 +179,9 @@ pub fn run() {
                         if let Some(client_id) = &settings.twitch.client_id {
                             let collector = TwitchCollector::new_with_app(client_id.clone(), None, app_handle.clone());
                             poller.register_collector("twitch".to_string(), Arc::new(collector));
-                            println!("Twitch collector initialized successfully");
+                            logger_for_init.info("Twitch collector initialized successfully");
                         } else {
-                            println!("Twitch credentials not configured, skipping collector initialization");
+                            logger_for_init.info("Twitch credentials not configured, skipping collector initialization");
                         }
 
                         // Initialize YouTube collector if credentials are available
@@ -175,43 +193,44 @@ pub fn run() {
                                     match YouTubeCollector::new(client_id.clone(), client_secret.clone(), "http://localhost:8081/callback".to_string(), Arc::clone(&db_conn)).await {
                                         Ok(collector) => {
                                             poller.register_collector("youtube".to_string(), Arc::new(collector));
-                                            println!("YouTube collector initialized successfully");
+                                            logger_for_init.info("YouTube collector initialized successfully");
                                         }
                                         Err(e) => {
-                                            eprintln!("Failed to initialize YouTube collector: {}", e);
+                                            logger_for_init.error(&format!("Failed to initialize YouTube collector: {}", e));
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    eprintln!("Failed to get database connection for YouTube collector: {}", e);
+                                    logger_for_init.error(&format!("Failed to get database connection for YouTube collector: {}", e));
                                 }
                             }
                         } else {
-                            println!("YouTube credentials not configured, skipping collector initialization");
+                            logger_for_init.info("YouTube credentials not configured, skipping collector initialization");
                         }
 
                         // Start polling for existing enabled channels
-                        eprintln!("Starting polling for existing enabled channels...");
+                        logger_for_init.info("Starting polling for existing enabled channels...");
                         match start_existing_channels_polling(&db_manager, &mut poller, &app_handle) {
                             Ok(count) => {
-                                eprintln!("Started polling for {} existing enabled channel(s)", count);
+                                logger_for_init.info(&format!("Started polling for {} existing enabled channel(s)", count));
                             }
                             Err(e) => {
-                                eprintln!("Failed to start polling for existing channels: {}", e);
+                                logger_for_init.error(&format!("Failed to start polling for existing channels: {}", e));
                             }
                         }
                     });
 
-                    eprintln!("Application daemon initialization completed");
+                    logger_for_init.info("Application daemon initialization completed");
                 })
                 .expect("Failed to spawn thread for collector initialization");
 
             Ok(())
         })
-        .on_window_event(|_window, event| {
+        .on_window_event(|window, event| {
             use tauri::WindowEvent;
             if let WindowEvent::CloseRequested { .. } = event {
-                eprintln!("Window close requested");
+                let logger = window.state::<AppLogger>();
+                logger.info("Window close requested");
                 // Note: DatabaseManager now uses file-based DuckDB with WAL
                 // No explicit shutdown needed - DuckDB handles persistence automatically
             }
@@ -252,6 +271,7 @@ pub fn run() {
             get_stream_stats,
             get_live_channels,
             get_channel_stats,
+            get_collector_status,
             // Export commands
             export_to_csv,
             export_to_json,
