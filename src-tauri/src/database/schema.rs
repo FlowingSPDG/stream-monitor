@@ -109,6 +109,30 @@ pub fn init_database(conn: &Connection) -> Result<(), duckdb::Error> {
     )?;
     eprintln!("[Schema] Step 4: chat_messages table created");
 
+    eprintln!("[Schema] Step 4.1: Creating sql_templates table...");
+    // Create sequence for sql_templates table
+    conn.execute(
+        "CREATE SEQUENCE IF NOT EXISTS sql_templates_id_seq START 1",
+        [],
+    )?;
+    eprintln!("[Schema] sql_templates sequence created");
+
+    // sql_templates テーブル: SQLクエリテンプレート
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS sql_templates (
+            id BIGINT PRIMARY KEY DEFAULT nextval('sql_templates_id_seq'),
+            name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            query TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        "#,
+        [],
+    )?;
+    eprintln!("[Schema] Step 4.1: sql_templates table created");
+
     eprintln!("[Schema] Step 4.5: Running database migrations...");
     // 既存テーブルにフィールドを追加（マイグレーション）
     migrate_database_schema(conn)?;
@@ -222,9 +246,8 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
     }
 
     // channelsテーブルにview_countフィールドを追加
-    let mut channels_has_view_count = conn.prepare(
-        "SELECT COUNT(*) FROM pragma_table_info('channels') WHERE name = 'view_count'",
-    )?;
+    let mut channels_has_view_count = conn
+        .prepare("SELECT COUNT(*) FROM pragma_table_info('channels') WHERE name = 'view_count'")?;
     let channels_has_view_count_count: i64 =
         channels_has_view_count.query_row([], |row| row.get(0))?;
 
