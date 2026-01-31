@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import type { DeviceAuthStatus } from '../../types';
+import { useConfigStore } from '../../stores/configStore';
 
 interface TwitchAuthPanelProps {
   onClose?: () => void;
@@ -15,6 +17,7 @@ export function TwitchAuthPanel({ onClose, onSuccess }: TwitchAuthPanelProps) {
   const [deviceAuth, setDeviceAuth] = useState<DeviceAuthStatus | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [pollingActive, setPollingActive] = useState(false);
+  const checkTokens = useConfigStore((state) => state.checkTokens);
 
   // タイマー管理
   useEffect(() => {
@@ -30,6 +33,50 @@ export function TwitchAuthPanel({ onClose, onSuccess }: TwitchAuthPanelProps) {
       setDeviceAuth(null);
     }
   }, [timeRemaining, deviceAuth, pollingActive]);
+
+  // バックエンドからの認証成功イベントをリッスン
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    const setupListener = async () => {
+      unlisten = await listen('twitch-auth-success', async () => {
+        console.log('[TwitchAuthPanel] Received twitch-auth-success event');
+        
+        // Strongholdへの保存が完全に完了するまで少し待機
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        
+        console.log('[TwitchAuthPanel] Checking token status after auth success...');
+        
+        // トークンステータスを更新
+        await checkTokens();
+        
+        // UIを更新
+        setPollingActive(false);
+        setDeviceAuth(null);
+        setSuccess('Twitch認証に成功しました！');
+        
+        console.log('[TwitchAuthPanel] Token status updated successfully');
+        
+        // コールバックを実行
+        if (onSuccess) {
+          await onSuccess();
+        }
+        
+        // 2秒後に画面を閉じる
+        if (onClose) {
+          setTimeout(() => onClose(), 2000);
+        }
+      });
+    };
+
+    setupListener();
+
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [checkTokens, onSuccess, onClose]);
 
   const handleStartAuth = async () => {
     setLoading(true);
@@ -58,27 +105,17 @@ export function TwitchAuthPanel({ onClose, onSuccess }: TwitchAuthPanelProps) {
 
     try {
       // ポーリングを開始（バックエンドで処理）
+      // トークン取得成功後、バックエンドが 'twitch-auth-success' イベントをemitする
+      // イベントリスナーが状態更新を処理するため、ここでは何もしない
       await invoke<string>('poll_twitch_device_token', {
         deviceCode: authStatus.device_code,
         interval: authStatus.interval,
         clientId: await getClientId(),
       });
-
-      // トークン取得成功 - バックエンドでの保存が完了している
-      setPollingActive(false);
-      setDeviceAuth(null);
-      setSuccess('Twitch認証に成功しました！');
-
-      // invokeが完了した時点でトークンは保存済みなので、直接状態を更新
-      if (onSuccess) {
-        await onSuccess();
-      }
-
-      // 2秒後に画面を閉じる
-      if (onClose) {
-        setTimeout(() => onClose(), 2000);
-      }
+      
+      console.log('[TwitchAuthPanel] Token polling completed, waiting for event...');
     } catch (err) {
+      // エラー時のみ処理
       setPollingActive(false);
       setDeviceAuth(null);
       setError(`認証エラー: ${String(err)}`);

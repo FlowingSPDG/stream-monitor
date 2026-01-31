@@ -1,4 +1,4 @@
-use crate::config::credentials::CredentialManager;
+use crate::config::stronghold_store::StrongholdStore;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -37,6 +37,7 @@ pub struct DeviceAuthStatus {
 pub struct TwitchOAuth {
     client_id: String,
     http_client: Client,
+    app_handle: Option<tauri::AppHandle>,
 }
 
 impl TwitchOAuth {
@@ -44,7 +45,13 @@ impl TwitchOAuth {
         Self {
             client_id,
             http_client: Client::new(),
+            app_handle: None,
         }
+    }
+
+    pub fn with_app_handle(mut self, app_handle: tauri::AppHandle) -> Self {
+        self.app_handle = Some(app_handle);
+        self
     }
 
     /// Device Code Grant Flow を開始
@@ -135,47 +142,37 @@ impl TwitchOAuth {
 
                 // アクセストークンを保存
                 eprintln!("[Twitch Device Flow] About to save access token...");
-                match CredentialManager::save_token("twitch", &token_response.access_token) {
-                    Ok(_) => {
-                        eprintln!("[Twitch Device Flow] Access token saved successfully");
-                    }
-                    Err(e) => {
-                        eprintln!("[Twitch Device Flow] CRITICAL ERROR: Failed to save access token: {}", e);
-                        return Err(format!("Failed to save access token: {}", e).into());
-                    }
-                }
-
-                // リフレッシュトークンがある場合は保存
-                if let Some(refresh_token) = &token_response.refresh_token {
-                    eprintln!("[Twitch Device Flow] About to save refresh token...");
-                    match CredentialManager::save_token("twitch_refresh", refresh_token) {
+                if let Some(ref handle) = self.app_handle {
+                    match StrongholdStore::save_token_with_app(handle, "twitch", &token_response.access_token) {
                         Ok(_) => {
-                            eprintln!("[Twitch Device Flow] Refresh token saved successfully");
+                            eprintln!("[Twitch Device Flow] Access token saved successfully to Stronghold");
                         }
                         Err(e) => {
-                            eprintln!("[Twitch Device Flow] WARNING: Failed to save refresh token: {}", e);
-                            // リフレッシュトークンは失敗しても続行
+                            eprintln!("[Twitch Device Flow] CRITICAL ERROR: Failed to save access token: {}", e);
+                            return Err(format!("Failed to save access token: {}", e).into());
                         }
                     }
-                }
 
-                // Windows keyringの書き込み完了を待つため、読み取りをリトライ
-                eprintln!("[Twitch Device Flow] Verifying token storage...");
-                let mut verified = false;
-                for attempt in 1..=10 {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                    if CredentialManager::has_token("twitch") {
-                        eprintln!("[Twitch Device Flow] Token verification successful (attempt {})", attempt);
-                        verified = true;
-                        break;
+                    // リフレッシュトークンがある場合は保存
+                    if let Some(refresh_token) = &token_response.refresh_token {
+                        eprintln!("[Twitch Device Flow] About to save refresh token...");
+                        match StrongholdStore::save_token_with_app(handle, "twitch_refresh", refresh_token) {
+                            Ok(_) => {
+                                eprintln!("[Twitch Device Flow] Refresh token saved successfully to Stronghold");
+                            }
+                            Err(e) => {
+                                eprintln!("[Twitch Device Flow] WARNING: Failed to save refresh token: {}", e);
+                                // リフレッシュトークンは失敗しても続行
+                            }
+                        }
                     }
-                    eprintln!("[Twitch Device Flow] Token not yet readable, retrying... (attempt {})", attempt);
-                }
 
-                if !verified {
-                    eprintln!("[Twitch Device Flow] WARNING: Token saved but cannot be verified after retries");
-                    eprintln!("[Twitch Device Flow] Proceeding anyway - token should be available on next app restart");
-                    // 検証失敗でもエラーにせず続行（保存は成功しているため）
+                    // Give frontend time to process the save event
+                    eprintln!("[Twitch Device Flow] Token save event sent, waiting for frontend processing...");
+                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                    eprintln!("[Twitch Device Flow] Token should now be saved in Stronghold by frontend");
+                } else {
+                    eprintln!("[Twitch Device Flow] WARNING: No AppHandle available, tokens will not be persisted");
                 }
 
                 // 確実に読み取れることを確認してからイベント送信
@@ -234,7 +231,10 @@ impl TwitchOAuth {
     /// Device Code Flow のリフレッシュトークンは1回限り使用で、Client Secret不要
     pub async fn refresh_device_token(&self, app_handle: Option<tauri::AppHandle>) -> Result<String, Box<dyn std::error::Error>> {
         // リフレッシュトークンを取得
-        let refresh_token = CredentialManager::get_token("twitch_refresh")
+        let handle = app_handle.or_else(|| self.app_handle.clone())
+            .ok_or("No app handle available")?;
+        
+        let refresh_token = StrongholdStore::get_token_with_app(&handle, "twitch_refresh")
             .map_err(|_| "No refresh token found")?;
 
         let mut params = HashMap::new();
@@ -263,40 +263,23 @@ impl TwitchOAuth {
         eprintln!("[Twitch Device Flow] Token refreshed successfully");
 
         // 新しいアクセストークンを保存
-        CredentialManager::save_token("twitch", &token_response.access_token)?;
+        StrongholdStore::save_token_with_app(&handle, "twitch", &token_response.access_token)?;
 
         // 新しいリフレッシュトークンがある場合は保存（1回限り使用）
         if let Some(new_refresh_token) = &token_response.refresh_token {
-            CredentialManager::save_token("twitch_refresh", new_refresh_token)?;
+            StrongholdStore::save_token_with_app(&handle, "twitch_refresh", new_refresh_token)?;
             eprintln!("[Twitch Device Flow] New refresh token saved (one-time use)");
         }
 
-        // Windows keyringの書き込み完了を待つため、読み取りをリトライ
-        eprintln!("[Twitch Device Flow] Verifying refreshed token storage...");
-        let mut verified = false;
-        for attempt in 1..=10 {
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-            if CredentialManager::has_token("twitch") {
-                eprintln!("[Twitch Device Flow] Refreshed token verification successful (attempt {})", attempt);
-                verified = true;
-                break;
-            }
-            eprintln!("[Twitch Device Flow] Refreshed token not yet readable, retrying... (attempt {})", attempt);
-        }
-
-        if !verified {
-            eprintln!("[Twitch Device Flow] WARNING: Refreshed token saved but cannot be verified after retries");
-            eprintln!("[Twitch Device Flow] Proceeding anyway - token should be available on next app restart");
-            // 検証失敗でもエラーにせず続行（保存は成功しているため）
-        }
+        // Give frontend time to process the save event
+        eprintln!("[Twitch Device Flow] Refreshed token save event sent");
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
         // フロントエンドに認証更新成功を通知
-        if let Some(handle) = app_handle {
-            if let Err(e) = handle.emit("twitch-auth-success", ()) {
-                eprintln!("[Twitch Device Flow] Failed to emit auth refresh event: {}", e);
-            } else {
-                eprintln!("[Twitch Device Flow] Auth refresh event emitted to frontend");
-            }
+        if let Err(e) = handle.emit("twitch-auth-success", ()) {
+            eprintln!("[Twitch Device Flow] Failed to emit auth refresh event: {}", e);
+        } else {
+            eprintln!("[Twitch Device Flow] Auth refresh event emitted to frontend");
         }
 
         Ok(token_response.access_token)

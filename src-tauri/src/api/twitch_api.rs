@@ -1,4 +1,4 @@
-use crate::config::credentials::CredentialManager;
+use crate::config::stronghold_store::StrongholdStore;
 use crate::oauth::twitch::TwitchOAuth;
 use std::sync::Arc;
 use twitch_api::{
@@ -16,6 +16,7 @@ pub struct TwitchApiClient {
     client: Arc<HelixClient<'static, reqwest::Client>>,
     client_id: String,
     client_secret: Option<String>,
+    app_handle: Option<tauri::AppHandle>,
 }
 
 impl TwitchApiClient {
@@ -30,13 +31,21 @@ impl TwitchApiClient {
             client,
             client_id,
             client_secret,
+            app_handle: None,
         }
     }
 
+    pub fn with_app_handle(mut self, app_handle: tauri::AppHandle) -> Self {
+        self.app_handle = Some(app_handle);
+        self
+    }
+
     async fn get_access_token(&self) -> Result<AccessToken, Box<dyn std::error::Error>> {
-        // keyringからトークンを取得を試みる（Device Code Flowで取得したユーザートークン）
-        if let Ok(token_str) = CredentialManager::get_token("twitch") {
-            return Ok(AccessToken::from(token_str));
+        // Strongholdからトークンを取得を試みる（Device Code Flowで取得したユーザートークン）
+        if let Some(ref handle) = self.app_handle {
+            if let Ok(token_str) = StrongholdStore::get_token_with_app(handle, "twitch") {
+                return Ok(AccessToken::from(token_str));
+            }
         }
 
         // Client Secretがある場合のみ、OAuth 2.0 Client Credentials Flowを試行
@@ -52,7 +61,9 @@ impl TwitchApiClient {
             let access_token_str = app_token.access_token.secret().to_string();
 
             // トークンを保存
-            CredentialManager::save_token("twitch", &access_token_str)?;
+            if let Some(ref handle) = self.app_handle {
+                StrongholdStore::save_token_with_app(handle, "twitch", &access_token_str)?;
+            }
 
             return Ok(AccessToken::from(access_token_str));
         }
@@ -64,13 +75,17 @@ impl TwitchApiClient {
     /// トークンをリフレッシュ
     async fn refresh_token(&self) -> Result<AccessToken, Box<dyn std::error::Error>> {
         // TwitchOAuthインスタンスを作成してリフレッシュ
-        let oauth = TwitchOAuth::new(
+        let mut oauth = TwitchOAuth::new(
             self.client_id.clone(),
             String::new(), // Device Code Flowでは不要
         );
 
+        if let Some(ref handle) = self.app_handle {
+            oauth = oauth.with_app_handle(handle.clone());
+        }
+
         // リフレッシュ時はイベント通知なし（バックグラウンド処理のため）
-        let new_token = oauth.refresh_device_token(None).await?;
+        let new_token = oauth.refresh_device_token(self.app_handle.clone()).await?;
         Ok(AccessToken::from(new_token))
     }
 

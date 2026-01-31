@@ -40,7 +40,8 @@ pub async fn poll_twitch_device_token(
     eprintln!("  - Polling interval: {} seconds", interval);
 
     // TwitchOAuthインスタンスを作成（Client Secret不要）
-    let oauth = TwitchOAuth::new(client_id, String::new());
+    let oauth = TwitchOAuth::new(client_id, String::new())
+        .with_app_handle(app_handle.clone());
 
     oauth
         .poll_for_device_token(&device_code, interval, Some(app_handle))

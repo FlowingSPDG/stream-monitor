@@ -1,4 +1,4 @@
-use crate::config::credentials::CredentialManager;
+use crate::config::stronghold_store::StrongholdStore;
 use crate::config::settings::SettingsManager;
 use crate::database::{get_connection, DatabaseManager};
 use serde::{Deserialize, Serialize};
@@ -46,7 +46,7 @@ pub struct OAuthConfigResponse {
 
 #[tauri::command]
 pub async fn save_token(platform: String, token: String) -> Result<TokenResponse, String> {
-    CredentialManager::save_token(&platform, &token)
+    StrongholdStore::save_token(&platform, &token)
         .map_err(|e| format!("Failed to save token: {}", e))?;
 
     Ok(TokenResponse {
@@ -57,13 +57,13 @@ pub async fn save_token(platform: String, token: String) -> Result<TokenResponse
 
 #[tauri::command]
 pub async fn get_token(platform: String) -> Result<String, String> {
-    CredentialManager::get_token(&platform)
+    StrongholdStore::get_token(&platform)
         .map_err(|e| format!("Failed to get token: {}", e))
 }
 
 #[tauri::command]
 pub async fn delete_token(platform: String) -> Result<TokenResponse, String> {
-    CredentialManager::delete_token(&platform)
+    StrongholdStore::delete_token(&platform)
         .map_err(|e| format!("Failed to delete token: {}", e))?;
 
     Ok(TokenResponse {
@@ -74,14 +74,14 @@ pub async fn delete_token(platform: String) -> Result<TokenResponse, String> {
 
 #[tauri::command]
 pub async fn has_token(platform: String) -> Result<bool, String> {
-    Ok(CredentialManager::has_token(&platform))
+    Ok(StrongholdStore::has_token(&platform))
 }
 
 #[tauri::command]
 pub async fn verify_token(platform: String) -> Result<bool, String> {
     // TODO: 実際のAPIを呼び出してトークンを検証する
     // ここでは一旦、トークンが存在するかどうかのみを確認
-    Ok(CredentialManager::has_token(&platform))
+    Ok(StrongholdStore::has_token(&platform))
 }
 
 #[tauri::command]
@@ -96,9 +96,9 @@ pub async fn get_oauth_config(app_handle: AppHandle, platform: String) -> Result
         _ => return Err(format!("Unsupported platform: {}", platform)),
     };
 
-    // YouTubeの場合のみkeyringからClient Secretを取得（TwitchはDevice Code Flowでクライアント Secret不要）
+    // YouTubeの場合のみStrongholdからClient Secretを取得（TwitchはDevice Code Flowでクライアント Secret不要）
     let client_secret = if platform == "youtube" {
-        match CredentialManager::get_oauth_secret(&platform) {
+        match StrongholdStore::get_oauth_secret(&platform) {
             Ok(secret) => Some(secret),
             Err(_) => None, // Secretが存在しない場合はNone
         }
@@ -138,11 +138,11 @@ pub async fn save_oauth_config(
     SettingsManager::save_settings(&app_handle, &settings)
         .map_err(|e| format!("Failed to save settings: {}", e))?;
 
-    // YouTubeの場合のみClient Secretをkeyringに保存（TwitchはDevice Code FlowでClient Secret不要）
+    // YouTubeの場合のみClient SecretをStrongholdに保存（TwitchはDevice Code FlowでClient Secret不要）
     if platform == "youtube" {
         if let Some(secret) = client_secret {
             if !secret.trim().is_empty() {
-                CredentialManager::save_oauth_secret(&platform, &secret)
+                StrongholdStore::save_oauth_secret(&platform, &secret)
                     .map_err(|e| format!("Failed to save OAuth secret: {}", e))?;
             }
         }
@@ -175,9 +175,9 @@ pub async fn delete_oauth_config(app_handle: AppHandle, platform: String) -> Res
     SettingsManager::save_settings(&app_handle, &settings)
         .map_err(|e| format!("Failed to save settings: {}", e))?;
 
-    // YouTubeの場合のみClient Secretをkeyringから削除（TwitchはDevice Code FlowでClient Secret不要）
+    // YouTubeの場合のみClient SecretをStrongholdから削除（TwitchはDevice Code FlowでClient Secret不要）
     if platform == "youtube" {
-        CredentialManager::delete_oauth_secret(&platform)
+        StrongholdStore::delete_oauth_secret(&platform)
             .map_err(|e| format!("Failed to delete OAuth secret: {}", e))?;
     }
 
@@ -204,7 +204,7 @@ pub async fn has_oauth_config(app_handle: AppHandle, platform: String) -> Result
     match platform.as_str() {
         "twitch" => Ok(has_client_id),
         "youtube" => {
-            let has_client_secret = CredentialManager::has_oauth_secret(&platform);
+            let has_client_secret = StrongholdStore::has_oauth_secret(&platform);
             Ok(has_client_id && has_client_secret)
         }
         _ => Err(format!("Unsupported platform: {}", platform)),
