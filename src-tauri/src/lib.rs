@@ -23,7 +23,7 @@ use commands::{
     logs::get_logs,
     oauth::{start_twitch_device_auth, poll_twitch_device_token},
     stats::{get_channel_stats, get_live_channels, get_stream_stats},
-    stronghold::{check_vault_initialized, initialize_vault},
+    twitch::validate_twitch_channel,
 };
 use config::settings::SettingsManager;
 use database::DatabaseManager;
@@ -34,6 +34,49 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+/// Helper function to start polling for existing enabled channels
+fn start_existing_channels_polling(
+    db_manager: &tauri::State<'_, DatabaseManager>,
+    poller: &mut ChannelPoller,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let conn = db_manager.get_connection()?;
+    
+    // Get all enabled channels
+    let mut stmt = conn.prepare(
+        "SELECT id, platform, channel_id, channel_name, enabled, poll_interval, \
+         CAST(created_at AS VARCHAR) as created_at, CAST(updated_at AS VARCHAR) as updated_at \
+         FROM channels WHERE enabled = true"
+    )?;
+    
+    let channels: Result<Vec<_>, _> = stmt
+        .query_map([], |row| {
+            Ok(database::models::Channel {
+                id: Some(row.get(0)?),
+                platform: row.get(1)?,
+                channel_id: row.get(2)?,
+                channel_name: row.get(3)?,
+                display_name: None,
+                enabled: row.get(4)?,
+                poll_interval: row.get(5)?,
+                created_at: Some(row.get(6)?),
+                updated_at: Some(row.get(7)?),
+            })
+        })?
+        .collect();
+    
+    let channels = channels?;
+    let count = channels.len();
+    
+    // Start polling for each enabled channel
+    for channel in channels {
+        if let Err(e) = poller.start_polling(channel.clone(), db_manager) {
+            eprintln!("Failed to start polling for channel {:?}: {}", channel.id, e);
+        }
+    }
+    
+    Ok(count)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -41,23 +84,24 @@ pub fn run() {
         .setup(|app| {
             let app_handle = app.handle().clone();
 
-            // Initialize Stronghold plugin with argon2 KDF
-            let salt_path = app
-                .path()
-                .app_local_data_dir()
-                .expect("could not resolve app local data path")
-                .join("salt.txt");
+            // Initialize Keyring plugin
             app.handle()
-                .plugin(tauri_plugin_stronghold::Builder::with_argon2(&salt_path).build())
-                .expect("failed to initialize stronghold plugin");
+                .plugin(tauri_plugin_keyring::init())
+                .expect("failed to initialize keyring plugin");
 
             // DatabaseManagerを初期化して管理
             let db_manager = DatabaseManager::new(&app_handle)
                 .expect("Failed to create DatabaseManager");
             app.manage(db_manager);
 
+            // Initialize ChannelPoller and manage it as app state (before spawning threads)
+            let poller = ChannelPoller::new();
+            let poller_arc = Arc::new(Mutex::new(poller));
+            app.manage(poller_arc.clone());
+
             // データベース初期化を起動時に実行
             eprintln!("Starting database initialization on startup...");
+            let poller_for_init = poller_arc.clone();
             std::thread::Builder::new()
                 .stack_size(512 * 1024 * 1024) // 512MB stack for DuckDB initialization
                 .spawn(move || {
@@ -92,17 +136,10 @@ pub fn run() {
                         }
                     }
 
-                    // DB初期化成功時のみ、ChannelPoller等のデーモンを初期化
+                    // DB初期化成功時のみ、コレクターとチャンネルポーリングを初期化
                     eprintln!("Initializing application daemons...");
 
-                    // Initialize ChannelPoller and manage it as app state
-                    let poller = ChannelPoller::new();
-                    let poller_arc = Arc::new(Mutex::new(poller));
-                    // Note: app.manage() cannot be called from a spawned thread, so we handle this differently
-                    // The poller will be managed per command invocation instead
-
                     // Initialize collectors from settings
-                    let poller_for_collectors = poller_arc.clone();
                     tauri::async_runtime::block_on(async {
                         // Load settings
                         let settings = match SettingsManager::load_settings(&app_handle) {
@@ -113,7 +150,7 @@ pub fn run() {
                             }
                         };
 
-                        let mut poller = poller_for_collectors.lock().await;
+                        let mut poller = poller_for_init.lock().await;
 
                         // Initialize Twitch collector if credentials are available
                         // Device Code Flow uses only client_id (no client_secret required)
@@ -127,25 +164,43 @@ pub fn run() {
 
                         // Initialize YouTube collector if credentials are available
                         if let (Some(client_id), Some(client_secret)) = (&settings.youtube.client_id, &settings.youtube.client_secret) {
-                            let db_conn = Arc::new(Mutex::new(conn));
-                            match YouTubeCollector::new(client_id.clone(), client_secret.clone(), "http://localhost:8081/callback".to_string(), Arc::clone(&db_conn)).await {
-                                Ok(collector) => {
-                                    poller.register_collector("youtube".to_string(), Arc::new(collector));
-                                    println!("YouTube collector initialized successfully");
+                            // YouTubeCollector用に新しい接続を作成
+                            match db_manager.get_connection() {
+                                Ok(yt_conn) => {
+                                    let db_conn = Arc::new(Mutex::new(yt_conn));
+                                    match YouTubeCollector::new(client_id.clone(), client_secret.clone(), "http://localhost:8081/callback".to_string(), Arc::clone(&db_conn)).await {
+                                        Ok(collector) => {
+                                            poller.register_collector("youtube".to_string(), Arc::new(collector));
+                                            println!("YouTube collector initialized successfully");
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Failed to initialize YouTube collector: {}", e);
+                                        }
+                                    }
                                 }
                                 Err(e) => {
-                                    eprintln!("Failed to initialize YouTube collector: {}", e);
+                                    eprintln!("Failed to get database connection for YouTube collector: {}", e);
                                 }
                             }
                         } else {
                             println!("YouTube credentials not configured, skipping collector initialization");
                         }
+
+                        // Start polling for existing enabled channels
+                        eprintln!("Starting polling for existing enabled channels...");
+                        match start_existing_channels_polling(&db_manager, &mut poller) {
+                            Ok(count) => {
+                                eprintln!("Started polling for {} existing enabled channel(s)", count);
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to start polling for existing channels: {}", e);
+                            }
+                        }
                     });
+
+                    eprintln!("Application daemon initialization completed");
                 })
                 .expect("Failed to spawn thread for collector initialization");
-
-            // DB初期化が成功した場合のみ、既存チャンネルのポーリングを開始
-            eprintln!("Application daemon initialization completed");
 
             Ok(())
         })
@@ -178,9 +233,6 @@ pub fn run() {
             // OAuth commands
             start_twitch_device_auth,
             poll_twitch_device_token,
-            // Stronghold commands
-            check_vault_initialized,
-            initialize_vault,
             // Stats commands
             get_stream_stats,
             get_live_channels,
@@ -190,6 +242,8 @@ pub fn run() {
             export_to_json,
             // Logs commands
             get_logs,
+            // Twitch commands
+            validate_twitch_channel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

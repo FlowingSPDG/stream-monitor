@@ -1,6 +1,6 @@
 use crate::collectors::collector_trait::Collector;
 use crate::database::{
-    models::{Channel, Stream, StreamStats},
+    models::{Channel, Stream, StreamData, StreamStats},
     writer::DatabaseWriter,
     DatabaseManager,
 };
@@ -95,11 +95,11 @@ impl ChannelPoller {
 
                 // ポーリング実行
                 match collector.poll_channel(&updated_channel).await {
-                    Ok(Some(stats)) => {
+                    Ok(Some(stream_data)) => {
                         // ストリーム情報をデータベースに保存
-                        if let Err(e) = Self::save_stream_stats(&conn, channel_id, &stats) {
+                        if let Err(e) = Self::save_stream_data(&conn, channel_id, &stream_data) {
                             eprintln!(
-                                "Failed to save stream stats for channel {}: {}",
+                                "Failed to save stream data for channel {}: {}",
                                 channel_id, e
                             );
                         }
@@ -151,34 +151,37 @@ impl ChannelPoller {
     }
 
     /// ストリーム統計情報をデータベースに保存する
-    fn save_stream_stats(
+    fn save_stream_data(
         conn: &Connection,
         channel_id: i64,
-        stats: &StreamStats,
+        stream_data: &StreamData,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // ストリームを作成または更新（現在は簡易実装：channel_id + timestampをstream_idとして使用）
-        let stream_id = format!("{}_{}", channel_id, Utc::now().timestamp());
-
+        // StreamDataから配信情報を含むStreamレコードを作成
         let stream = Stream {
             id: None,
             channel_id,
-            stream_id: stream_id.clone(),
-            title: None,         // 現在はタイトル情報なし
-            category: None,      // 現在はカテゴリ情報なし
-            thumbnail_url: None, // 現在はサムネイル情報なし
-            started_at: stats.collected_at.clone(),
+            stream_id: stream_data.stream_id.clone(),
+            title: stream_data.title.clone(),
+            category: stream_data.category.clone(),
+            thumbnail_url: stream_data.thumbnail_url.clone(),
+            started_at: stream_data.started_at.clone(),
             ended_at: None, // ライブ中なのでNone
         };
 
-        // ストリームを保存
+        // ストリームを保存（同じstream_idの場合は更新）
         let stream_db_id = DatabaseWriter::insert_or_update_stream(conn, channel_id, &stream)?;
 
-        // StreamStatsに正しいstream_idを設定
-        let mut stats_with_id = stats.clone();
-        stats_with_id.stream_id = stream_db_id;
+        // StreamStatsを作成して保存
+        let stats = StreamStats {
+            id: None,
+            stream_id: stream_db_id,
+            collected_at: Utc::now().to_rfc3339(),
+            viewer_count: stream_data.viewer_count,
+            chat_rate_1min: stream_data.chat_rate_1min,
+        };
 
         // ストリーム統計を保存
-        DatabaseWriter::insert_stream_stats(conn, &stats_with_id)?;
+        DatabaseWriter::insert_stream_stats(conn, &stats)?;
 
         Ok(())
     }

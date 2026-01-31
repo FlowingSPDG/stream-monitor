@@ -34,6 +34,18 @@ pub struct StreamStats {
     pub chat_rate_1min: i32,
 }
 
+/// Combined stream data returned by collectors
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamData {
+    pub stream_id: String,           // Platform-specific stream ID
+    pub title: Option<String>,
+    pub category: Option<String>,
+    pub thumbnail_url: Option<String>,
+    pub started_at: String,
+    pub viewer_count: Option<i32>,
+    pub chat_rate_1min: i32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelWithStats {
     #[serde(flatten)]

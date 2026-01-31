@@ -35,8 +35,12 @@ impl DatabaseManager {
             db_dir.join("stream_stats.db")
         };
 
+        // 初期接続を作成（スレッドセーフ）
+        eprintln!("Creating initial database connection at: {}", db_path.display());
+        let initial_conn = Self::create_connection_internal(&db_path)?;
+
         Ok(DatabaseManager {
-            connection: Arc::new(Mutex::new(None)),
+            connection: Arc::new(Mutex::new(Some(initial_conn))),
             db_path,
         })
     }
@@ -75,16 +79,21 @@ impl DatabaseManager {
         Ok(conn)
     }
 
-    // 実際の接続作成処理
+    // 実際の接続作成処理（インスタンスメソッド）
     fn create_connection(&self) -> Result<Connection, Box<dyn std::error::Error>> {
+        Self::create_connection_internal(&self.db_path)
+    }
+
+    // 静的な接続作成処理（インスタンス不要）
+    fn create_connection_internal(db_path: &PathBuf) -> Result<Connection, Box<dyn std::error::Error>> {
         // データベースファイルの存在チェック
-        let file_exists = self.db_path.exists();
-        eprintln!("Opening DuckDB connection at: {}", self.db_path.display());
+        let file_exists = db_path.exists();
+        eprintln!("Opening DuckDB connection at: {}", db_path.display());
         eprintln!("Database file exists: {}", file_exists);
 
         // ファイルが存在するが読み取り不可の場合、破損の可能性がある
         if file_exists {
-            match std::fs::metadata(&self.db_path) {
+            match std::fs::metadata(&db_path) {
                 Ok(metadata) => {
                     if metadata.len() == 0 {
                         eprintln!("Warning: Database file exists but is empty (0 bytes)");
@@ -101,7 +110,7 @@ impl DatabaseManager {
         }
 
         // Use a thread with larger stack for DuckDB connection
-        let db_path_clone = self.db_path.clone();
+        let db_path_clone = db_path.clone();
         let conn_result = std::thread::Builder::new()
             .stack_size(512 * 1024 * 1024) // 512MB stack
             .spawn(move || {
@@ -122,7 +131,7 @@ impl DatabaseManager {
             Ok(Err(e)) => {
                 return Err(format!(
                     "Failed to open database at {}: {}",
-                    self.db_path.display(),
+                    db_path.display(),
                     e
                 )
                 .into());
