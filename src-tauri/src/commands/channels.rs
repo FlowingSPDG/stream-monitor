@@ -241,6 +241,7 @@ async fn enrich_channels_with_twitch_info(
     // Twitch API情報を取得
     let mut user_info_map = std::collections::HashMap::new();
     let mut stream_info_map = std::collections::HashMap::new();
+    let mut follower_count_map = std::collections::HashMap::new();
 
     if let Some(collector) = twitch_collector {
         let api_client = collector.get_api_client();
@@ -297,6 +298,18 @@ async fn enrich_channels_with_twitch_info(
                         }
                     }
                 }
+                
+                // フォロワー数をバッチ取得
+                match api_client.get_followers_batch(&user_ids).await {
+                    Ok(followers) => {
+                        for (user_id, count) in followers {
+                            follower_count_map.insert(user_id, count);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[list_channels] Failed to fetch follower counts: {}", e);
+                    }
+                }
             }
         }
     }
@@ -320,9 +333,13 @@ async fn enrich_channels_with_twitch_info(
                         twitch_api::types::BroadcasterType::Affiliate => "affiliate".to_string(),
                         _ => "".to_string(),
                     });
-                    // follower_count は Twitch Helix API で直接取得不可（別エンドポイントが必要）
+                    
+                    // フォロワー数を設定
+                    channel.follower_count = follower_count_map
+                        .get(user.id.as_str())
+                        .copied();
+                    
                     // view_count は Twitch API で非推奨となり取得不可
-                    channel.follower_count = None;
                     channel.view_count = None;
                 }
 

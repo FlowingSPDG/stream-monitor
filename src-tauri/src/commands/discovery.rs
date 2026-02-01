@@ -174,13 +174,14 @@ pub async fn promote_discovered_channel(
         .db_context("get connection")
         .map_err(|e| e.to_string())?;
 
-    // 既に登録されているかチェック
+    // login name (channel_name) を使用して重複チェック
+    let login_name = &stream_info.channel_name;
     let mut stmt = conn
         .prepare("SELECT COUNT(*) FROM channels WHERE platform = 'twitch' AND channel_id = ?")
         .db_context("prepare query")
         .map_err(|e| e.to_string())?;
     let count: i64 = stmt
-        .query_row([&channel_id], |row| row.get(0))
+        .query_row([login_name], |row| row.get(0))
         .db_context("query")
         .map_err(|e| e.to_string())?;
     drop(stmt);
@@ -189,12 +190,12 @@ pub async fn promote_discovered_channel(
         // 既に登録されている場合はis_auto_discoveredフラグを更新
         conn.execute(
             "UPDATE channels SET is_auto_discovered = false, discovered_at = NULL WHERE platform = 'twitch' AND channel_id = ?",
-            [&channel_id],
+            [login_name],
         )
         .db_context("update channel")
         .map_err(|e| e.to_string())?;
     } else {
-        // 新規登録
+        // 新規登録: channel_id に login name を保存
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
             r#"
@@ -206,8 +207,8 @@ pub async fn promote_discovered_channel(
             "#,
             duckdb::params![
                 db_constants::PLATFORM_TWITCH,
-                channel_id.as_str(),
-                stream_info.channel_name.as_str(),
+                login_name,     // channel_id に login name を保存
+                login_name,     // channel_name も同じ値
                 "true",         // enabled
                 "60",           // poll_interval
                 "false",        // is_auto_discovered

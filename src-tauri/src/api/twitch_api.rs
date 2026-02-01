@@ -446,6 +446,49 @@ impl TwitchApiClient {
         }
     }
 
+    /// 複数のユーザーIDからフォロワー数をバッチ取得
+    /// 
+    /// user_ids: ユーザーIDのリスト
+    /// 戻り値: (user_id, follower_count) のタプルのベクター
+    pub async fn get_followers_batch(
+        &self,
+        user_ids: &[&str],
+    ) -> Result<Vec<(String, i32)>, Box<dyn std::error::Error>> {
+        use twitch_api::helix::channels::GetChannelFollowersRequest;
+        
+        if user_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let token = self.get_user_token().await?;
+        let mut results = Vec::new();
+
+        // 各ユーザーIDに対してフォロワー数を取得
+        for user_id in user_ids {
+            let broadcaster_id_ref: &types::UserIdRef = (*user_id).into();
+            let request = GetChannelFollowersRequest::broadcaster_id(broadcaster_id_ref);
+
+            // リクエストをトラッキング
+            if let Ok(mut limiter) = self.rate_limiter.lock() {
+                limiter.track_request();
+            }
+
+            match self.client.req_get(request, &token).await {
+                Ok(response) => {
+                    let follower_count = response.total.unwrap_or(0) as i32;
+                    results.push((user_id.to_string(), follower_count));
+                }
+                Err(e) => {
+                    // エラーの場合は0として扱う（個別のエラーで全体を失敗させない）
+                    eprintln!("[TwitchAPI] Failed to get follower count for {}: {}", user_id, e);
+                    results.push((user_id.to_string(), 0));
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
     /// 上位配信を取得（自動発見機能用）
     ///
     /// game_ids: ゲームIDのリスト（Noneの場合は全ゲーム）
