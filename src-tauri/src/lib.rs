@@ -187,8 +187,8 @@ pub fn run() {
                         // Initialize Twitch collector if credentials are available
                         // Device Code Flow uses only client_id (no client_secret required)
                         if let Some(client_id) = &settings.twitch.client_id {
-                            let collector = TwitchCollector::new_with_app(client_id.clone(), None, app_handle.clone());
-                            poller.register_collector("twitch".to_string(), Arc::new(collector));
+                            let collector = Arc::new(TwitchCollector::new_with_app(client_id.clone(), None, app_handle.clone()));
+                            poller.register_twitch_collector(collector);
                             logger_for_init.info("Twitch collector initialized successfully");
                         } else {
                             logger_for_init.info("Twitch credentials not configured, skipping collector initialization");
