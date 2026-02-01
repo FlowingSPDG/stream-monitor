@@ -192,13 +192,14 @@ impl TwitchOAuth {
                             expires_at: (now + Duration::seconds(expires_in as i64)).to_rfc3339(),
                             obtained_at: now.to_rfc3339(),
                         };
-                        
-                        if let Err(e) = KeyringStore::save_token_metadata_with_app(
-                            handle,
-                            "twitch",
-                            &metadata,
-                        ) {
-                            eprintln!("[Twitch Device Flow] WARNING: Failed to save token metadata: {}", e);
+
+                        if let Err(e) =
+                            KeyringStore::save_token_metadata_with_app(handle, "twitch", &metadata)
+                        {
+                            eprintln!(
+                                "[Twitch Device Flow] WARNING: Failed to save token metadata: {}",
+                                e
+                            );
                             // メタデータ保存失敗は致命的ではないので続行
                         }
                     }
@@ -326,13 +327,13 @@ impl TwitchOAuth {
                 expires_at: (now + Duration::seconds(expires_in as i64)).to_rfc3339(),
                 obtained_at: now.to_rfc3339(),
             };
-            
-            if let Err(e) = KeyringStore::save_token_metadata_with_app(
-                &handle,
-                "twitch",
-                &metadata,
-            ) {
-                eprintln!("[Twitch Device Flow] WARNING: Failed to save token metadata: {}", e);
+
+            if let Err(e) = KeyringStore::save_token_metadata_with_app(&handle, "twitch", &metadata)
+            {
+                eprintln!(
+                    "[Twitch Device Flow] WARNING: Failed to save token metadata: {}",
+                    e
+                );
             }
         }
 

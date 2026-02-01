@@ -2,6 +2,7 @@ use crate::api::twitch_api::TwitchRateLimitStatus;
 use crate::collectors::poller::ChannelPoller;
 use crate::config::settings::SettingsManager;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tauri::{AppHandle, State};
 use tokio::sync::Mutex;
 use twitch_api::{
@@ -9,7 +10,6 @@ use twitch_api::{
     twitch_oauth2::{AccessToken, UserToken as TwitchApiUserToken},
     types,
 };
-use std::sync::Arc;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TwitchChannelInfo {
@@ -102,15 +102,15 @@ pub async fn get_twitch_rate_limit_status(
     poller: State<'_, Arc<Mutex<ChannelPoller>>>,
 ) -> Result<TwitchRateLimitStatus, String> {
     let poller_guard = poller.lock().await;
-    
+
     // TwitchCollectorからrate_limiterを取得
     let result = if let Some(twitch_collector) = poller_guard.get_twitch_collector() {
         let api_client = twitch_collector.get_api_client();
         let rate_limiter = Arc::clone(&api_client.get_rate_limiter());
-        
+
         // pollerのロックを早期に解放
         drop(poller_guard);
-        
+
         let status = match rate_limiter.lock() {
             Ok(limiter) => Ok(limiter.get_status()),
             Err(e) => Err(format!("レート制限トラッカーのロックに失敗しました: {}", e)),
@@ -127,6 +127,6 @@ pub async fn get_twitch_rate_limit_status(
             request_count: 0,
         })
     };
-    
+
     result
 }

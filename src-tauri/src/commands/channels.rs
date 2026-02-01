@@ -235,7 +235,10 @@ pub async fn update_channel(
     params.push(id.to_string());
 
     let query = format!("UPDATE channels SET {} WHERE id = ?", updates.join(", "));
-    println!("[update_channel] Executing query: {} with params: {:?}", query, params);
+    println!(
+        "[update_channel] Executing query: {} with params: {:?}",
+        query, params
+    );
 
     utils::execute_with_params(&conn, &query, &params)
         .map_err(|e| format!("Failed to update channel: {}", e))?;
@@ -261,7 +264,7 @@ pub async fn update_channel(
     // 有効状態が変更された場合、またはpoll_intervalが変更された場合にポーリングを更新
     if let Some(poller) = app_handle.try_state::<Arc<Mutex<ChannelPoller>>>() {
         let mut poller = poller.lock().await;
-        
+
         if let Some(enabled) = enabled {
             if enabled && !old_channel.enabled {
                 // 無効→有効になった場合、ポーリングを開始
@@ -285,7 +288,10 @@ pub async fn update_channel(
                 if let Err(e) =
                     poller.start_polling(updated_channel.clone(), &db_manager, app_handle.clone())
                 {
-                    eprintln!("Failed to restart polling for updated channel {}: {}", id, e);
+                    eprintln!(
+                        "Failed to restart polling for updated channel {}: {}",
+                        id, e
+                    );
                 }
             } else {
                 println!(
@@ -302,7 +308,10 @@ pub async fn update_channel(
             if let Err(e) =
                 poller.start_polling(updated_channel.clone(), &db_manager, app_handle.clone())
             {
-                eprintln!("Failed to restart polling for updated channel {}: {}", id, e);
+                eprintln!(
+                    "Failed to restart polling for updated channel {}: {}",
+                    id, e
+                );
             }
         }
     } else {

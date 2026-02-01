@@ -4,7 +4,7 @@ use tauri::{AppHandle, Runtime};
 /// Token metadata for tracking expiration
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TokenMetadata {
-    pub expires_at: String, // RFC3339 format
+    pub expires_at: String,  // RFC3339 format
     pub obtained_at: String, // RFC3339 format
 }
 
@@ -109,7 +109,7 @@ impl KeyringStore {
 
         let key = format!("{}_token_metadata", platform);
         let metadata_json = serde_json::to_string(metadata)?;
-        
+
         app.keyring()
             .set_password(Self::SERVICE_NAME, &key, &metadata_json)?;
 

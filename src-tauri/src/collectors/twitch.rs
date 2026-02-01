@@ -104,7 +104,9 @@ impl Collector for TwitchCollector {
 
 impl TwitchCollector {
     /// トークンの有効期限をチェックし、必要に応じてリフレッシュ
-    pub async fn check_and_refresh_token_if_needed(&self) -> Result<bool, Box<dyn std::error::Error>> {
+    pub async fn check_and_refresh_token_if_needed(
+        &self,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
         self.api_client.check_and_refresh_token_if_needed().await
     }
 

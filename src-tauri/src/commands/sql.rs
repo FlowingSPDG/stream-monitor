@@ -1,6 +1,6 @@
 use crate::database::DatabaseManager;
 use chrono::{TimeZone, Utc};
-use duckdb::{params, types::ValueRef, types::TimeUnit};
+use duckdb::{params, types::TimeUnit, types::ValueRef};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tauri::State;
@@ -145,8 +145,12 @@ pub async fn execute_sql(
                             }
                         };
                         match datetime {
-                            Some(dt) => serde_json::Value::String(dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string()),
-                            None => serde_json::Value::String(format!("<Invalid Timestamp: {}>", value)),
+                            Some(dt) => serde_json::Value::String(
+                                dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string(),
+                            ),
+                            None => {
+                                serde_json::Value::String(format!("<Invalid Timestamp: {}>", value))
+                            }
                         }
                     }
                     Ok(ValueRef::Text(s)) => {
@@ -238,8 +242,12 @@ pub async fn execute_sql(
                             }
                         };
                         match datetime {
-                            Some(dt) => serde_json::Value::String(dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string()),
-                            None => serde_json::Value::String(format!("<Invalid Timestamp: {}>", value)),
+                            Some(dt) => serde_json::Value::String(
+                                dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string(),
+                            ),
+                            None => {
+                                serde_json::Value::String(format!("<Invalid Timestamp: {}>", value))
+                            }
                         }
                     }
                     Ok(ValueRef::Text(s)) => {

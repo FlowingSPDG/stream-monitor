@@ -13,7 +13,6 @@ interface ChannelFormData {
 }
 
 interface ChannelFormProps {
-  channel: null;
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -27,7 +26,7 @@ interface TwitchChannelInfo {
   broadcaster_type?: string;
 }
 
-export function ChannelForm({ channel, onSuccess, onCancel }: ChannelFormProps) {
+export function ChannelForm({ onSuccess, onCancel }: ChannelFormProps) {
   const [isValidating, setIsValidating] = useState(false);
   const [validatedInfo, setValidatedInfo] = useState<TwitchChannelInfo | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);

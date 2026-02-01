@@ -623,14 +623,14 @@ pub fn get_game_daily_stats(
 
     let mut stmt = conn.prepare(sql)?;
     let params = vec![
-        category.to_string(), 
-        start_time.to_string(), 
+        category.to_string(),
+        start_time.to_string(),
         end_time.to_string(),
         category.to_string(),
         start_time.to_string(),
         end_time.to_string(),
     ];
-    
+
     let results = utils::query_map_with_params(&mut stmt, &params, |row| {
         Ok(DailyStats {
             date: row.get(0)?,
@@ -697,14 +697,14 @@ pub fn get_channel_daily_stats(
 
     let mut stmt = conn.prepare(sql)?;
     let params = vec![
-        channel_id.to_string(), 
-        start_time.to_string(), 
+        channel_id.to_string(),
+        start_time.to_string(),
         end_time.to_string(),
         channel_id.to_string(),
         start_time.to_string(),
         end_time.to_string(),
     ];
-    
+
     let results = utils::query_map_with_params(&mut stmt, &params, |row| {
         Ok(DailyStats {
             date: row.get(0)?,

@@ -194,7 +194,6 @@ export function ChannelList() {
       {showAddForm && (
         <div className="card p-6 animate-slide-up">
           <ChannelForm
-            channel={null}
             onSuccess={handleFormSuccess}
             onCancel={handleFormClose}
           />
