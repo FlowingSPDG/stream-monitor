@@ -74,7 +74,9 @@ function LiveChannelCard({ channel }: LiveChannelCardProps) {
             onClick={async () => {
               if (confirm('このチャンネルを手動登録に昇格しますか？')) {
                 try {
-                  await invoke('promote_discovered_channel', { channelId: channel.id });
+                  await invoke('promote_discovered_channel', { 
+                    channelId: channel.twitch_user_id?.toString() || channel.channel_id 
+                  });
                   window.location.reload();
                 } catch (err) {
                   alert(`エラー: ${err}`);
@@ -188,7 +190,7 @@ function DiscoveredStreamCard({ stream, onPromote }: DiscoveredStreamCardProps) 
           配信を開く
         </button>
         <button
-          onClick={() => onPromote(stream.channel_id)}
+          onClick={() => onPromote(stream.twitch_user_id.toString())}
           className="text-xs px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
         >
           手動登録に昇格

@@ -1,7 +1,7 @@
 export interface Channel {
   id?: number;
   platform: 'twitch' | 'youtube';
-  channel_id: string;
+  channel_id: string; // Twitch: login, YouTube: channel_id
   channel_name: string;
   display_name?: string;
   profile_image_url?: string;
@@ -12,6 +12,7 @@ export interface Channel {
   view_count?: number;
   is_auto_discovered?: boolean;
   discovered_at?: string;
+  twitch_user_id?: number; // Twitchの不変なuser ID（内部識別子）
   created_at?: string;
   updated_at?: string;
 }
@@ -257,7 +258,8 @@ export interface AutoDiscoverySettings {
 
 export interface DiscoveredStreamInfo {
   id: number;
-  channel_id: string;
+  twitch_user_id: number;  // 不変なTwitch user ID（内部識別子）
+  channel_id: string;       // login（表示用）
   channel_name: string;
   display_name?: string;
   profile_image_url?: string;

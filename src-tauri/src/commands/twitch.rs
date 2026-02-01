@@ -15,7 +15,8 @@ use twitch_api::{
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TwitchChannelInfo {
-    pub channel_id: String,
+    pub channel_id: String,        // login (表示用)
+    pub twitch_user_id: i64,       // 不変なuser ID
     pub display_name: String,
     pub profile_image_url: String,
     pub description: String,
@@ -86,8 +87,16 @@ pub async fn validate_twitch_channel(
         .broadcaster_type
         .map(|bt| format!("{:?}", bt).to_lowercase());
 
+    // Parse user_id as i64
+    let twitch_user_id = user
+        .id
+        .as_str()
+        .parse::<i64>()
+        .map_err(|e| format!("Failed to parse Twitch user ID: {}", e))?;
+
     Ok(TwitchChannelInfo {
         channel_id: user.login.to_string(),
+        twitch_user_id,
         display_name: user.display_name.to_string(),
         profile_image_url: user
             .profile_image_url

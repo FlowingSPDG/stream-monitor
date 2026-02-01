@@ -19,6 +19,7 @@ interface ChannelFormProps {
 
 interface TwitchChannelInfo {
   channel_id: string;
+  twitch_user_id: number;
   display_name: string;
   profile_image_url: string;
   description: string;
@@ -41,7 +42,7 @@ export function ChannelForm({ onSuccess, onCancel }: ChannelFormProps) {
   });
 
   const addMutation = useMutation({
-    mutationFn: async (data: ChannelFormData & { display_name?: string; profile_image_url?: string; follower_count?: number; broadcaster_type?: string }) => {
+    mutationFn: async (data: ChannelFormData & { display_name?: string; profile_image_url?: string; follower_count?: number; broadcaster_type?: string; twitch_user_id?: number }) => {
       return await invoke<Channel>("add_channel", {
         request: {
           platform: data.platform,
@@ -52,6 +53,7 @@ export function ChannelForm({ onSuccess, onCancel }: ChannelFormProps) {
           poll_interval: data.poll_interval,
           follower_count: data.follower_count,
           broadcaster_type: data.broadcaster_type,
+          twitch_user_id: data.twitch_user_id,
         },
       });
     },
@@ -140,6 +142,7 @@ export function ChannelForm({ onSuccess, onCancel }: ChannelFormProps) {
           profile_image_url: validatedInfo.profile_image_url,
           follower_count: validatedInfo.follower_count,
           broadcaster_type: validatedInfo.broadcaster_type,
+          twitch_user_id: validatedInfo.twitch_user_id,
         } : {}),
       };
 

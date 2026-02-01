@@ -161,7 +161,7 @@ pub async fn promote_discovered_channel(
     let streams_lock = cache.streams.lock().await;
     let stream_info = streams_lock
         .iter()
-        .find(|s| s.channel_id == channel_id)
+        .find(|s| s.twitch_user_id.to_string() == channel_id)
         .cloned();
     drop(streams_lock);
 
@@ -174,8 +174,8 @@ pub async fn promote_discovered_channel(
         .db_context("get connection")
         .map_err(|e| e.to_string())?;
 
-    // login name (channel_name) を使用して重複チェック
-    let login_name = &stream_info.channel_name;
+    // login name (channel_id フィールド) を使用して重複チェック
+    let login_name = &stream_info.channel_id;
     let mut stmt = conn
         .prepare("SELECT COUNT(*) FROM channels WHERE platform = 'twitch' AND channel_id = ?")
         .db_context("prepare query")
@@ -187,32 +187,33 @@ pub async fn promote_discovered_channel(
     drop(stmt);
 
     if count > 0 {
-        // 既に登録されている場合はis_auto_discoveredフラグを更新
+        // 既に登録されている場合はis_auto_discoveredフラグとtwitch_user_idを更新
         conn.execute(
-            "UPDATE channels SET is_auto_discovered = false, discovered_at = NULL WHERE platform = 'twitch' AND channel_id = ?",
-            [login_name],
+            "UPDATE channels SET is_auto_discovered = false, discovered_at = NULL, twitch_user_id = ? WHERE platform = 'twitch' AND channel_id = ?",
+            duckdb::params![stream_info.twitch_user_id, login_name],
         )
         .db_context("update channel")
         .map_err(|e| e.to_string())?;
     } else {
-        // 新規登録: channel_id に login name を保存
+        // 新規登録: channel_id に login、twitch_user_id に user ID を保存
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
             r#"
             INSERT INTO channels (
                 platform, channel_id, channel_name,
                 enabled, poll_interval, is_auto_discovered, discovered_at,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                twitch_user_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
             duckdb::params![
                 db_constants::PLATFORM_TWITCH,
-                login_name,     // channel_id に login name を保存
-                login_name,     // channel_name も同じ値
-                "true",         // enabled
-                "60",           // poll_interval
-                "false",        // is_auto_discovered
-                None::<String>, // discovered_at
+                login_name,                  // channel_id に login を保存
+                &stream_info.channel_name,   // channel_name
+                "true",                      // enabled
+                "60",                        // poll_interval
+                "false",                     // is_auto_discovered
+                None::<String>,              // discovered_at
+                stream_info.twitch_user_id,  // twitch_user_id
                 now.as_str(),
                 now.as_str(),
             ],
@@ -233,7 +234,8 @@ pub async fn promote_discovered_channel(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredStreamInfo {
     pub id: i64,
-    pub channel_id: String,
+    pub twitch_user_id: i64,   // 不変なTwitch user ID（内部識別子）
+    pub channel_id: String,     // login（表示用）
     pub channel_name: String,
     pub display_name: Option<String>,
     pub profile_image_url: Option<String>,

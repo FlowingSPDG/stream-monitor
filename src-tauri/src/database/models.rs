@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct Channel {
     pub id: Option<i64>,
     pub platform: String,
-    pub channel_id: String,
+    pub channel_id: String, // Twitch: login (変更可能), YouTube: channel_id
     pub channel_name: String,
     pub display_name: Option<String>,
     pub profile_image_url: Option<String>,
@@ -15,6 +15,7 @@ pub struct Channel {
     pub view_count: Option<i32>,
     pub is_auto_discovered: Option<bool>,
     pub discovered_at: Option<String>,
+    pub twitch_user_id: Option<i64>, // Twitchの不変なuser ID（内部識別子）
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
 }
@@ -103,6 +104,7 @@ mod tests {
             view_count: None,
             is_auto_discovered: None,
             discovered_at: None,
+            twitch_user_id: Some(123456789),
             enabled: true,
             poll_interval: 60,
             created_at: Some("2024-01-01T00:00:00Z".to_string()),
@@ -116,6 +118,7 @@ mod tests {
         assert_eq!(channel.platform, deserialized.platform);
         assert_eq!(channel.channel_id, deserialized.channel_id);
         assert_eq!(channel.channel_name, deserialized.channel_name);
+        assert_eq!(channel.twitch_user_id, deserialized.twitch_user_id);
     }
 
     #[test]

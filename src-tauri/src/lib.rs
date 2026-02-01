@@ -22,7 +22,7 @@ use commands::{
         get_broadcaster_analytics, get_channel_daily_stats, get_data_availability,
         get_game_analytics, get_game_daily_stats, list_game_categories,
     },
-    channels::{add_channel, list_channels, remove_channel, toggle_channel, update_channel},
+    channels::{add_channel, list_channels, migrate_twitch_user_ids, remove_channel, toggle_channel, update_channel},
     chat::{get_chat_messages, get_chat_rate, get_chat_stats},
     config::{
         delete_oauth_config, delete_token, get_build_info, get_database_init_status,
@@ -71,7 +71,7 @@ fn start_existing_channels_polling(
     // Get all enabled channels
     let mut stmt = conn.prepare(
         "SELECT id, platform, channel_id, channel_name, enabled, poll_interval, \
-         is_auto_discovered, discovered_at, CAST(created_at AS VARCHAR) as created_at, CAST(updated_at AS VARCHAR) as updated_at \
+         is_auto_discovered, discovered_at, twitch_user_id, CAST(created_at AS VARCHAR) as created_at, CAST(updated_at AS VARCHAR) as updated_at \
          FROM channels WHERE enabled = true"
     )?;
 
@@ -91,8 +91,9 @@ fn start_existing_channels_polling(
                 view_count: None,
                 is_auto_discovered: row.get(6).ok(),
                 discovered_at: row.get(7).ok(),
-                created_at: Some(row.get(8)?),
-                updated_at: Some(row.get(9)?),
+                twitch_user_id: row.get(8).ok(),
+                created_at: Some(row.get(9)?),
+                updated_at: Some(row.get(10)?),
             })
         })?
         .collect();
@@ -337,6 +338,7 @@ pub fn run() {
             update_channel,
             list_channels,
             toggle_channel,
+            migrate_twitch_user_ids,
             // Chat commands
             get_chat_messages,
             get_chat_stats,

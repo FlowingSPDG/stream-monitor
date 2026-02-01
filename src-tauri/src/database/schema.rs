@@ -266,5 +266,23 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
         conn.execute("ALTER TABLE channels ADD COLUMN current_category TEXT", [])?;
     }
 
+    // channelsテーブルにtwitch_user_idフィールドを追加（不変なTwitch user ID）
+    let mut channels_has_twitch_user_id = conn.prepare(
+        "SELECT COUNT(*) FROM pragma_table_info('channels') WHERE name = 'twitch_user_id'",
+    )?;
+    let channels_has_twitch_user_id_count: i64 =
+        channels_has_twitch_user_id.query_row([], |row| row.get(0))?;
+
+    if channels_has_twitch_user_id_count == 0 {
+        eprintln!("[Migration] Adding twitch_user_id column to channels table");
+        conn.execute("ALTER TABLE channels ADD COLUMN twitch_user_id BIGINT", [])?;
+        // インデックスを作成（検索パフォーマンス向上のため）
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_channels_twitch_user_id ON channels(twitch_user_id)",
+            [],
+        )?;
+        eprintln!("[Migration] Created index on twitch_user_id");
+    }
+
     Ok(())
 }

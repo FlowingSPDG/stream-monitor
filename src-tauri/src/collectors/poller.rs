@@ -346,7 +346,7 @@ impl ChannelPoller {
     }
 
     fn get_channel(conn: &Connection, channel_id: i64) -> Result<Option<Channel>, duckdb::Error> {
-        let mut stmt = conn.prepare("SELECT id, platform, channel_id, channel_name, enabled, poll_interval, is_auto_discovered, CAST(discovered_at AS VARCHAR) as discovered_at, CAST(created_at AS VARCHAR) as created_at, CAST(updated_at AS VARCHAR) as updated_at FROM channels WHERE id = ?")?;
+        let mut stmt = conn.prepare("SELECT id, platform, channel_id, channel_name, enabled, poll_interval, is_auto_discovered, CAST(discovered_at AS VARCHAR) as discovered_at, twitch_user_id, CAST(created_at AS VARCHAR) as created_at, CAST(updated_at AS VARCHAR) as updated_at FROM channels WHERE id = ?")?;
 
         let channel_id_str = channel_id.to_string();
         let rows: Result<Vec<_>, _> = stmt
@@ -365,8 +365,9 @@ impl ChannelPoller {
                     view_count: None,
                     is_auto_discovered: row.get(6).ok(),
                     discovered_at: row.get(7).ok(),
-                    created_at: Some(row.get(8)?),
-                    updated_at: Some(row.get(9)?),
+                    twitch_user_id: row.get(8).ok(),
+                    created_at: Some(row.get(9)?),
+                    updated_at: Some(row.get(10)?),
                 })
             })?
             .collect();
