@@ -1,7 +1,10 @@
 use crate::config::keyring_store::KeyringStore;
 use crate::oauth::twitch::TwitchOAuth;
 use chrono::{DateTime, Utc};
-use std::sync::Arc;
+use serde::Serialize;
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use twitch_api::{
     helix::{
         streams::{GetStreamsRequest, Stream},
@@ -18,6 +21,7 @@ pub struct TwitchApiClient {
     client_id: String,
     client_secret: Option<String>,
     app_handle: Option<tauri::AppHandle>,
+    rate_limiter: Arc<Mutex<TwitchRateLimitTracker>>,
 }
 
 impl TwitchApiClient {
@@ -33,7 +37,13 @@ impl TwitchApiClient {
             client_id,
             client_secret,
             app_handle: None,
+            rate_limiter: Arc::new(Mutex::new(TwitchRateLimitTracker::new())),
         }
+    }
+
+    /// レート制限トラッカーの参照を取得
+    pub fn get_rate_limiter(&self) -> Arc<Mutex<TwitchRateLimitTracker>> {
+        Arc::clone(&self.rate_limiter)
     }
 
     pub fn with_app_handle(mut self, app_handle: tauri::AppHandle) -> Self {
@@ -99,27 +109,41 @@ impl TwitchApiClient {
 
     async fn get_user_token(&self) -> Result<TwitchApiUserToken, Box<dyn std::error::Error>> {
         let access_token = self.get_access_token().await?;
-        
-        // トークン検証を試行
+
+        // トークン検証を試行（これもAPIコールなのでトラッキング）
+        if let Ok(mut limiter) = self.rate_limiter.lock() {
+            limiter.track_request();
+        }
+
         match TwitchApiUserToken::from_token(&*self.client, access_token).await {
             Ok(token) => Ok(token),
             Err(e) => {
                 // トークン検証失敗 - リフレッシュを試行
-                eprintln!("[TwitchAPI] Token validation failed: {}, attempting refresh...", e);
-                
+                eprintln!(
+                    "[TwitchAPI] Token validation failed: {}, attempting refresh...",
+                    e
+                );
+
                 // リフレッシュトークンの存在確認
                 if let Some(ref handle) = self.app_handle {
                     if KeyringStore::get_token_with_app(handle, "twitch_refresh").is_err() {
-                        return Err("Refresh token not found. Please re-authenticate via Device Code Flow.".into());
+                        return Err(
+                            "Refresh token not found. Please re-authenticate via Device Code Flow."
+                                .into(),
+                        );
                     }
                 } else {
                     return Err("No app handle available for token refresh.".into());
                 }
-                
+
                 // トークンリフレッシュ実行
                 let new_token = self.refresh_token().await?;
-                
-                // 再度検証
+
+                // 再度検証（これもAPIコールなのでトラッキング）
+                if let Ok(mut limiter) = self.rate_limiter.lock() {
+                    limiter.track_request();
+                }
+
                 TwitchApiUserToken::from_token(&*self.client, new_token)
                     .await
                     .map_err(|e| {
@@ -140,12 +164,13 @@ impl TwitchApiClient {
     }
 
     /// トークンの有効期限をチェックし、期限が近い場合はリフレッシュ
-    /// 
+    ///
     /// Returns: Ok(true) if token was refreshed, Ok(false) if refresh was not needed
-    pub async fn check_and_refresh_token_if_needed(&self) -> Result<bool, Box<dyn std::error::Error>> {
-        let handle = self.app_handle.as_ref()
-            .ok_or("No app handle available")?;
-        
+    pub async fn check_and_refresh_token_if_needed(
+        &self,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        let handle = self.app_handle.as_ref().ok_or("No app handle available")?;
+
         // メタデータを取得
         let metadata = match KeyringStore::get_token_metadata_with_app(handle, "twitch") {
             Ok(m) => m,
@@ -155,7 +180,7 @@ impl TwitchApiClient {
                 return Ok(false);
             }
         };
-        
+
         let expires_at = match DateTime::parse_from_rfc3339(&metadata.expires_at) {
             Ok(dt) => dt,
             Err(e) => {
@@ -163,24 +188,24 @@ impl TwitchApiClient {
                 return Ok(false);
             }
         };
-        
+
         let now = Utc::now();
         let time_until_expiry = expires_at.signed_duration_since(now);
         let minutes_until_expiry = time_until_expiry.num_minutes();
-        
+
         // 有効期限まで30分以内の場合はリフレッシュ
         if minutes_until_expiry < 30 {
             eprintln!(
                 "[TwitchAPI] Token expires in {} minutes, refreshing proactively...",
                 minutes_until_expiry
             );
-            
+
             // リフレッシュトークンの存在確認
             if KeyringStore::get_token_with_app(handle, "twitch_refresh").is_err() {
                 eprintln!("[TwitchAPI] No refresh token available, cannot refresh proactively");
                 return Ok(false);
             }
-            
+
             // トークンリフレッシュ
             match self.refresh_token().await {
                 Ok(_) => {
@@ -204,6 +229,11 @@ impl TwitchApiClient {
         let login_refs: &[&types::UserNameRef] = &[login.into()];
         let request = GetUsersRequest::logins(login_refs);
 
+        // リクエストをトラッキング
+        if let Ok(mut limiter) = self.rate_limiter.lock() {
+            limiter.track_request();
+        }
+
         match self.client.req_get(request, &token).await {
             Ok(response) => response
                 .data
@@ -216,6 +246,11 @@ impl TwitchApiClient {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;
+
+                    // 再試行もトラッキング
+                    if let Ok(mut limiter) = self.rate_limiter.lock() {
+                        limiter.track_request();
+                    }
 
                     let response = self
                         .client
@@ -242,6 +277,11 @@ impl TwitchApiClient {
         let user_id_refs: &[&types::UserIdRef] = &[user_id.into()];
         let request = GetStreamsRequest::user_ids(user_id_refs);
 
+        // リクエストをトラッキング
+        if let Ok(mut limiter) = self.rate_limiter.lock() {
+            limiter.track_request();
+        }
+
         match self.client.req_get(request, &token).await {
             Ok(response) => Ok(response.data.into_iter().next()),
             Err(e) => {
@@ -250,6 +290,11 @@ impl TwitchApiClient {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;
+
+                    // 再試行もトラッキング
+                    if let Ok(mut limiter) = self.rate_limiter.lock() {
+                        limiter.track_request();
+                    }
 
                     let response = self
                         .client
@@ -264,7 +309,124 @@ impl TwitchApiClient {
     }
 }
 
-// 既存コードとの互換性のため、レートリミッターは残しておく（将来的に使用可能）
+/// Twitch APIレート制限トラッカー
+///
+/// トークンバケットアルゴリズムをシミュレートし、直近1分間のリクエスト数を追跡します。
+pub struct TwitchRateLimitTracker {
+    /// リクエストごとのタイムスタンプとポイント消費を記録
+    request_log: VecDeque<(Instant, u32)>,
+    /// バケット容量（デフォルト800ポイント/分）
+    bucket_capacity: u32,
+    /// ウィンドウサイズ（60秒）
+    window_duration: Duration,
+}
+
+impl TwitchRateLimitTracker {
+    /// デフォルトの設定で新しいトラッカーを作成
+    ///
+    /// バケット容量: 800ポイント/分（Twitch Developer Forumsの情報に基づく）
+    pub fn new() -> Self {
+        Self {
+            request_log: VecDeque::new(),
+            bucket_capacity: 800,
+            window_duration: Duration::from_secs(60),
+        }
+    }
+
+    /// カスタム設定で新しいトラッカーを作成
+    #[allow(dead_code)]
+    pub fn with_capacity(bucket_capacity: u32) -> Self {
+        Self {
+            request_log: VecDeque::new(),
+            bucket_capacity,
+            window_duration: Duration::from_secs(60),
+        }
+    }
+
+    /// リクエストを記録（デフォルト1ポイント）
+    pub fn track_request(&mut self) {
+        self.track_request_with_points(1);
+    }
+
+    /// ポイント指定でリクエストを記録（将来の拡張用）
+    pub fn track_request_with_points(&mut self, points: u32) {
+        let now = Instant::now();
+        self.request_log.push_back((now, points));
+        self.cleanup_old_entries();
+    }
+
+    /// 現在のステータスを取得
+    pub fn get_status(&self) -> TwitchRateLimitStatus {
+        let now = Instant::now();
+
+        // 期限切れのエントリを除外してカウント
+        let valid_entries: Vec<_> = self
+            .request_log
+            .iter()
+            .filter(|(timestamp, _)| now.duration_since(*timestamp) < self.window_duration)
+            .collect();
+
+        let points_used: u32 = valid_entries.iter().map(|(_, points)| points).sum();
+        let request_count = valid_entries.len() as u32;
+        let points_remaining = self.bucket_capacity.saturating_sub(points_used);
+        let usage_percent = (points_used as f32 / self.bucket_capacity as f32) * 100.0;
+
+        // 最古のエントリが期限切れになるまでの秒数を計算
+        let oldest_entry_expires_in_seconds = valid_entries.first().map(|(timestamp, _)| {
+            let elapsed = now.duration_since(*timestamp);
+            let remaining = self.window_duration.saturating_sub(elapsed);
+            remaining.as_secs() as u32
+        });
+
+        TwitchRateLimitStatus {
+            points_used,
+            bucket_capacity: self.bucket_capacity,
+            points_remaining,
+            oldest_entry_expires_in_seconds,
+            usage_percent,
+            request_count,
+        }
+    }
+
+    /// 期限切れのエントリを削除（スライディングウィンドウ）
+    fn cleanup_old_entries(&mut self) {
+        let now = Instant::now();
+
+        // 60秒以上前のエントリを削除
+        while let Some((timestamp, _)) = self.request_log.front() {
+            if now.duration_since(*timestamp) >= self.window_duration {
+                self.request_log.pop_front();
+            } else {
+                break;
+            }
+        }
+    }
+}
+
+impl Default for TwitchRateLimitTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Twitch APIレート制限のステータス情報
+#[derive(Debug, Clone, Serialize)]
+pub struct TwitchRateLimitStatus {
+    /// 直近1分間で消費したポイント数（≒リクエスト数）
+    pub points_used: u32,
+    /// バケット容量（800ポイント/分）
+    pub bucket_capacity: u32,
+    /// 推定残りポイント数
+    pub points_remaining: u32,
+    /// 最古エントリが期限切れになるまでの秒数（バケット部分回復）
+    pub oldest_entry_expires_in_seconds: Option<u32>,
+    /// 使用率（0.0 - 100.0）
+    pub usage_percent: f32,
+    /// 直近1分間のリクエスト数
+    pub request_count: u32,
+}
+
+// 既存コードとの互換性のため残す
 #[allow(dead_code)]
 pub struct RateLimiter {
     // 将来的に実装

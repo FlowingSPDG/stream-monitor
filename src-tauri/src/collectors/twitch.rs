@@ -53,6 +53,11 @@ impl TwitchCollector {
         let (client_id, client_secret) = Self::get_client_id_and_secret().await?;
         Ok(Self::new(client_id, client_secret))
     }
+
+    /// レート制限トラッカーへのアクセスを提供
+    pub fn get_api_client(&self) -> &Arc<TwitchApiClient> {
+        &self.api_client
+    }
 }
 
 #[async_trait]
@@ -99,7 +104,9 @@ impl Collector for TwitchCollector {
 
 impl TwitchCollector {
     /// トークンの有効期限をチェックし、必要に応じてリフレッシュ
-    pub async fn check_and_refresh_token_if_needed(&self) -> Result<bool, Box<dyn std::error::Error>> {
+    pub async fn check_and_refresh_token_if_needed(
+        &self,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
         self.api_client.check_and_refresh_token_if_needed().await
     }
 
