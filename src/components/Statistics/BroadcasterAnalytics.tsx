@@ -1,0 +1,363 @@
+import { useQuery } from '@tanstack/react-query';
+import { invoke } from '@tauri-apps/api/core';
+import { BroadcasterAnalytics as BroadcasterAnalyticsType } from '../../types';
+import { BarChart } from '../common/charts/BarChart';
+import { Tooltip } from '../common/Tooltip';
+
+interface BroadcasterAnalyticsProps {
+  channelId?: number;
+  startTime?: string;
+  endTime?: string;
+}
+
+export default function BroadcasterAnalytics({
+  channelId,
+  startTime,
+  endTime,
+}: BroadcasterAnalyticsProps) {
+  const { data: analytics, isLoading, error } = useQuery({
+    queryKey: ['broadcaster-analytics', channelId, startTime, endTime],
+    queryFn: async () => {
+      const result = await invoke<BroadcasterAnalyticsType[]>(
+        'get_broadcaster_analytics',
+        {
+          channelId,
+          startTime,
+          endTime,
+        }
+      );
+      return result;
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center p-8">
+        <div className="text-gray-400">Loading broadcaster analytics...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-500/10 border border-red-500 rounded-lg">
+        <p className="text-red-500">Error loading analytics: {String(error)}</p>
+      </div>
+    );
+  }
+
+  if (!analytics || analytics.length === 0) {
+    return (
+      <div className="p-8 text-center text-gray-400">
+        No analytics data available for the selected period.
+      </div>
+    );
+  }
+
+  // 数値フォーマット用のヘルパー関数
+  const formatNumber = (num: number): string => {
+    return new Intl.NumberFormat().format(Math.round(num));
+  };
+
+  const formatHours = (hours: number): string => {
+    return hours.toFixed(1);
+  };
+
+  const formatPercent = (percent: number | null): string => {
+    if (percent === null) return 'N/A';
+    return `${percent.toFixed(1)}%`;
+  };
+
+  const formatDecimal = (num: number): string => {
+    return num.toFixed(2);
+  };
+
+  // MinutesWatched チャート用データ
+  const mwChartData = analytics.map((item) => ({
+    name: item.channel_name,
+    value: item.minutes_watched,
+  }));
+
+  // Average CCU チャート用データ
+  const ccuChartData = analytics.map((item) => ({
+    name: item.channel_name,
+    value: Math.round(item.average_ccu),
+  }));
+
+  // Hours Broadcasted チャート用データ
+  const hoursChartData = analytics.map((item) => ({
+    name: item.channel_name,
+    value: parseFloat(item.hours_broadcasted.toFixed(1)),
+  }));
+
+  // Peak CCU チャート用データ
+  const peakCcuChartData = analytics.map((item) => ({
+    name: item.channel_name,
+    value: item.peak_ccu,
+  }));
+
+  // Peak to Average Ratio チャート用データ
+  const peakToAvgRatioData = analytics.map((item) => ({
+    name: item.channel_name,
+    value: item.average_ccu > 0 ? parseFloat((item.peak_ccu / item.average_ccu).toFixed(2)) : 0,
+  }));
+
+  // Engagement Rate チャート用データ
+  const engagementChartData = analytics.map((item) => ({
+    name: item.channel_name,
+    value: parseFloat(item.engagement_rate.toFixed(2)),
+  }));
+
+  return (
+    <div className="space-y-6">
+      {/* サマリーカード */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+          <Tooltip content="分析対象の配信者数">
+            <div className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+              Total Broadcasters
+              <span className="text-xs opacity-60">ℹ️</span>
+            </div>
+          </Tooltip>
+          <div className="text-2xl font-bold text-white">{analytics.length}</div>
+        </div>
+        <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+          <Tooltip content="視聴者数 × 時間の合計。配信の総視聴時間を表します。">
+            <div className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+              Total Minutes Watched
+              <span className="text-xs opacity-60">ℹ️</span>
+            </div>
+          </Tooltip>
+          <div className="text-2xl font-bold text-white">
+            {formatNumber(
+              analytics.reduce((sum, item) => sum + item.minutes_watched, 0)
+            )}
+          </div>
+        </div>
+        <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+          <Tooltip content="配信を行った合計時間">
+            <div className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+              Total Hours Broadcasted
+              <span className="text-xs opacity-60">ℹ️</span>
+            </div>
+          </Tooltip>
+          <div className="text-2xl font-bold text-white">
+            {formatHours(
+              analytics.reduce((sum, item) => sum + item.hours_broadcasted, 0)
+            )}
+          </div>
+        </div>
+        <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+          <Tooltip content="期間内の総配信回数">
+            <div className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+              Total Streams
+              <span className="text-xs opacity-60">ℹ️</span>
+            </div>
+          </Tooltip>
+          <div className="text-2xl font-bold text-white">
+            {formatNumber(
+              analytics.reduce((sum, item) => sum + item.stream_count, 0)
+            )}
+          </div>
+        </div>
+        <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+          <Tooltip content="期間内のチャットメッセージ総数（概算値）">
+            <div className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+              Total Chat Messages
+              <span className="text-xs opacity-60">ℹ️</span>
+            </div>
+          </Tooltip>
+          <div className="text-2xl font-bold text-white">
+            {formatNumber(
+              analytics.reduce((sum, item) => sum + item.total_chat_messages, 0)
+            )}
+          </div>
+        </div>
+        <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+          <Tooltip content="エンゲージメント率の平均値。1000分視聴あたりのチャット数で、視聴者の参加度を表します。">
+            <div className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+              Avg Engagement
+              <span className="text-xs opacity-60">ℹ️</span>
+            </div>
+          </Tooltip>
+          <div className="text-2xl font-bold text-white">
+            {formatDecimal(
+              analytics.reduce((sum, item) => sum + item.engagement_rate, 0) / analytics.length
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* チャート */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <BarChart
+          data={mwChartData}
+          dataKey="value"
+          xAxisKey="name"
+          title="Minutes Watched by Broadcaster"
+          tooltipDescription="視聴者数×時間の合計。配信の総視聴時間を配信者別に表示します。"
+          color="#10b981"
+          height={300}
+          yAxisLabel="Minutes"
+        />
+        <BarChart
+          data={ccuChartData}
+          dataKey="value"
+          xAxisKey="name"
+          title="Average CCU by Broadcaster"
+          tooltipDescription="Average Concurrent Users（平均同時視聴者数）。期間内の平均視聴者数を示します。"
+          color="#3b82f6"
+          height={300}
+          yAxisLabel="Viewers"
+        />
+        <BarChart
+          data={peakCcuChartData}
+          dataKey="value"
+          xAxisKey="name"
+          title="Peak CCU by Broadcaster"
+          tooltipDescription="Peak Concurrent Users（ピーク同時視聴者数）。期間内の最大視聴者数を示します。"
+          color="#8b5cf6"
+          height={300}
+          yAxisLabel="Viewers"
+        />
+        <BarChart
+          data={hoursChartData}
+          dataKey="value"
+          xAxisKey="name"
+          title="Hours Broadcasted by Channel"
+          tooltipDescription="配信を行った合計時間。配信の長さや頻度の指標です。"
+          color="#f59e0b"
+          height={300}
+          yAxisLabel="Hours"
+        />
+        <BarChart
+          data={peakToAvgRatioData}
+          dataKey="value"
+          xAxisKey="name"
+          title="Peak to Average Ratio by Broadcaster"
+          tooltipDescription="ピーク集中度（Peak CCU / Average CCU）。1に近い=安定した視聴者数、大きい値=ピーク時に視聴者が集中。配信のバイラル性や話題性を示します。"
+          color="#ec4899"
+          height={300}
+          yAxisLabel="Ratio"
+        />
+        <BarChart
+          data={engagementChartData}
+          dataKey="value"
+          xAxisKey="name"
+          title="Engagement Rate by Broadcaster"
+          tooltipDescription="エンゲージメント率（チャット数 / Minutes Watched × 1000）。1000分視聴あたりのチャット数で、視聴者の参加度を表します。高いほど活発です。"
+          color="#14b8a6"
+          height={300}
+          yAxisLabel="Messages/1000MW"
+        />
+      </div>
+
+      {/* 詳細テーブル */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-700">
+          <h3 className="text-lg font-semibold text-white">Detailed Statistics</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-900/50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Broadcaster
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  <Tooltip content="Minutes Watched: 総視聴時間">
+                    <span className="cursor-help">MW</span>
+                  </Tooltip>
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  <Tooltip content="配信時間（時間）">
+                    <span className="cursor-help">Hours</span>
+                  </Tooltip>
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  <Tooltip content="平均同時視聴者数">
+                    <span className="cursor-help">Avg CCU</span>
+                  </Tooltip>
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  <Tooltip content="ピーク同時視聴者数">
+                    <span className="cursor-help">Peak CCU</span>
+                  </Tooltip>
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  <Tooltip content="配信回数">
+                    <span className="cursor-help">Streams</span>
+                  </Tooltip>
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  <Tooltip content="ピーク集中度 (Peak/Avg): 視聴者の安定性を示す">
+                    <span className="cursor-help">P/A Ratio</span>
+                  </Tooltip>
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  <Tooltip content="チャットメッセージ総数">
+                    <span className="cursor-help">Chat Msgs</span>
+                  </Tooltip>
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  <Tooltip content="エンゲージメント率: 1000分視聴あたりのチャット数">
+                    <span className="cursor-help">Engagement</span>
+                  </Tooltip>
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  <Tooltip content="最も多く配信したゲーム/カテゴリ">
+                    <span className="cursor-help">Main Title</span>
+                  </Tooltip>
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  <Tooltip content="メインタイトルのMW割合">
+                    <span className="cursor-help">MW%</span>
+                  </Tooltip>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-700">
+              {analytics.map((item) => (
+                <tr key={item.channel_id} className="hover:bg-gray-700/30">
+                  <td className="px-4 py-3 text-sm text-white font-medium">
+                    {item.channel_name}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                    {formatNumber(item.minutes_watched)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                    {formatHours(item.hours_broadcasted)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                    {formatNumber(item.average_ccu)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                    {formatNumber(item.peak_ccu)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                    {item.stream_count}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                    {item.average_ccu > 0 ? formatDecimal(item.peak_ccu / item.average_ccu) : 'N/A'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                    {formatNumber(item.total_chat_messages)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                    {formatDecimal(item.engagement_rate)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300">
+                    {item.main_played_title || 'N/A'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                    {formatPercent(item.main_title_mw_percent)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

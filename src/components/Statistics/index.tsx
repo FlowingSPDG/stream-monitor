@@ -1,23 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { ChannelStatistics } from "./ChannelStatistics";
-import { ChatAnalysis } from "./ChatAnalysis";
-import { StreamSessionView } from "./StreamSessionView";
+import BroadcasterAnalytics from "./BroadcasterAnalytics";
+import GameAnalytics from "./GameAnalytics";
 import { DateRangePicker } from "./DateRangePicker";
-import { Channel, StreamStats } from "../../types";
+import { Channel } from "../../types";
 
-type TabType = "overview" | "channels" | "chat" | "sessions";
-
-interface ChannelStat {
-  channel: Channel;
-  stats: {
-    avgViewers: number;
-    maxViewers: number;
-    totalChatMessages: number;
-    dataPoints: number;
-  };
-}
+type TabType = "overview" | "broadcaster" | "game";
 
 export function Statistics() {
   const [activeTab, setActiveTab] = useState<TabType>("overview");
@@ -44,53 +33,14 @@ export function Statistics() {
     },
   });
 
-  // チャンネル統計データ取得
-  const { data: channelStats, isLoading: channelStatsLoading } = useQuery({
-    queryKey: ["channel-statistics", dateRange, selectedChannelId],
-    queryFn: async () => {
-      const channelList = selectedChannelId 
-        ? channels?.filter(ch => ch.id === selectedChannelId) || []
-        : channels || [];
-
-      const statsPromises = channelList.map(async (channel) => {
-        const stats = await invoke<StreamStats[]>("get_stream_stats", {
-          query: {
-            channel_id: channel.id,
-            start_time: new Date(dateRange.start).toISOString(),
-            end_time: new Date(dateRange.end + 'T23:59:59').toISOString(),
-          },
-        });
-
-        const viewerCounts = stats.map(s => s.viewer_count || 0);
-        const totalChatMessages = stats.reduce((sum, s) => sum + s.chat_rate_1min, 0);
-
-        return {
-          channel,
-          stats: {
-            avgViewers: viewerCounts.length > 0 
-              ? Math.round(viewerCounts.reduce((sum, v) => sum + v, 0) / viewerCounts.length)
-              : 0,
-            maxViewers: viewerCounts.length > 0 ? Math.max(...viewerCounts) : 0,
-            totalChatMessages,
-            dataPoints: stats.length,
-          },
-        } as ChannelStat;
-      });
-
-      return await Promise.all(statsPromises);
-    },
-    enabled: !!channels && activeTab === "channels",
-  });
-
   const handleDateRangeChange = (start: string, end: string) => {
     setDateRange({ start, end });
   };
 
   const tabs = [
     { id: "overview" as TabType, label: "概要", icon: "📊" },
-    { id: "channels" as TabType, label: "チャンネル統計", icon: "📺" },
-    { id: "chat" as TabType, label: "チャット分析", icon: "💬" },
-    { id: "sessions" as TabType, label: "セッション履歴", icon: "📅" },
+    { id: "broadcaster" as TabType, label: "配信者分析", icon: "👤" },
+    { id: "game" as TabType, label: "ゲーム分析", icon: "🎮" },
   ];
 
   return (
@@ -171,35 +121,25 @@ export function Statistics() {
                 <p className="text-gray-600 dark:text-gray-400 mb-6">
                   タブを選択して詳細な統計データを確認してください
                 </p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
                   <button
-                    onClick={() => setActiveTab("channels")}
-                    className="p-6 bg-purple-50 dark:bg-purple-900/20 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                    onClick={() => setActiveTab("broadcaster")}
+                    className="p-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
                   >
-                    <div className="text-3xl mb-2">📺</div>
-                    <div className="font-semibold text-gray-900 dark:text-gray-100">チャンネル統計</div>
+                    <div className="text-3xl mb-2">👤</div>
+                    <div className="font-semibold text-gray-900 dark:text-gray-100">配信者分析</div>
                     <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      チャンネル別の詳細統計
+                      MinutesWatched・放送時間等
                     </div>
                   </button>
                   <button
-                    onClick={() => setActiveTab("chat")}
-                    className="p-6 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                    onClick={() => setActiveTab("game")}
+                    className="p-6 bg-pink-50 dark:bg-pink-900/20 rounded-lg hover:bg-pink-100 dark:hover:bg-pink-900/30 transition-colors"
                   >
-                    <div className="text-3xl mb-2">💬</div>
-                    <div className="font-semibold text-gray-900 dark:text-gray-100">チャット分析</div>
+                    <div className="text-3xl mb-2">🎮</div>
+                    <div className="font-semibold text-gray-900 dark:text-gray-100">ゲーム分析</div>
                     <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      チャットメッセージの分析
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("sessions")}
-                    className="p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-                  >
-                    <div className="text-3xl mb-2">📅</div>
-                    <div className="font-semibold text-gray-900 dark:text-gray-100">セッション履歴</div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      配信セッションの履歴
+                      ゲームタイトル別統計
                     </div>
                   </button>
                 </div>
@@ -207,30 +147,18 @@ export function Statistics() {
             </div>
           )}
 
-          {activeTab === "channels" && (
-            channelStatsLoading ? (
-              <div className="flex justify-center items-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              </div>
-            ) : (
-              <ChannelStatistics
-                channelStats={channelStats || []}
-                dateRange={dateRange}
-              />
-            )
-          )}
-
-          {activeTab === "chat" && (
-            <ChatAnalysis
-              dateRange={dateRange}
-              selectedChannelId={selectedChannelId}
+          {activeTab === "broadcaster" && (
+            <BroadcasterAnalytics
+              channelId={selectedChannelId || undefined}
+              startTime={new Date(dateRange.start).toISOString()}
+              endTime={new Date(dateRange.end + 'T23:59:59').toISOString()}
             />
           )}
 
-          {activeTab === "sessions" && (
-            <StreamSessionView
-              channelId={selectedChannelId}
-              dateRange={dateRange}
+          {activeTab === "game" && (
+            <GameAnalytics
+              startTime={new Date(dateRange.start).toISOString()}
+              endTime={new Date(dateRange.end + 'T23:59:59').toISOString()}
             />
           )}
         </div>
