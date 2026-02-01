@@ -6,5 +6,15 @@
     "client_id": null,
     "client_secret": null
   },
-  "youtube_scraping": null
+  "youtube_scraping": null,
+  "auto_discovery": {
+    "enabled": true,
+    "poll_interval": 300,
+    "max_streams": 20,
+    "filters": {
+      "game_ids": [],
+      "languages": [],
+      "min_viewers": null
+    }
+  }
 }

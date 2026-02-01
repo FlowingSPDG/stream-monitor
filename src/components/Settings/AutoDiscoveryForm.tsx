@@ -166,10 +166,14 @@ export function AutoDiscoveryForm() {
       </div>
 
       {showDetails && (
-        <div className="space-y-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+        <div className="space-y-4 p-4 border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-800">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            視聴者数上位の配信を自動的に発見・監視します
+          </div>
+
           {/* ポーリング間隔 */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               ポーリング間隔（秒）
             </label>
             <input
@@ -183,16 +187,16 @@ export function AutoDiscoveryForm() {
                   poll_interval: parseInt(e.target.value) || 300,
                 }))
               }
-              className="input w-full text-xs"
+              className="input-field"
             />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              推奨: 300秒以上
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              推奨: 300秒（5分）以上
             </p>
           </div>
 
           {/* 最大取得件数 */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               最大取得件数
             </label>
             <input
@@ -206,13 +210,16 @@ export function AutoDiscoveryForm() {
                   max_streams: parseInt(e.target.value) || 20,
                 }))
               }
-              className="input w-full text-xs"
+              className="input-field"
             />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              最大100件まで指定可能
+            </p>
           </div>
 
           {/* 最小視聴者数 */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               最小視聴者数（任意）
             </label>
             <input
@@ -230,37 +237,37 @@ export function AutoDiscoveryForm() {
                   },
                 }))
               }
-              className="input w-full text-xs"
-              placeholder="指定なし"
+              className="input-field"
+              placeholder="指定しない場合は全て取得"
             />
           </div>
 
           {/* 言語フィルター */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-              言語フィルター
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              言語フィルター（任意）
             </label>
-            <div className="flex gap-1 mb-1">
+            <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={languageInput}
                 onChange={(e) => setLanguageInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddLanguage()}
-                placeholder="ja, en..."
-                className="input flex-1 text-xs"
+                placeholder="例: ja, en"
+                className="input-field flex-1"
               />
               <button
                 onClick={handleAddLanguage}
-                className="px-2 py-1 rounded text-xs bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600"
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors text-sm font-medium"
               >
                 追加
               </button>
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-2">
               {settings.filters.languages.map((lang) => (
                 <span
                   key={lang}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded text-xs"
+                  className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm"
                 >
                   {lang}
                   <button
@@ -272,34 +279,37 @@ export function AutoDiscoveryForm() {
                 </span>
               ))}
             </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              ISO 639-1コード（例: ja=日本語, en=英語, ko=韓国語）
+            </p>
           </div>
 
           {/* ゲームIDフィルター */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-              ゲームIDフィルター
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              ゲーム/カテゴリIDフィルター（任意）
             </label>
-            <div className="flex gap-1 mb-1">
+            <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={gameIdInput}
                 onChange={(e) => setGameIdInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddGameId()}
-                placeholder="ゲームID"
-                className="input flex-1 text-xs"
+                placeholder="TwitchゲームID"
+                className="input-field flex-1"
               />
               <button
                 onClick={handleAddGameId}
-                className="px-2 py-1 rounded text-xs bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600"
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors text-sm font-medium"
               >
                 追加
               </button>
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-2">
               {settings.filters.game_ids.map((gameId) => (
                 <span
                   key={gameId}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded text-xs"
+                  className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-sm"
                 >
                   {gameId}
                   <button
@@ -311,15 +321,20 @@ export function AutoDiscoveryForm() {
                 </span>
               ))}
             </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Twitch API のゲームIDを指定（空の場合は全カテゴリ）
+            </p>
           </div>
 
-          <button
-            onClick={handleSave}
-            disabled={loading}
-            className="px-3 py-1.5 rounded text-xs font-medium bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-sm hover:shadow-md transition-all duration-200 w-full disabled:opacity-50"
-          >
-            {loading ? '保存中...' : '設定を保存'}
-          </button>
+          <div className="flex space-x-3">
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors text-sm font-medium"
+            >
+              {loading ? '保存中...' : '保存'}
+            </button>
+          </div>
         </div>
       )}
     </section>
