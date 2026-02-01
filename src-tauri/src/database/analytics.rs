@@ -679,7 +679,7 @@ pub fn get_game_daily_stats(
         })
     })?;
 
-    Ok(results.collect::<Result<Vec<_>, _>>()?)
+    results.collect::<Result<Vec<_>, _>>()
 }
 
 /// チャンネル別日次統計を取得
@@ -731,5 +731,5 @@ pub fn get_channel_daily_stats(
         })
     })?;
 
-    Ok(results.collect::<Result<Vec<_>, _>>()?)
+    results.collect::<Result<Vec<_>, _>>()
 }
