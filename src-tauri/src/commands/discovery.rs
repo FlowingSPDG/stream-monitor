@@ -188,20 +188,15 @@ pub async fn promote_discovered_channel(
         conn.execute(
             r#"
             INSERT INTO channels (
-                platform, channel_id, channel_name, display_name,
-                profile_image_url, broadcaster_type, follower_count,
+                platform, channel_id, channel_name,
                 enabled, poll_interval, is_auto_discovered, discovered_at,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
             duckdb::params![
                 "twitch",
                 channel_id.as_str(),
                 stream_info.channel_name.as_str(),
-                stream_info.display_name.as_deref().unwrap_or(""),
-                stream_info.profile_image_url.as_deref().unwrap_or(""),
-                stream_info.broadcaster_type.as_deref().unwrap_or(""),
-                stream_info.follower_count.unwrap_or(0),
                 "true",         // enabled
                 "60",           // poll_interval
                 "false",        // is_auto_discovered

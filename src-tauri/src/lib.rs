@@ -68,7 +68,7 @@ fn start_existing_channels_polling(
 
     // Get all enabled channels
     let mut stmt = conn.prepare(
-        "SELECT id, platform, channel_id, channel_name, display_name, profile_image_url, enabled, poll_interval, follower_count, broadcaster_type, view_count, \
+        "SELECT id, platform, channel_id, channel_name, enabled, poll_interval, \
          is_auto_discovered, discovered_at, CAST(created_at AS VARCHAR) as created_at, CAST(updated_at AS VARCHAR) as updated_at \
          FROM channels WHERE enabled = true"
     )?;
@@ -80,17 +80,17 @@ fn start_existing_channels_polling(
                 platform: row.get(1)?,
                 channel_id: row.get(2)?,
                 channel_name: row.get(3)?,
-                display_name: row.get(4)?,
-                profile_image_url: row.get(5)?,
-                enabled: row.get(6)?,
-                poll_interval: row.get(7)?,
-                follower_count: row.get(8).ok(),
-                broadcaster_type: row.get(9).ok(),
-                view_count: row.get(10).ok(),
-                is_auto_discovered: row.get(11).ok(),
-                discovered_at: row.get(12).ok(),
-                created_at: Some(row.get(13)?),
-                updated_at: Some(row.get(14)?),
+                display_name: None,
+                profile_image_url: None,
+                enabled: row.get(4)?,
+                poll_interval: row.get(5)?,
+                follower_count: None,
+                broadcaster_type: None,
+                view_count: None,
+                is_auto_discovered: row.get(6).ok(),
+                discovered_at: row.get(7).ok(),
+                created_at: Some(row.get(8)?),
+                updated_at: Some(row.get(9)?),
             })
         })?
         .collect();
