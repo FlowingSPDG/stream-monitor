@@ -1,4 +1,5 @@
 use crate::config::keyring_store::KeyringStore;
+use crate::constants::{database as db_constants, twitch};
 use crate::oauth::twitch::TwitchOAuth;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -54,7 +55,7 @@ impl TwitchApiClient {
     async fn get_access_token(&self) -> Result<AccessToken, Box<dyn std::error::Error>> {
         // Keyringからトークンを取得を試みる（Device Code Flowで取得したユーザートークン）
         if let Some(ref handle) = self.app_handle {
-            if let Ok(token_str) = KeyringStore::get_token_with_app(handle, "twitch") {
+            if let Ok(token_str) = KeyringStore::get_token_with_app(handle, db_constants::PLATFORM_TWITCH) {
                 return Ok(AccessToken::from(token_str));
             }
         }
@@ -77,7 +78,7 @@ impl TwitchApiClient {
 
             // トークンを保存
             if let Some(ref handle) = self.app_handle {
-                KeyringStore::save_token_with_app(handle, "twitch", &access_token_str)?;
+                KeyringStore::save_token_with_app(handle, db_constants::PLATFORM_TWITCH, &access_token_str)?;
             }
 
             return Ok(AccessToken::from(access_token_str));
@@ -172,7 +173,7 @@ impl TwitchApiClient {
         let handle = self.app_handle.as_ref().ok_or("No app handle available")?;
 
         // メタデータを取得
-        let metadata = match KeyringStore::get_token_metadata_with_app(handle, "twitch") {
+        let metadata = match KeyringStore::get_token_metadata_with_app(handle, db_constants::PLATFORM_TWITCH) {
             Ok(m) => m,
             Err(_) => {
                 // メタデータがない場合は、トークンが古い形式で保存されている可能性
@@ -242,7 +243,7 @@ impl TwitchApiClient {
                 .ok_or_else(|| "User not found".into()),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
-                if e.to_string().contains("401") || e.to_string().contains("Unauthorized") {
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED) || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT) {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;
@@ -286,7 +287,7 @@ impl TwitchApiClient {
             Ok(response) => Ok(response.data.into_iter().next()),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
-                if e.to_string().contains("401") || e.to_string().contains("Unauthorized") {
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED) || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT) {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;
@@ -331,7 +332,7 @@ impl TwitchApiClient {
             Ok(response) => Ok(response.data),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
-                if e.to_string().contains("401") || e.to_string().contains("Unauthorized") {
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED) || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT) {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;
@@ -375,7 +376,7 @@ impl TwitchApiClient {
             Ok(response) => Ok(response.data),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
-                if e.to_string().contains("401") || e.to_string().contains("Unauthorized") {
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED) || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT) {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;
@@ -420,7 +421,7 @@ impl TwitchApiClient {
             Ok(response) => Ok(response.data),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
-                if e.to_string().contains("401") || e.to_string().contains("Unauthorized") {
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED) || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT) {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;
@@ -487,7 +488,7 @@ impl TwitchApiClient {
             Ok(response) => response,
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
-                if e.to_string().contains("401") || e.to_string().contains("Unauthorized") {
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED) || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT) {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;
@@ -523,21 +524,21 @@ impl TwitchApiClient {
 pub struct TwitchRateLimitTracker {
     /// リクエストごとのタイムスタンプとポイント消費を記録
     request_log: VecDeque<(Instant, u32)>,
-    /// バケット容量（デフォルト800ポイント/分）
+    /// バケット容量（Twitch API レート制限）
     bucket_capacity: u32,
-    /// ウィンドウサイズ（60秒）
+    /// ウィンドウサイズ
     window_duration: Duration,
 }
 
 impl TwitchRateLimitTracker {
     /// デフォルトの設定で新しいトラッカーを作成
     ///
-    /// バケット容量: 800ポイント/分（Twitch Developer Forumsの情報に基づく）
+    /// バケット容量: Twitch Developer Forumsの情報に基づく
     pub fn new() -> Self {
         Self {
             request_log: VecDeque::new(),
-            bucket_capacity: 800,
-            window_duration: Duration::from_secs(60),
+            bucket_capacity: twitch::RATE_LIMIT_BUCKET_CAPACITY as u32,
+            window_duration: Duration::from_secs(twitch::RATE_LIMIT_WINDOW_SECS),
         }
     }
 
@@ -622,7 +623,7 @@ impl Default for TwitchRateLimitTracker {
 pub struct TwitchRateLimitStatus {
     /// 直近1分間で消費したポイント数（≒リクエスト数）
     pub points_used: u32,
-    /// バケット容量（800ポイント/分）
+    /// バケット容量（Twitch API レート制限）
     pub bucket_capacity: u32,
     /// 推定残りポイント数
     pub points_remaining: u32,

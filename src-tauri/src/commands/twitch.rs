@@ -1,6 +1,8 @@
 use crate::api::twitch_api::TwitchRateLimitStatus;
 use crate::collectors::poller::ChannelPoller;
 use crate::config::settings::SettingsManager;
+use crate::constants::twitch;
+use crate::error::ResultExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, State};
@@ -31,6 +33,7 @@ pub async fn validate_twitch_channel(
 ) -> Result<TwitchChannelInfo, String> {
     // Load settings to get client_id
     let settings = SettingsManager::load_settings(&app_handle)
+        .config_context("load settings")
         .map_err(|e| format!("設定の読み込みに失敗しました: {}", e))?;
 
     let _client_id = settings.twitch.client_id.ok_or_else(|| {
@@ -120,8 +123,8 @@ pub async fn get_twitch_rate_limit_status(
         // TwitchCollectorが初期化されていない場合、デフォルト値を返す
         Ok(TwitchRateLimitStatus {
             points_used: 0,
-            bucket_capacity: 800,
-            points_remaining: 800,
+            bucket_capacity: twitch::RATE_LIMIT_BUCKET_CAPACITY as u32,
+            points_remaining: twitch::RATE_LIMIT_BUCKET_CAPACITY as u32,
             oldest_entry_expires_in_seconds: None,
             usage_percent: 0.0,
             request_count: 0,

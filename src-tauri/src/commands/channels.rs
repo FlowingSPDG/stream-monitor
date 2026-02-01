@@ -3,6 +3,7 @@ use crate::database::{
     models::{Channel, ChannelWithStats},
     utils, DatabaseManager,
 };
+use crate::error::{OptionExt, ResultExt};
 use duckdb::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -25,7 +26,8 @@ pub async fn add_channel(
 ) -> Result<Channel, String> {
     let conn = db_manager
         .get_connection()
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+        .db_context("get database connection")
+        .map_err(|e| e.to_string())?;
 
     let poll_interval = request.poll_interval.unwrap_or(60);
 
@@ -42,10 +44,12 @@ pub async fn add_channel(
             ],
             |row| row.get(0),
         )
-        .map_err(|e| format!("Failed to insert channel: {}", e))?;
+        .db_context("insert channel")
+        .map_err(|e| e.to_string())?;
 
     let channel = get_channel_by_id(&conn, channel_id)
-        .ok_or_else(|| "Failed to retrieve created channel".to_string())?;
+        .ok_or_not_found("Failed to retrieve created channel")
+        .map_err(|e| e.to_string())?;
 
     // 有効なチャンネルであればポーリングを開始
     if channel.enabled {
@@ -78,11 +82,13 @@ pub async fn remove_channel(
 
     let conn = db_manager
         .get_connection()
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+        .db_context("get database connection")
+        .map_err(|e| e.to_string())?;
 
     let id_str = id.to_string();
     conn.execute("DELETE FROM channels WHERE id = ?", [id_str.as_str()])
-        .map_err(|e| format!("Failed to delete channel: {}", e))?;
+        .db_context("delete channel")
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -98,11 +104,13 @@ pub async fn update_channel(
 ) -> Result<Channel, String> {
     let conn = db_manager
         .get_connection()
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+        .db_context("get database connection")
+        .map_err(|e| e.to_string())?;
 
     // 更新前の状態を取得（有効状態の変更を検知するため）
-    let old_channel =
-        get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
+    let old_channel = get_channel_by_id(&conn, id)
+        .ok_or_not_found("Channel not found")
+        .map_err(|e| e.to_string())?;
 
     let mut updates = Vec::new();
     let mut params: Vec<String> = Vec::new();
@@ -123,7 +131,9 @@ pub async fn update_channel(
     }
 
     if updates.is_empty() {
-        return get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string());
+        return get_channel_by_id(&conn, id)
+            .ok_or_not_found("Channel not found")
+            .map_err(|e| e.to_string());
     }
 
     updates.push("updated_at = CURRENT_TIMESTAMP");
@@ -132,10 +142,12 @@ pub async fn update_channel(
     let query = format!("UPDATE channels SET {} WHERE id = ?", updates.join(", "));
 
     utils::execute_with_params(&conn, &query, &params)
-        .map_err(|e| format!("Failed to update channel: {}", e))?;
+        .db_context("update channel")
+        .map_err(|e| e.to_string())?;
 
-    let updated_channel =
-        get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
+    let updated_channel = get_channel_by_id(&conn, id)
+        .ok_or_not_found("Channel not found")
+        .map_err(|e| e.to_string())?;
 
     // 有効状態が変更された場合、ポーリングを開始/停止
     if let Some(enabled) = enabled {
@@ -164,14 +176,16 @@ pub async fn list_channels(
     db_manager: State<'_, DatabaseManager>,
 ) -> Result<Vec<ChannelWithStats>, String> {
     // DB接続とクエリをスコープ内で完了させる
-    let channels = {
+    let channels: Vec<Channel> = {
         let conn = db_manager
             .get_connection()
-            .map_err(|e| format!("Failed to get database connection: {}", e))?;
+            .db_context("get database connection")
+            .map_err(|e| e.to_string())?;
 
         let mut stmt = conn
             .prepare("SELECT id, platform, channel_id, channel_name, enabled, poll_interval, is_auto_discovered, CAST(discovered_at AS VARCHAR) as discovered_at, CAST(created_at AS VARCHAR) as created_at, CAST(updated_at AS VARCHAR) as updated_at FROM channels ORDER BY created_at DESC")
-            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+            .db_context("prepare statement")
+            .map_err(|e| e.to_string())?;
 
         let channels: Result<Vec<Channel>, _> = stmt
             .query_map([], |row| {
@@ -193,10 +207,11 @@ pub async fn list_channels(
                     updated_at: Some(row.get(9)?),
                 })
             })
-            .map_err(|e| format!("Failed to query channels: {}", e))?
+            .db_context("query channels")
+            .map_err(|e| e.to_string())?
             .collect();
 
-        channels.map_err(|e| format!("Failed to collect channels: {}", e))?
+        channels.db_context("collect channels").map_err(|e| e.to_string())?
     };
 
     // Twitch API情報を取得して統合
@@ -212,7 +227,7 @@ async fn enrich_channels_with_twitch_info(
 ) -> Vec<ChannelWithStats> {
     // Twitchチャンネルのみを抽出
     let twitch_channels: Vec<&Channel> =
-        channels.iter().filter(|c| c.platform == "twitch").collect();
+        channels.iter().filter(|c| c.platform == crate::constants::database::PLATFORM_TWITCH).collect();
 
     // Twitch API クライアントを取得
     let twitch_collector = if let Some(poller) = app_handle.try_state::<Arc<Mutex<ChannelPoller>>>()
@@ -294,7 +309,7 @@ async fn enrich_channels_with_twitch_info(
             let mut current_viewers = None;
             let mut current_title = None;
 
-            if channel.platform == "twitch" {
+            if channel.platform == crate::constants::database::PLATFORM_TWITCH {
                 // ユーザー情報を統合
                 if let Some(user) = user_info_map.get(&channel.channel_id) {
                     channel.display_name = Some(user.display_name.to_string());
@@ -337,10 +352,13 @@ pub async fn toggle_channel(
 ) -> Result<Channel, String> {
     let conn = db_manager
         .get_connection()
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+        .db_context("get database connection")
+        .map_err(|e| e.to_string())?;
 
     // 現在の状態を取得
-    let current = get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
+    let current = get_channel_by_id(&conn, id)
+        .ok_or_not_found("Channel not found")
+        .map_err(|e| e.to_string())?;
 
     let new_enabled = !current.enabled;
 
@@ -350,10 +368,12 @@ pub async fn toggle_channel(
         "UPDATE channels SET enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         [enabled_str.as_str(), id_str.as_str()],
     )
-    .map_err(|e| format!("Failed to update channel: {}", e))?;
+    .db_context("update channel")
+    .map_err(|e| e.to_string())?;
 
-    let updated_channel =
-        get_channel_by_id(&conn, id).ok_or_else(|| "Channel not found".to_string())?;
+    let updated_channel = get_channel_by_id(&conn, id)
+        .ok_or_not_found("Channel not found")
+        .map_err(|e| e.to_string())?;
 
     // ポーリングの開始/停止
     if let Some(poller) = app_handle.try_state::<Arc<Mutex<ChannelPoller>>>() {
@@ -387,7 +407,7 @@ fn get_channel_by_id(conn: &Connection, id: i64) -> Option<Channel> {
                 platform: row.get(1)?,
                 channel_id: row.get(2)?,
                 channel_name: row.get(3)?,
-                display_name: None, // TODO: データベースから取得
+                display_name: None,
                 profile_image_url: None,
                 enabled: row.get(4)?,
                 poll_interval: row.get(5)?,

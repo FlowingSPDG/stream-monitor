@@ -82,27 +82,6 @@ impl DatabaseWriter {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub fn insert_chat_message(
-        conn: &Connection,
-        message: &ChatMessage,
-    ) -> Result<(), duckdb::Error> {
-        conn.execute(
-            "INSERT INTO chat_messages (stream_id, timestamp, platform, user_id, user_name, message, message_type)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [
-                &message.stream_id.to_string(),
-                &message.timestamp,
-                &message.platform,
-                message.user_id.as_deref().unwrap_or(""),
-                &message.user_name,
-                &message.message,
-                &message.message_type,
-            ],
-        )?;
-        Ok(())
-    }
-
     pub fn insert_chat_messages_batch(
         conn: &Connection,
         messages: &[ChatMessage],

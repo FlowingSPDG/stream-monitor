@@ -2,6 +2,7 @@ use crate::api::twitch_api::TwitchApiClient;
 use crate::commands::discovery::DiscoveredStreamInfo;
 use crate::config::settings::{AutoDiscoverySettings, SettingsManager};
 use crate::database::DatabaseManager;
+use crate::error::ResultExt;
 use crate::DiscoveredStreamsCache;
 use chrono::Utc;
 use std::collections::HashMap;
@@ -40,7 +41,8 @@ impl AutoDiscoveryPoller {
     pub async fn start(&self) -> Result<(), String> {
         // 設定をロード
         let settings = SettingsManager::load_settings(&self.app_handle)
-            .map_err(|e| format!("Failed to load settings: {}", e))?;
+            .config_context("load settings")
+            .map_err(|e| e.to_string())?;
 
         let auto_discovery_settings = match &settings.auto_discovery {
             Some(s) if s.enabled => s.clone(),

@@ -1,6 +1,9 @@
 use crate::config::keyring_store::KeyringStore;
 use crate::config::settings::SettingsManager;
+use crate::constants::database as db_constants;
+use crate::constants::youtube;
 use crate::database::{get_connection, DatabaseManager};
+use crate::error::ResultExt;
 use serde::{Deserialize, Serialize};
 use tauri::{command, AppHandle, Manager, State};
 
@@ -52,7 +55,8 @@ pub async fn save_token(
     token: String,
 ) -> Result<TokenResponse, String> {
     KeyringStore::save_token_with_app(&app_handle, &platform, &token)
-        .map_err(|e| format!("Failed to save token: {}", e))?;
+        .config_context("save token")
+        .map_err(|e| e.to_string())?;
 
     Ok(TokenResponse {
         success: true,
@@ -63,7 +67,8 @@ pub async fn save_token(
 #[tauri::command]
 pub async fn get_token(app_handle: AppHandle, platform: String) -> Result<String, String> {
     KeyringStore::get_token_with_app(&app_handle, &platform)
-        .map_err(|e| format!("Failed to get token: {}", e))
+        .config_context("get token")
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -72,7 +77,8 @@ pub async fn delete_token(
     platform: String,
 ) -> Result<TokenResponse, String> {
     KeyringStore::delete_token_with_app(&app_handle, &platform)
-        .map_err(|e| format!("Failed to delete token: {}", e))?;
+        .config_context("delete token")
+        .map_err(|e| e.to_string())?;
 
     Ok(TokenResponse {
         success: true,
@@ -99,16 +105,17 @@ pub async fn get_oauth_config(
 ) -> Result<OAuthConfig, String> {
     // 設定ファイルからClient IDを取得
     let settings = SettingsManager::load_settings(&app_handle)
-        .map_err(|e| format!("Failed to load settings: {}", e))?;
+        .config_context("load settings")
+        .map_err(|e| e.to_string())?;
 
     let client_id = match platform.as_str() {
-        "twitch" => settings.twitch.client_id,
-        "youtube" => settings.youtube.client_id,
+        p if p == db_constants::PLATFORM_TWITCH => settings.twitch.client_id,
+        p if p == youtube::PLATFORM_NAME => settings.youtube.client_id,
         _ => return Err(format!("Unsupported platform: {}", platform)),
     };
 
     // YouTubeの場合のみKeyringからClient Secretを取得（TwitchはDevice Code Flowでクライアント Secret不要）
-    let client_secret = if platform == "youtube" {
+    let client_secret = if platform == youtube::PLATFORM_NAME {
         KeyringStore::get_oauth_secret_with_app(&app_handle, &platform).ok()
     } else {
         None
@@ -129,14 +136,15 @@ pub async fn save_oauth_config(
 ) -> Result<OAuthConfigResponse, String> {
     // 現在の設定を読み込み
     let mut settings = SettingsManager::load_settings(&app_handle)
-        .map_err(|e| format!("Failed to load settings: {}", e))?;
+        .config_context("load settings")
+        .map_err(|e| e.to_string())?;
 
     // Client IDを設定ファイルに保存
     match platform.as_str() {
-        "twitch" => {
+        p if p == db_constants::PLATFORM_TWITCH => {
             settings.twitch.client_id = Some(client_id);
         }
-        "youtube" => {
+        p if p == youtube::PLATFORM_NAME => {
             settings.youtube.client_id = Some(client_id);
         }
         _ => return Err(format!("Unsupported platform: {}", platform)),
@@ -144,14 +152,16 @@ pub async fn save_oauth_config(
 
     // 設定ファイルを保存
     SettingsManager::save_settings(&app_handle, &settings)
-        .map_err(|e| format!("Failed to save settings: {}", e))?;
+        .config_context("save settings")
+        .map_err(|e| e.to_string())?;
 
     // YouTubeの場合のみClient SecretをKeyringに保存（TwitchはDevice Code FlowでClient Secret不要）
-    if platform == "youtube" {
+    if platform == youtube::PLATFORM_NAME {
         if let Some(secret) = client_secret {
             if !secret.trim().is_empty() {
                 KeyringStore::save_oauth_secret_with_app(&app_handle, &platform, &secret)
-                    .map_err(|e| format!("Failed to save OAuth secret: {}", e))?;
+                    .config_context("save OAuth secret")
+                    .map_err(|e| e.to_string())?;
             }
         }
     }
@@ -169,14 +179,15 @@ pub async fn delete_oauth_config(
 ) -> Result<OAuthConfigResponse, String> {
     // 現在の設定を読み込み
     let mut settings = SettingsManager::load_settings(&app_handle)
-        .map_err(|e| format!("Failed to load settings: {}", e))?;
+        .config_context("load settings")
+        .map_err(|e| e.to_string())?;
 
     // Client IDを設定ファイルから削除
     match platform.as_str() {
-        "twitch" => {
+        p if p == db_constants::PLATFORM_TWITCH => {
             settings.twitch.client_id = None;
         }
-        "youtube" => {
+        p if p == youtube::PLATFORM_NAME => {
             settings.youtube.client_id = None;
         }
         _ => return Err(format!("Unsupported platform: {}", platform)),
@@ -184,12 +195,14 @@ pub async fn delete_oauth_config(
 
     // 設定ファイルを保存
     SettingsManager::save_settings(&app_handle, &settings)
-        .map_err(|e| format!("Failed to save settings: {}", e))?;
+        .config_context("save settings")
+        .map_err(|e| e.to_string())?;
 
     // YouTubeの場合のみClient SecretをKeyringから削除（TwitchはDevice Code FlowでClient Secret不要）
-    if platform == "youtube" {
+    if platform == youtube::PLATFORM_NAME {
         KeyringStore::delete_token_with_app(&app_handle, &format!("{}_oauth_secret", platform))
-            .map_err(|e| format!("Failed to delete OAuth secret: {}", e))?;
+            .config_context("delete OAuth secret")
+            .map_err(|e| e.to_string())?;
     }
 
     Ok(OAuthConfigResponse {
@@ -202,19 +215,20 @@ pub async fn delete_oauth_config(
 pub async fn has_oauth_config(app_handle: AppHandle, platform: String) -> Result<bool, String> {
     // 設定ファイルからClient IDの存在を確認
     let settings = SettingsManager::load_settings(&app_handle)
-        .map_err(|e| format!("Failed to load settings: {}", e))?;
+        .config_context("load settings")
+        .map_err(|e| e.to_string())?;
 
     let has_client_id = match platform.as_str() {
-        "twitch" => settings.twitch.client_id.is_some(),
-        "youtube" => settings.youtube.client_id.is_some(),
+        p if p == db_constants::PLATFORM_TWITCH => settings.twitch.client_id.is_some(),
+        p if p == youtube::PLATFORM_NAME => settings.youtube.client_id.is_some(),
         _ => return Err(format!("Unsupported platform: {}", platform)),
     };
 
     // TwitchはDevice Code Flowを使用するため、Client IDのみで十分
     // YouTubeの場合はClient Secretも必要
     match platform.as_str() {
-        "twitch" => Ok(has_client_id),
-        "youtube" => {
+        p if p == db_constants::PLATFORM_TWITCH => Ok(has_client_id),
+        p if p == youtube::PLATFORM_NAME => {
             let has_client_secret =
                 KeyringStore::get_oauth_secret_with_app(&app_handle, &platform).is_ok();
             Ok(has_client_id && has_client_secret)
@@ -297,7 +311,8 @@ pub async fn recreate_database(app_handle: AppHandle) -> Result<DatabaseInitResu
     // データベースパスを取得
     let db_path = if let Ok(app_data_dir) = app_handle.path().app_data_dir() {
         std::fs::create_dir_all(&app_data_dir)
-            .map_err(|e| format!("Failed to create app data directory: {}", e))?;
+            .io_context("create app data directory")
+            .map_err(|e| e.to_string())?;
         app_data_dir.join("stream_stats.db")
     } else {
         return Err("Failed to get app data directory".to_string());

@@ -1,5 +1,6 @@
 use crate::collectors::collector_trait::Collector;
 use crate::collectors::twitch::TwitchCollector;
+use crate::constants::database as db_constants;
 use crate::database::{
     models::{Channel, ChannelStatsEvent, Stream, StreamData, StreamStats},
     writer::DatabaseWriter,
@@ -63,7 +64,7 @@ impl ChannelPoller {
     /// Register Twitch collector specifically for token management
     pub fn register_twitch_collector(&mut self, collector: Arc<TwitchCollector>) {
         self.twitch_collector = Some(collector.clone());
-        self.collectors.insert("twitch".to_string(), collector);
+        self.collectors.insert(db_constants::PLATFORM_TWITCH.to_string(), collector);
     }
 
     /// Get Twitch collector for rate limit tracking
@@ -163,7 +164,7 @@ impl ChannelPoller {
                 };
 
                 // Twitch プラットフォームの場合、10回のポーリングごとにトークン有効期限をチェック
-                if channel.platform == "twitch" && poll_count % 10 == 0 {
+                if channel.platform == db_constants::PLATFORM_TWITCH && poll_count % 10 == 0 {
                     if let Some(ref twitch_collector) = twitch_collector_for_task {
                         match twitch_collector.check_and_refresh_token_if_needed().await {
                             Ok(true) => {
@@ -400,7 +401,7 @@ impl ChannelPoller {
         let stream_db_id = DatabaseWriter::insert_or_update_stream(conn, channel_id, &stream)?;
 
         // プラットフォーム別にtwitch_user_idを設定
-        let twitch_user_id = if channel.platform == "twitch" {
+        let twitch_user_id = if channel.platform == db_constants::PLATFORM_TWITCH {
             Some(channel.channel_id.clone())
         } else {
             None

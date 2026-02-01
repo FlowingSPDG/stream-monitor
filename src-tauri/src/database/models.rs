@@ -93,7 +93,7 @@ mod tests {
     fn test_channel_serialization() {
         let channel = Channel {
             id: Some(1),
-            platform: "twitch".to_string(),
+            platform: crate::constants::database::PLATFORM_TWITCH.to_string(),
             channel_id: "test_channel".to_string(),
             channel_name: "Test Channel".to_string(),
             display_name: None,

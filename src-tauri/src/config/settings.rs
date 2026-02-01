@@ -1,3 +1,4 @@
+use crate::error::ResultExt;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::AppHandle;
@@ -123,7 +124,8 @@ impl SettingsManager {
 
         // ディレクトリが存在しない場合は作成
         std::fs::create_dir_all(&app_data_dir)
-            .map_err(|e| format!("Failed to create app data directory: {}", e))?;
+            .io_context("create app data directory")
+            .map_err(|e| e.to_string())?;
 
         Ok(app_data_dir.join("settings.json"))
     }
@@ -142,7 +144,6 @@ impl SettingsManager {
         Ok(settings)
     }
 
-    #[allow(dead_code)]
     pub fn save_settings(
         app_handle: &AppHandle,
         settings: &AppSettings,

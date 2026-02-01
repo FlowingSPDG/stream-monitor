@@ -1,5 +1,6 @@
 use crate::collectors::poller::{ChannelPoller, CollectorStatus};
 use crate::database::{models::StreamStats, utils, DatabaseManager};
+use crate::error::ResultExt;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 use tokio::sync::Mutex;
@@ -20,7 +21,8 @@ pub async fn get_stream_stats(
 ) -> Result<Vec<StreamStats>, String> {
     let conn = db_manager
         .get_connection()
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+        .db_context("get database connection")
+        .map_err(|e| e.to_string())?;
 
     let mut sql = String::from(
         "SELECT ss.id, ss.stream_id, ss.collected_at, ss.viewer_count, ss.chat_rate_1min, ss.category, ss.twitch_user_id, ss.channel_name 
@@ -55,7 +57,8 @@ pub async fn get_stream_stats(
 
     let mut stmt = conn
         .prepare(&sql)
-        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+        .db_context("prepare statement")
+        .map_err(|e| e.to_string())?;
 
     let stats: Result<Vec<StreamStats>, _> =
         utils::query_map_with_params(&mut stmt, &params, |row| {
@@ -70,10 +73,11 @@ pub async fn get_stream_stats(
                 channel_name: row.get(7)?,
             })
         })
-        .map_err(|e| format!("Failed to query stats: {}", e))?
+        .db_context("query stats")
+        .map_err(|e| e.to_string())?
         .collect();
 
-    stats.map_err(|e| format!("Failed to collect stats: {}", e))
+    stats.db_context("collect stats").map_err(|e| e.to_string())
 }
 
 #[tauri::command]

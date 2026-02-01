@@ -1,6 +1,8 @@
 use crate::collectors::auto_discovery::AutoDiscoveryPoller;
 use crate::config::settings::{AutoDiscoverySettings, SettingsManager};
+use crate::constants::database as db_constants;
 use crate::database::DatabaseManager;
+use crate::error::ResultExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
@@ -12,7 +14,8 @@ pub async fn get_auto_discovery_settings(
     app_handle: AppHandle,
 ) -> Result<Option<AutoDiscoverySettings>, String> {
     let settings = SettingsManager::load_settings(&app_handle)
-        .map_err(|e| format!("Failed to load settings: {}", e))?;
+        .config_context("load settings")
+        .map_err(|e| e.to_string())?;
 
     Ok(settings.auto_discovery)
 }
@@ -29,7 +32,8 @@ pub async fn save_auto_discovery_settings(
 
     // 設定をロード
     let mut app_settings = SettingsManager::load_settings(&app_handle)
-        .map_err(|e| format!("Failed to load settings: {}", e))?;
+        .config_context("load settings")
+        .map_err(|e| e.to_string())?;
 
     // 自動発見設定を更新
     let was_enabled = app_settings
@@ -43,7 +47,8 @@ pub async fn save_auto_discovery_settings(
 
     // 設定を保存
     SettingsManager::save_settings(&app_handle, &app_settings)
-        .map_err(|e| format!("Failed to save settings: {}", e))?;
+        .config_context("save settings")
+        .map_err(|e| e.to_string())?;
 
     // ポーラーの状態を更新
     let poller_guard = auto_discovery_poller.lock().await;
@@ -53,7 +58,7 @@ pub async fn save_auto_discovery_settings(
             poller
                 .start()
                 .await
-                .map_err(|e| format!("Failed to start auto-discovery: {}", e))?;
+                .map_err(|e| format!("Auto-discovery start failed: {}", e))?;
         } else if !is_enabled && was_enabled {
             // 無効化された場合は停止
             poller.stop().await;
@@ -63,7 +68,7 @@ pub async fn save_auto_discovery_settings(
             poller
                 .start()
                 .await
-                .map_err(|e| format!("Failed to restart auto-discovery: {}", e))?;
+                .map_err(|e| format!("Auto-discovery restart failed: {}", e))?;
         }
     }
 
@@ -78,7 +83,8 @@ pub async fn toggle_auto_discovery(
 ) -> Result<bool, String> {
     // 設定をロード
     let mut settings = SettingsManager::load_settings(&app_handle)
-        .map_err(|e| format!("Failed to load settings: {}", e))?;
+        .config_context("load settings")
+        .map_err(|e| e.to_string())?;
 
     // 現在の状態を取得
     let current_enabled = settings
@@ -101,7 +107,8 @@ pub async fn toggle_auto_discovery(
 
     // 設定を保存
     SettingsManager::save_settings(&app_handle, &settings)
-        .map_err(|e| format!("Failed to save settings: {}", e))?;
+        .config_context("save settings")
+        .map_err(|e| e.to_string())?;
 
     // ポーラーの状態を更新
     let poller_guard = auto_discovery_poller.lock().await;
@@ -110,7 +117,7 @@ pub async fn toggle_auto_discovery(
             poller
                 .start()
                 .await
-                .map_err(|e| format!("Failed to start auto-discovery: {}", e))?;
+                .map_err(|e| format!("Auto-discovery start failed: {}", e))?;
         } else {
             poller.stop().await;
         }
@@ -164,15 +171,18 @@ pub async fn promote_discovered_channel(
     // channelsテーブルに新規登録（手動登録として）
     let conn = db_manager
         .get_connection()
-        .map_err(|e| format!("Failed to get connection: {}", e))?;
+        .db_context("get connection")
+        .map_err(|e| e.to_string())?;
 
     // 既に登録されているかチェック
     let mut stmt = conn
         .prepare("SELECT COUNT(*) FROM channels WHERE platform = 'twitch' AND channel_id = ?")
-        .map_err(|e| format!("Failed to prepare query: {}", e))?;
+        .db_context("prepare query")
+        .map_err(|e| e.to_string())?;
     let count: i64 = stmt
         .query_row([&channel_id], |row| row.get(0))
-        .map_err(|e| format!("Failed to query: {}", e))?;
+        .db_context("query")
+        .map_err(|e| e.to_string())?;
     drop(stmt);
 
     if count > 0 {
@@ -181,7 +191,8 @@ pub async fn promote_discovered_channel(
             "UPDATE channels SET is_auto_discovered = false, discovered_at = NULL WHERE platform = 'twitch' AND channel_id = ?",
             [&channel_id],
         )
-        .map_err(|e| format!("Failed to update channel: {}", e))?;
+        .db_context("update channel")
+        .map_err(|e| e.to_string())?;
     } else {
         // 新規登録
         let now = chrono::Utc::now().to_rfc3339();
@@ -194,7 +205,7 @@ pub async fn promote_discovered_channel(
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
             duckdb::params![
-                "twitch",
+                db_constants::PLATFORM_TWITCH,
                 channel_id.as_str(),
                 stream_info.channel_name.as_str(),
                 "true",         // enabled
@@ -205,7 +216,8 @@ pub async fn promote_discovered_channel(
                 now.as_str(),
             ],
         )
-        .map_err(|e| format!("Failed to insert channel: {}", e))?;
+        .db_context("insert channel")
+        .map_err(|e| e.to_string())?;
     }
 
     drop(conn);

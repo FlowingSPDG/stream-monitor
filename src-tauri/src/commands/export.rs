@@ -3,6 +3,7 @@ use crate::database::{
     models::{ChatMessage, StreamStats},
     utils, DatabaseManager,
 };
+use crate::error::ResultExt;
 use duckdb::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -26,10 +27,12 @@ pub async fn export_to_csv(
 ) -> Result<String, String> {
     let conn = db_manager
         .get_connection()
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+        .db_context("get database connection")
+        .map_err(|e| e.to_string())?;
 
     let stats = get_stream_stats_internal(&conn, &query)
-        .map_err(|e| format!("Failed to query stats: {}", e))?;
+        .db_context("query stats")
+        .map_err(|e| e.to_string())?;
 
     let stats_len = stats.len();
 
@@ -48,7 +51,9 @@ pub async fn export_to_csv(
     }
 
     // ファイルに書き込み
-    std::fs::write(&file_path, csv).map_err(|e| format!("Failed to write file: {}", e))?;
+    std::fs::write(&file_path, csv)
+        .io_context("write file")
+        .map_err(|e| e.to_string())?;
 
     Ok(format!("Exported {} records to {}", stats_len, file_path))
 }
@@ -62,11 +67,13 @@ pub async fn export_to_json(
 ) -> Result<String, String> {
     let conn = db_manager
         .get_connection()
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+        .db_context("get database connection")
+        .map_err(|e| e.to_string())?;
 
     // ストリーム統計データを取得
     let stats = get_stream_stats_internal(&conn, &query)
-        .map_err(|e| format!("Failed to query stats: {}", e))?;
+        .db_context("query stats")
+        .map_err(|e| e.to_string())?;
 
     // 集計処理
     let processed_stats = if let Some(agg) = &query.aggregation {
@@ -111,7 +118,8 @@ pub async fn export_to_json(
     // チャットデータを含む場合
     if query.include_chat.unwrap_or(false) {
         let chat_messages = get_chat_messages_internal(&conn, &query)
-            .map_err(|e| format!("Failed to query chat messages: {}", e))?;
+            .db_context("query chat messages")
+            .map_err(|e| e.to_string())?;
 
         export_data.insert(
             "chat_messages".to_string(),
@@ -142,10 +150,11 @@ pub async fn export_to_json(
 
     // JSONファイルに書き込み
     let json_content = serde_json::to_string_pretty(&export_data)
-        .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+        .map_err(|e| format!("JSON serialization failed: {}", e))?;
 
     std::fs::write(&file_path, json_content)
-        .map_err(|e| format!("Failed to write JSON file: {}", e))?;
+        .io_context("write JSON file")
+        .map_err(|e| e.to_string())?;
 
     Ok(format!("Exported data to {}", file_path))
 }

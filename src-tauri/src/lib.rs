@@ -3,7 +3,9 @@ mod api;
 mod collectors;
 mod commands;
 mod config;
+mod constants;
 mod database;
+mod error;
 mod logger;
 mod oauth;
 mod websocket;
@@ -228,7 +230,7 @@ pub fn run() {
                                     let db_conn = Arc::new(Mutex::new(yt_conn));
                                     match YouTubeCollector::new(client_id.clone(), client_secret.clone(), "http://localhost:8081/callback".to_string(), Arc::clone(&db_conn)).await {
                                         Ok(collector) => {
-                                            poller.register_collector("youtube".to_string(), Arc::new(collector));
+                                            poller.register_collector(crate::constants::database::PLATFORM_YOUTUBE.to_string(), Arc::new(collector));
                                             logger_for_init.info("YouTube collector initialized successfully");
                                         }
                                         Err(e) => {

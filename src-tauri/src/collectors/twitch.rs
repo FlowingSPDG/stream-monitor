@@ -39,21 +39,6 @@ impl TwitchCollector {
         }
     }
 
-    async fn get_client_id_and_secret(
-    ) -> Result<(String, Option<String>), Box<dyn std::error::Error>> {
-        // TODO: 設定から取得する
-        // 現時点では環境変数または設定ファイルから取得する必要がある
-        let client_id =
-            std::env::var("TWITCH_CLIENT_ID").map_err(|_| "TWITCH_CLIENT_ID not set")?;
-        let client_secret = std::env::var("TWITCH_CLIENT_SECRET").ok();
-        Ok((client_id, client_secret))
-    }
-
-    pub async fn new_from_env() -> Result<Self, Box<dyn std::error::Error>> {
-        let (client_id, client_secret) = Self::get_client_id_and_secret().await?;
-        Ok(Self::new(client_id, client_secret))
-    }
-
     /// レート制限トラッカーへのアクセスを提供
     pub fn get_api_client(&self) -> &Arc<TwitchApiClient> {
         &self.api_client

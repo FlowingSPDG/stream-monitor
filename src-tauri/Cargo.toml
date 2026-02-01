@@ -47,6 +47,7 @@ yup-oauth2 = "9"
 # WebSocket and scraping libraries
 tungstenite = { version = "0.21", features = ["native-tls"] }
 scraper = "0.19"
+thiserror = "2.0.18"
 # JSON export uses existing serde_json dependency
 # Workaround for upstream scrypt bug
 [profile.dev.package.scrypt]
