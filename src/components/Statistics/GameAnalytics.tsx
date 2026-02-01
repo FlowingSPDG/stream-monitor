@@ -1,30 +1,50 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
 import { GameAnalytics as GameAnalyticsType } from '../../types';
 import { BarChart } from '../common/charts/BarChart';
+import { Tooltip } from '../common/Tooltip';
 
 interface GameAnalyticsProps {
-  category?: string;
   startTime?: string;
   endTime?: string;
 }
 
 export default function GameAnalytics({
-  category,
   startTime,
   endTime,
 }: GameAnalyticsProps) {
-  const { data: analytics, isLoading, error } = useQuery({
-    queryKey: ['game-analytics', category, startTime, endTime],
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+
+  // カテゴリ一覧を取得
+  const { data: categories } = useQuery({
+    queryKey: ['game-categories', startTime, endTime],
     queryFn: async () => {
-      const result = await invoke<GameAnalyticsType[]>('get_game_analytics', {
-        category,
+      const result = await invoke<string[]>('list_game_categories', {
         startTime,
         endTime,
       });
       return result;
     },
   });
+  // ゲーム分析データを取得
+  const { data: analytics, isLoading, error } = useQuery({
+    queryKey: ['game-analytics', selectedCategory, startTime, endTime],
+    queryFn: async () => {
+      const result = await invoke<GameAnalyticsType[]>('get_game_analytics', {
+        category: selectedCategory || undefined,
+        startTime,
+        endTime,
+      });
+      return result;
+    },
+  });
+
+  // 検索フィルター
+  const filteredCategories = categories?.filter((cat) =>
+    cat.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
 
   if (isLoading) {
     return (
@@ -93,14 +113,65 @@ export default function GameAnalytics({
 
   return (
     <div className="space-y-6">
+      {/* ゲームフィルター */}
+      <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          フィルター: ゲーム / カテゴリ
+        </label>
+        <div className="relative">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="ゲーム名で検索..."
+            className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedCategory('');
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <div className="mt-2">
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">すべてのゲーム</option>
+            {filteredCategories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* サマリーカード */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
-          <div className="text-gray-400 text-sm mb-1">Total Games</div>
+          <Tooltip content="分析対象のゲーム/カテゴリ数">
+            <div className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+              Total Games
+              <span className="text-xs opacity-60">ℹ️</span>
+            </div>
+          </Tooltip>
           <div className="text-2xl font-bold text-white">{analytics.length}</div>
         </div>
         <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
-          <div className="text-gray-400 text-sm mb-1">Total Minutes Watched</div>
+          <Tooltip content="このゲーム/カテゴリでの総視聴時間（視聴者数×時間）">
+            <div className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+              Total Minutes Watched
+              <span className="text-xs opacity-60">ℹ️</span>
+            </div>
+          </Tooltip>
           <div className="text-2xl font-bold text-white">
             {formatNumber(
               analytics.reduce((sum, item) => sum + item.minutes_watched, 0)
@@ -108,7 +179,12 @@ export default function GameAnalytics({
           </div>
         </div>
         <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
-          <div className="text-gray-400 text-sm mb-1">Total Hours Broadcasted</div>
+          <Tooltip content="このゲーム/カテゴリで配信された合計時間">
+            <div className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+              Total Hours Broadcasted
+              <span className="text-xs opacity-60">ℹ️</span>
+            </div>
+          </Tooltip>
           <div className="text-2xl font-bold text-white">
             {formatHours(
               analytics.reduce((sum, item) => sum + item.hours_broadcasted, 0)
@@ -116,7 +192,12 @@ export default function GameAnalytics({
           </div>
         </div>
         <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
-          <div className="text-gray-400 text-sm mb-1">Total Unique Broadcasters</div>
+          <Tooltip content="このゲーム/カテゴリを配信したユニークな配信者の合計数">
+            <div className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+              Total Unique Broadcasters
+              <span className="text-xs opacity-60">ℹ️</span>
+            </div>
+          </Tooltip>
           <div className="text-2xl font-bold text-white">
             {formatNumber(
               analytics.reduce((sum, item) => sum + item.unique_broadcasters, 0)
@@ -132,6 +213,7 @@ export default function GameAnalytics({
           dataKey="value"
           xAxisKey="name"
           title="Top 10 Games by Minutes Watched"
+          tooltipDescription="総視聴時間が最も多いゲームTop 10。人気度や注目度の指標です。"
           color="#10b981"
           height={300}
           yAxisLabel="Minutes"
@@ -141,6 +223,7 @@ export default function GameAnalytics({
           dataKey="value"
           xAxisKey="name"
           title="Top 10 Games by Average CCU"
+          tooltipDescription="平均同時視聴者数が最も多いゲームTop 10。視聴の集中度を示します。"
           color="#3b82f6"
           height={300}
           yAxisLabel="Viewers"
@@ -153,6 +236,7 @@ export default function GameAnalytics({
           dataKey="value"
           xAxisKey="name"
           title="Top 10 Games by Hours Broadcasted"
+          tooltipDescription="配信時間が最も長いゲームTop 10。配信者にとっての人気度を示します。"
           color="#f59e0b"
           height={300}
           yAxisLabel="Hours"
@@ -162,6 +246,7 @@ export default function GameAnalytics({
           dataKey="value"
           xAxisKey="name"
           title="Top 10 Games by Unique Broadcasters"
+          tooltipDescription="配信者数が最も多いゲームTop 10。ゲームの普及度や配信のしやすさを示します。"
           color="#8b5cf6"
           height={300}
           yAxisLabel="Broadcasters"
@@ -181,19 +266,29 @@ export default function GameAnalytics({
                   Game / Category
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  Minutes Watched
+                  <Tooltip content="総視聴時間（視聴者数×時間）">
+                    <span className="cursor-help">Minutes Watched</span>
+                  </Tooltip>
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  Hours Broadcasted
+                  <Tooltip content="配信時間（時間）">
+                    <span className="cursor-help">Hours Broadcasted</span>
+                  </Tooltip>
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  Avg CCU
+                  <Tooltip content="平均同時視聴者数">
+                    <span className="cursor-help">Avg CCU</span>
+                  </Tooltip>
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  Unique Broadcasters
+                  <Tooltip content="このゲームを配信したユニークな配信者数">
+                    <span className="cursor-help">Unique Broadcasters</span>
+                  </Tooltip>
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  Top Channel
+                  <Tooltip content="このゲームで最も視聴されたチャンネル">
+                    <span className="cursor-help">Top Channel</span>
+                  </Tooltip>
                 </th>
               </tr>
             </thead>

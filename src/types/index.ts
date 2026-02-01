@@ -192,6 +192,13 @@ export interface BroadcasterAnalytics {
   average_ccu: number;
   main_played_title: string | null;
   main_title_mw_percent: number | null;
+  peak_ccu: number;
+  stream_count: number;
+  total_chat_messages: number;
+  avg_chat_rate: number;
+  unique_chatters: number;
+  engagement_rate: number;
+  category_count: number;
 }
 
 export interface GameAnalytics {

@@ -12,6 +12,14 @@ pub struct BroadcasterAnalytics {
     pub average_ccu: f64,
     pub main_played_title: Option<String>,
     pub main_title_mw_percent: Option<f64>,
+    // 新規追加
+    pub peak_ccu: i32,
+    pub stream_count: i32,
+    pub total_chat_messages: i64,
+    pub avg_chat_rate: f64,
+    pub unique_chatters: i32,
+    pub engagement_rate: f64,
+    pub category_count: i32,
 }
 
 /// ゲームタイトル別統計
@@ -45,8 +53,10 @@ pub fn get_broadcaster_analytics(
             SELECT 
                 s.channel_id,
                 c.channel_name,
+                ss.stream_id,
                 ss.viewer_count,
                 ss.category,
+                ss.chat_rate_1min,
                 ss.collected_at,
                 EXTRACT(EPOCH FROM (
                     LEAD(ss.collected_at) OVER (PARTITION BY ss.stream_id ORDER BY ss.collected_at) 
@@ -84,7 +94,12 @@ pub fn get_broadcaster_analytics(
                 channel_id,
                 channel_name,
                 COALESCE(SUM(viewer_count * COALESCE(interval_minutes, 1)), 0)::BIGINT AS minutes_watched,
-                COALESCE(AVG(viewer_count), 0) AS average_ccu
+                COALESCE(AVG(viewer_count), 0) AS average_ccu,
+                COALESCE(MAX(viewer_count), 0) AS peak_ccu,
+                COUNT(DISTINCT stream_id) AS stream_count,
+                COALESCE(SUM(chat_rate_1min * COALESCE(interval_minutes, 1)), 0)::BIGINT AS total_chat_messages,
+                COALESCE(AVG(chat_rate_1min), 0) AS avg_chat_rate,
+                COUNT(DISTINCT category) AS category_count
             FROM stats_with_interval
             WHERE viewer_count IS NOT NULL
             GROUP BY channel_id, channel_name
@@ -93,7 +108,12 @@ pub fn get_broadcaster_analytics(
             channel_id,
             channel_name,
             minutes_watched,
-            average_ccu
+            average_ccu,
+            peak_ccu,
+            stream_count,
+            total_chat_messages,
+            avg_chat_rate,
+            category_count
         FROM channel_stats
         ORDER BY minutes_watched DESC
         "#,
@@ -106,6 +126,11 @@ pub fn get_broadcaster_analytics(
             row.get::<_, String>(1)?,  // channel_name
             row.get::<_, i64>(2)?,     // minutes_watched
             row.get::<_, f64>(3)?,     // average_ccu
+            row.get::<_, i32>(4)?,     // peak_ccu
+            row.get::<_, i32>(5)?,     // stream_count
+            row.get::<_, i64>(6)?,     // total_chat_messages
+            row.get::<_, f64>(7)?,     // avg_chat_rate
+            row.get::<_, i32>(8)?,     // category_count
         ))
     })?
     .collect::<Result<Vec<_>, _>>()?;
@@ -137,10 +162,57 @@ pub fn get_broadcaster_analytics(
         })?
         .collect::<Result<_, _>>()?;
 
+    // ユニークチャッター数を取得
+    let mut chatters_sql = String::from(
+        r#"
+        SELECT 
+            c.id AS channel_id,
+            COUNT(DISTINCT cm.user_name) AS unique_chatters
+        FROM channels c
+        LEFT JOIN streams s ON c.id = s.channel_id
+        LEFT JOIN chat_messages cm ON s.id = cm.stream_id
+        WHERE 1=1
+        "#,
+    );
+
+    let mut chatters_params: Vec<String> = Vec::new();
+
+    if let Some(ch_id) = channel_id {
+        chatters_sql.push_str(" AND c.id = ?");
+        chatters_params.push(ch_id.to_string());
+    }
+
+    if let Some(start) = start_time {
+        chatters_sql.push_str(" AND cm.timestamp >= ?");
+        chatters_params.push(start.to_string());
+    }
+
+    if let Some(end) = end_time {
+        chatters_sql.push_str(" AND cm.timestamp <= ?");
+        chatters_params.push(end.to_string());
+    }
+
+    chatters_sql.push_str(" GROUP BY c.id");
+
+    let mut chatters_stmt = conn.prepare(&chatters_sql)?;
+    let chatters_map: std::collections::HashMap<i64, i32> =
+        utils::query_map_with_params(&mut chatters_stmt, &chatters_params, |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, i32>(1)?))
+        })?
+        .collect::<Result<_, _>>()?;
+
     // カテゴリ別 MinutesWatched を取得してメインタイトルを計算
     let mut results = Vec::new();
-    for (ch_id, ch_name, mw, avg_ccu) in channel_stats {
+    for (ch_id, ch_name, mw, avg_ccu, peak_ccu, stream_count, total_chat, avg_chat_rate, category_count) in channel_stats {
         let hours = hours_map.get(&ch_id).copied().unwrap_or(0.0);
+        let unique_chatters = chatters_map.get(&ch_id).copied().unwrap_or(0);
+
+        // エンゲージメント率を計算 (チャット数 / (視聴者数 * 時間))
+        let engagement_rate = if mw > 0 {
+            (total_chat as f64 / mw as f64) * 1000.0  // 1000視聴分あたりのメッセージ数
+        } else {
+            0.0
+        };
 
         // カテゴリ別 MinutesWatched を取得
         let category_mw = get_category_minutes_watched(conn, ch_id, start_time, end_time)?;
@@ -166,6 +238,13 @@ pub fn get_broadcaster_analytics(
             average_ccu: avg_ccu,
             main_played_title: main_title,
             main_title_mw_percent: main_mw_percent,
+            peak_ccu,
+            stream_count,
+            total_chat_messages: total_chat,
+            avg_chat_rate,
+            unique_chatters,
+            engagement_rate,
+            category_count,
         });
     }
 
@@ -364,6 +443,61 @@ pub fn get_game_analytics(
     }
 
     Ok(results)
+}
+
+/// カテゴリ一覧を取得（MinutesWatched降順）
+pub fn list_categories(
+    conn: &Connection,
+    start_time: Option<&str>,
+    end_time: Option<&str>,
+) -> Result<Vec<String>, duckdb::Error> {
+    let mut sql = String::from(
+        r#"
+        WITH stats_with_interval AS (
+            SELECT 
+                ss.category,
+                ss.viewer_count,
+                EXTRACT(EPOCH FROM (
+                    LEAD(ss.collected_at) OVER (PARTITION BY ss.stream_id ORDER BY ss.collected_at) 
+                    - ss.collected_at
+                )) / 60.0 AS interval_minutes
+            FROM stream_stats ss
+            WHERE ss.category IS NOT NULL
+        "#,
+    );
+
+    let mut params: Vec<String> = Vec::new();
+
+    if let Some(start) = start_time {
+        sql.push_str(" AND ss.collected_at >= ?");
+        params.push(start.to_string());
+    }
+
+    if let Some(end) = end_time {
+        sql.push_str(" AND ss.collected_at <= ?");
+        params.push(end.to_string());
+    }
+
+    sql.push_str(
+        r#"
+        )
+        SELECT 
+            category,
+            COALESCE(SUM(viewer_count * COALESCE(interval_minutes, 1)), 0)::BIGINT AS minutes_watched
+        FROM stats_with_interval
+        WHERE viewer_count IS NOT NULL
+        GROUP BY category
+        ORDER BY minutes_watched DESC
+        "#,
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+    let categories: Vec<String> = utils::query_map_with_params(&mut stmt, &params, |row| {
+        Ok(row.get::<_, String>(0)?)
+    })?
+    .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(categories)
 }
 
 /// カテゴリごとのトップチャンネルを取得

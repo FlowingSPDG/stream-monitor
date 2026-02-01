@@ -1,4 +1,5 @@
 import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { Tooltip as InfoTooltip } from "../Tooltip";
 
 interface ChartDataPoint {
   [key: string]: string | number | undefined;
@@ -10,6 +11,7 @@ interface BarChartProps {
   xAxisKey?: string;
   color?: string;
   title?: string;
+  tooltipDescription?: string;
   height?: number;
   showLegend?: boolean;
   yAxisLabel?: string;
@@ -21,6 +23,7 @@ export function BarChart({
   xAxisKey = "name",
   color = "#10b981",
   title,
+  tooltipDescription,
   height = 300,
   showLegend = false,
   yAxisLabel,
@@ -28,7 +31,14 @@ export function BarChart({
   return (
     <div className="w-full">
       {title && (
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+          {tooltipDescription && (
+            <InfoTooltip content={tooltipDescription}>
+              <span className="text-xs text-gray-400 cursor-help">ℹ️</span>
+            </InfoTooltip>
+          )}
+        </div>
       )}
       <div style={{ height: `${height}px` }}>
         <ResponsiveContainer width="100%" height="100%">

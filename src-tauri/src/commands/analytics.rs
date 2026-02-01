@@ -40,3 +40,21 @@ pub async fn get_game_analytics(
     )
     .map_err(|e| format!("Failed to get game analytics: {}", e))
 }
+
+#[tauri::command]
+pub async fn list_game_categories(
+    db_manager: State<'_, DatabaseManager>,
+    start_time: Option<String>,
+    end_time: Option<String>,
+) -> Result<Vec<String>, String> {
+    let conn = db_manager
+        .get_connection()
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    analytics::list_categories(
+        &conn,
+        start_time.as_deref(),
+        end_time.as_deref(),
+    )
+    .map_err(|e| format!("Failed to list categories: {}", e))
+}
