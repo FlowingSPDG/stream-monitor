@@ -194,9 +194,11 @@ impl TwitchOAuth {
                             obtained_at: now.to_rfc3339(),
                         };
 
-                        if let Err(e) =
-                            KeyringStore::save_token_metadata_with_app(handle, db_constants::PLATFORM_TWITCH, &metadata)
-                        {
+                        if let Err(e) = KeyringStore::save_token_metadata_with_app(
+                            handle,
+                            db_constants::PLATFORM_TWITCH,
+                            &metadata,
+                        ) {
                             eprintln!(
                                 "[Twitch Device Flow] WARNING: Failed to save token metadata: {}",
                                 e
@@ -313,7 +315,11 @@ impl TwitchOAuth {
         eprintln!("[Twitch Device Flow] Token refreshed successfully");
 
         // 新しいアクセストークンを保存
-        KeyringStore::save_token_with_app(&handle, db_constants::PLATFORM_TWITCH, &token_response.access_token)?;
+        KeyringStore::save_token_with_app(
+            &handle,
+            db_constants::PLATFORM_TWITCH,
+            &token_response.access_token,
+        )?;
 
         // 新しいリフレッシュトークンがある場合は保存（1回限り使用）
         if let Some(new_refresh_token) = &token_response.refresh_token {
@@ -329,8 +335,11 @@ impl TwitchOAuth {
                 obtained_at: now.to_rfc3339(),
             };
 
-            if let Err(e) = KeyringStore::save_token_metadata_with_app(&handle, db_constants::PLATFORM_TWITCH, &metadata)
-            {
+            if let Err(e) = KeyringStore::save_token_metadata_with_app(
+                &handle,
+                db_constants::PLATFORM_TWITCH,
+                &metadata,
+            ) {
                 eprintln!(
                     "[Twitch Device Flow] WARNING: Failed to save token metadata: {}",
                     e

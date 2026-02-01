@@ -55,7 +55,9 @@ impl TwitchApiClient {
     async fn get_access_token(&self) -> Result<AccessToken, Box<dyn std::error::Error>> {
         // Keyringからトークンを取得を試みる（Device Code Flowで取得したユーザートークン）
         if let Some(ref handle) = self.app_handle {
-            if let Ok(token_str) = KeyringStore::get_token_with_app(handle, db_constants::PLATFORM_TWITCH) {
+            if let Ok(token_str) =
+                KeyringStore::get_token_with_app(handle, db_constants::PLATFORM_TWITCH)
+            {
                 return Ok(AccessToken::from(token_str));
             }
         }
@@ -78,7 +80,11 @@ impl TwitchApiClient {
 
             // トークンを保存
             if let Some(ref handle) = self.app_handle {
-                KeyringStore::save_token_with_app(handle, db_constants::PLATFORM_TWITCH, &access_token_str)?;
+                KeyringStore::save_token_with_app(
+                    handle,
+                    db_constants::PLATFORM_TWITCH,
+                    &access_token_str,
+                )?;
             }
 
             return Ok(AccessToken::from(access_token_str));
@@ -173,7 +179,10 @@ impl TwitchApiClient {
         let handle = self.app_handle.as_ref().ok_or("No app handle available")?;
 
         // メタデータを取得
-        let metadata = match KeyringStore::get_token_metadata_with_app(handle, db_constants::PLATFORM_TWITCH) {
+        let metadata = match KeyringStore::get_token_metadata_with_app(
+            handle,
+            db_constants::PLATFORM_TWITCH,
+        ) {
             Ok(m) => m,
             Err(_) => {
                 // メタデータがない場合は、トークンが古い形式で保存されている可能性
@@ -243,7 +252,9 @@ impl TwitchApiClient {
                 .ok_or_else(|| "User not found".into()),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
-                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED) || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT) {
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED)
+                    || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT)
+                {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;
@@ -287,7 +298,9 @@ impl TwitchApiClient {
             Ok(response) => Ok(response.data.into_iter().next()),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
-                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED) || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT) {
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED)
+                    || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT)
+                {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;
@@ -332,7 +345,9 @@ impl TwitchApiClient {
             Ok(response) => Ok(response.data),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
-                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED) || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT) {
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED)
+                    || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT)
+                {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;
@@ -376,7 +391,9 @@ impl TwitchApiClient {
             Ok(response) => Ok(response.data),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
-                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED) || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT) {
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED)
+                    || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT)
+                {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;
@@ -421,7 +438,9 @@ impl TwitchApiClient {
             Ok(response) => Ok(response.data),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
-                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED) || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT) {
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED)
+                    || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT)
+                {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;
@@ -447,7 +466,7 @@ impl TwitchApiClient {
     }
 
     /// 複数のユーザーIDからフォロワー数をバッチ取得
-    /// 
+    ///
     /// user_ids: ユーザーIDのリスト
     /// 戻り値: (user_id, follower_count) のタプルのベクター
     pub async fn get_followers_batch(
@@ -455,7 +474,7 @@ impl TwitchApiClient {
         user_ids: &[&str],
     ) -> Result<Vec<(String, i32)>, Box<dyn std::error::Error>> {
         use twitch_api::helix::channels::GetChannelFollowersRequest;
-        
+
         if user_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -480,7 +499,10 @@ impl TwitchApiClient {
                 }
                 Err(e) => {
                     // エラーの場合は0として扱う（個別のエラーで全体を失敗させない）
-                    eprintln!("[TwitchAPI] Failed to get follower count for {}: {}", user_id, e);
+                    eprintln!(
+                        "[TwitchAPI] Failed to get follower count for {}: {}",
+                        user_id, e
+                    );
                     results.push((user_id.to_string(), 0));
                 }
             }
@@ -531,7 +553,9 @@ impl TwitchApiClient {
             Ok(response) => response,
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
-                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED) || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT) {
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED)
+                    || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT)
+                {
                     eprintln!("Token expired, attempting refresh...");
                     let _new_token = self.refresh_token().await?;
                     let refreshed_token = self.get_user_token().await?;

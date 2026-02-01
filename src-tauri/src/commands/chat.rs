@@ -304,8 +304,7 @@ pub async fn get_chat_stats(
         .map_err(|e| e.to_string())?
         .collect();
 
-    let message_types =
-        message_types
+    let message_types = message_types
         .db_context("collect message types")
         .map_err(|e| e.to_string())?;
 
@@ -340,8 +339,7 @@ pub async fn get_chat_stats(
         .map_err(|e| e.to_string())?
         .collect();
 
-    let hourly_distribution =
-        hourly_distribution
+    let hourly_distribution = hourly_distribution
         .db_context("collect hourly distribution")
         .map_err(|e| e.to_string())?;
 

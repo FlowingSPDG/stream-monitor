@@ -72,16 +72,16 @@ impl From<std::io::Error> for AppError {
 pub trait ResultExt<T> {
     /// データベースエラーにコンテキストを追加
     fn db_context(self, context: &str) -> Result<T, AppError>;
-    
+
     /// APIエラーにコンテキストを追加
     fn api_context(self, context: &str) -> Result<T, AppError>;
-    
+
     /// I/Oエラーにコンテキストを追加
     fn io_context(self, context: &str) -> Result<T, AppError>;
-    
+
     /// 設定エラーにコンテキストを追加
     fn config_context(self, context: &str) -> Result<T, AppError>;
-    
+
     /// 一般的なエラーにコンテキストを追加
     fn context(self, context: &str) -> Result<T, AppError>;
 }

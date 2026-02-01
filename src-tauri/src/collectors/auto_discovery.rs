@@ -232,14 +232,14 @@ impl AutoDiscoveryPoller {
             let follower_count: Option<i32> = None; // view_count is deprecated
 
             // user_idをi64に変換
-            let twitch_user_id: i64 = user_id.parse().map_err(|e| {
-                format!("Failed to parse Twitch user ID '{}': {}", user_id, e)
-            })?;
+            let twitch_user_id: i64 = user_id
+                .parse()
+                .map_err(|e| format!("Failed to parse Twitch user ID '{}': {}", user_id, e))?;
 
             // DiscoveredStreamInfoを構築（メモリキャッシュ用）
             let stream_info = DiscoveredStreamInfo {
-                id: 0, // メモリキャッシュでは使用しない
-                twitch_user_id,            // 不変なuser ID
+                id: 0,                          // メモリキャッシュでは使用しない
+                twitch_user_id,                 // 不変なuser ID
                 channel_id: user_login.clone(), // login（表示用）
                 channel_name: user_login.clone(),
                 display_name: display_name.clone(),

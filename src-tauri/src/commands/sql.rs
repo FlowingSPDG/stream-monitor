@@ -430,7 +430,7 @@ pub async fn save_sql_template(
         let conn = db_manager
             .get_connection()
             .db_context("get database connection")
-        .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())?;
 
         if let Some(id) = request.id {
             // 更新

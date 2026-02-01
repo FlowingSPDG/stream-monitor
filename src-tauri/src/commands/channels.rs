@@ -214,7 +214,9 @@ pub async fn list_channels(
             .map_err(|e| e.to_string())?
             .collect();
 
-        channels.db_context("collect channels").map_err(|e| e.to_string())?
+        channels
+            .db_context("collect channels")
+            .map_err(|e| e.to_string())?
     };
 
     // Twitch API情報を取得して統合
@@ -229,8 +231,10 @@ async fn enrich_channels_with_twitch_info(
     app_handle: &AppHandle,
 ) -> Vec<ChannelWithStats> {
     // Twitchチャンネルのみを抽出
-    let twitch_channels: Vec<&Channel> =
-        channels.iter().filter(|c| c.platform == crate::constants::database::PLATFORM_TWITCH).collect();
+    let twitch_channels: Vec<&Channel> = channels
+        .iter()
+        .filter(|c| c.platform == crate::constants::database::PLATFORM_TWITCH)
+        .collect();
 
     // Twitch API クライアントを取得
     let twitch_collector = if let Some(poller) = app_handle.try_state::<Arc<Mutex<ChannelPoller>>>()
@@ -251,7 +255,9 @@ async fn enrich_channels_with_twitch_info(
 
         // twitch_user_idの有無でチャンネルを分類
         let (channels_with_user_id, channels_without_user_id): (Vec<&Channel>, Vec<&Channel>) =
-            twitch_channels.iter().partition(|c| c.twitch_user_id.is_some());
+            twitch_channels
+                .iter()
+                .partition(|c| c.twitch_user_id.is_some());
 
         // twitch_user_idがあるチャンネルはIDで取得
         if !channels_with_user_id.is_empty() {
@@ -270,7 +276,10 @@ async fn enrich_channels_with_twitch_info(
                             }
                         }
                         Err(e) => {
-                            eprintln!("[list_channels] Failed to fetch Twitch user info by ID: {}", e);
+                            eprintln!(
+                                "[list_channels] Failed to fetch Twitch user info by ID: {}",
+                                e
+                            );
                         }
                     }
                 }
@@ -292,7 +301,10 @@ async fn enrich_channels_with_twitch_info(
                         }
                     }
                     Err(e) => {
-                        eprintln!("[list_channels] Failed to fetch Twitch user info by login: {}", e);
+                        eprintln!(
+                            "[list_channels] Failed to fetch Twitch user info by login: {}",
+                            e
+                        );
                     }
                 }
             }
@@ -304,9 +316,12 @@ async fn enrich_channels_with_twitch_info(
             let user_ids: Vec<String> = twitch_channels
                 .iter()
                 .filter_map(|c| {
-                    c.twitch_user_id
-                        .map(|id| id.to_string())
-                        .or_else(|| user_info_map.values().find(|u| u.login.to_string() == c.channel_id).map(|u| u.id.to_string()))
+                    c.twitch_user_id.map(|id| id.to_string()).or_else(|| {
+                        user_info_map
+                            .values()
+                            .find(|u| u.login.to_string() == c.channel_id)
+                            .map(|u| u.id.to_string())
+                    })
                 })
                 .collect();
 
@@ -329,7 +344,9 @@ async fn enrich_channels_with_twitch_info(
                                                 .unwrap_or(false)
                                         })
                                 }) {
-                                    let key = channel.twitch_user_id.map(|id| id.to_string())
+                                    let key = channel
+                                        .twitch_user_id
+                                        .map(|id| id.to_string())
                                         .unwrap_or_else(|| channel.channel_id.clone());
                                     stream_info_map.insert(key, stream);
                                 }
@@ -340,7 +357,7 @@ async fn enrich_channels_with_twitch_info(
                         }
                     }
                 }
-                
+
                 // フォロワー数をバッチ取得
                 match api_client.get_followers_batch(&user_id_refs).await {
                     Ok(followers) => {
@@ -366,29 +383,32 @@ async fn enrich_channels_with_twitch_info(
 
             if channel.platform == crate::constants::database::PLATFORM_TWITCH {
                 // ユーザー情報を統合（twitch_user_idがあればそれで検索、なければloginで検索）
-                let user_key = channel.twitch_user_id.map(|id| id.to_string())
-                    .or_else(|| {
-                        user_info_map.values()
-                            .find(|u| u.login.to_string() == channel.channel_id)
-                            .map(|u| u.id.to_string())
-                    });
+                let user_key = channel.twitch_user_id.map(|id| id.to_string()).or_else(|| {
+                    user_info_map
+                        .values()
+                        .find(|u| u.login.to_string() == channel.channel_id)
+                        .map(|u| u.id.to_string())
+                });
 
                 if let Some(key) = user_key.as_ref() {
                     if let Some(user) = user_info_map.get(key) {
                         channel.display_name = Some(user.display_name.to_string());
                         channel.profile_image_url =
                             user.profile_image_url.as_deref().map(|s| s.to_string());
-                        channel.broadcaster_type = user.broadcaster_type.as_ref().map(|bt| match bt {
-                            twitch_api::types::BroadcasterType::Partner => "partner".to_string(),
-                            twitch_api::types::BroadcasterType::Affiliate => "affiliate".to_string(),
-                            _ => "".to_string(),
-                        });
-                        
+                        channel.broadcaster_type =
+                            user.broadcaster_type.as_ref().map(|bt| match bt {
+                                twitch_api::types::BroadcasterType::Partner => {
+                                    "partner".to_string()
+                                }
+                                twitch_api::types::BroadcasterType::Affiliate => {
+                                    "affiliate".to_string()
+                                }
+                                _ => "".to_string(),
+                            });
+
                         // フォロワー数を設定
-                        channel.follower_count = follower_count_map
-                            .get(user.id.as_str())
-                            .copied();
-                        
+                        channel.follower_count = follower_count_map.get(user.id.as_str()).copied();
+
                         // view_count は Twitch API で非推奨となり取得不可
                         channel.view_count = None;
                     }
@@ -552,8 +572,7 @@ pub async fn migrate_twitch_user_ids(
         return Err("Twitch collector not initialized".to_string());
     };
 
-    let collector =
-        twitch_collector.ok_or_else(|| "Twitch collector not available".to_string())?;
+    let collector = twitch_collector.ok_or_else(|| "Twitch collector not available".to_string())?;
     let api_client = collector.get_api_client();
 
     let mut updated = 0;
@@ -571,10 +590,7 @@ pub async fn migrate_twitch_user_ids(
                     let user_id: i64 = match user_id_str.parse() {
                         Ok(id) => id,
                         Err(e) => {
-                            eprintln!(
-                                "[Migration] Failed to parse user_id for {}: {}",
-                                login, e
-                            );
+                            eprintln!("[Migration] Failed to parse user_id for {}: {}", login, e);
                             failed += 1;
                             continue;
                         }

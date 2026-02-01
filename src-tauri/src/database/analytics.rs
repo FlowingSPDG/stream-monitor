@@ -83,15 +83,15 @@ pub fn get_broadcaster_analytics(
     );
 
     let mut params: Vec<String> = Vec::new();
-    
+
     // channel_id が指定されている場合、channel_name を取得してフィルター
     let filter_channel_name = if let Some(ch_id) = channel_id {
-        let name_query = conn.query_row(
+        conn.query_row(
             "SELECT channel_id FROM channels WHERE id = ? AND platform = 'twitch'",
             [ch_id.to_string()],
             |row| row.get::<_, String>(0),
-        ).ok();
-        name_query
+        )
+        .ok()
     } else {
         None
     };
@@ -173,18 +173,18 @@ pub fn get_broadcaster_analytics(
     let mut stmt = conn.prepare(&sql)?;
     let channel_stats: Vec<_> = utils::query_map_with_params(&mut stmt, &params, |row| {
         Ok((
-            row.get::<_, i64>(0)?,                    // channel_id
-            row.get::<_, String>(1)?,                 // channel_name
-            row.get::<_, i64>(2)?,                    // minutes_watched
-            row.get::<_, f64>(3)?,                    // hours_broadcasted
-            row.get::<_, f64>(4)?,                    // average_ccu
-            row.get::<_, i32>(5)?,                    // peak_ccu
-            row.get::<_, i32>(6)?,                    // stream_count
-            row.get::<_, i64>(7)?,                    // total_chat_messages
-            row.get::<_, f64>(8)?,                    // avg_chat_rate
-            row.get::<_, i32>(9)?,                    // category_count
-            row.get::<_, Option<String>>(10)?,        // main_title
-            row.get::<_, Option<i64>>(11)?,           // main_mw
+            row.get::<_, i64>(0)?,             // channel_id
+            row.get::<_, String>(1)?,          // channel_name
+            row.get::<_, i64>(2)?,             // minutes_watched
+            row.get::<_, f64>(3)?,             // hours_broadcasted
+            row.get::<_, f64>(4)?,             // average_ccu
+            row.get::<_, i32>(5)?,             // peak_ccu
+            row.get::<_, i32>(6)?,             // stream_count
+            row.get::<_, i64>(7)?,             // total_chat_messages
+            row.get::<_, f64>(8)?,             // avg_chat_rate
+            row.get::<_, i32>(9)?,             // category_count
+            row.get::<_, Option<String>>(10)?, // main_title
+            row.get::<_, Option<i64>>(11)?,    // main_mw
         ))
     })?
     .collect::<Result<Vec<_>, _>>()?;

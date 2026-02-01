@@ -15,8 +15,8 @@ use twitch_api::{
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TwitchChannelInfo {
-    pub channel_id: String,        // login (表示用)
-    pub twitch_user_id: i64,       // 不変なuser ID
+    pub channel_id: String,  // login (表示用)
+    pub twitch_user_id: i64, // 不変なuser ID
     pub display_name: String,
     pub profile_image_url: String,
     pub description: String,

@@ -114,6 +114,16 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    // テスト用のヘルパー関数
+    fn get_connection_with_path(
+        db_path: PathBuf,
+    ) -> Result<Connection, Box<dyn std::error::Error>> {
+        let conn = Connection::open(&db_path)
+            .db_context("open test database")
+            .map_err(|e| e.to_string())?;
+        Ok(conn)
+    }
+
     #[test]
     #[cfg_attr(
         target_os = "windows",

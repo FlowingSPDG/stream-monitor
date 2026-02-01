@@ -22,7 +22,10 @@ use commands::{
         get_broadcaster_analytics, get_channel_daily_stats, get_data_availability,
         get_game_analytics, get_game_daily_stats, list_game_categories,
     },
-    channels::{add_channel, list_channels, migrate_twitch_user_ids, remove_channel, toggle_channel, update_channel},
+    channels::{
+        add_channel, list_channels, migrate_twitch_user_ids, remove_channel, toggle_channel,
+        update_channel,
+    },
     chat::{get_chat_messages, get_chat_rate, get_chat_stats},
     config::{
         delete_oauth_config, delete_token, get_build_info, get_database_init_status,

@@ -64,7 +64,8 @@ impl ChannelPoller {
     /// Register Twitch collector specifically for token management
     pub fn register_twitch_collector(&mut self, collector: Arc<TwitchCollector>) {
         self.twitch_collector = Some(collector.clone());
-        self.collectors.insert(db_constants::PLATFORM_TWITCH.to_string(), collector);
+        self.collectors
+            .insert(db_constants::PLATFORM_TWITCH.to_string(), collector);
     }
 
     /// Get Twitch collector for rate limit tracking

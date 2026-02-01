@@ -1,5 +1,4 @@
 /// アプリケーション全体で使用される定数
-
 #[allow(dead_code)]
 pub mod twitch {
     /// トークンの有効期限チェック閾値（分）
@@ -32,6 +31,7 @@ pub mod youtube {
     pub const OAUTH_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 
     /// YouTube読み取り専用スコープ
+    #[allow(dead_code)]
     pub const SCOPE_YOUTUBE_READONLY: &str = "https://www.googleapis.com/auth/youtube.readonly";
 
     /// APIレスポンス部分: ID

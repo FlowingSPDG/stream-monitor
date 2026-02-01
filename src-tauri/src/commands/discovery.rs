@@ -227,7 +227,7 @@ pub async fn promote_discovered_channel(
             .query_row([&login_name], |row| row.get(0))
             .db_context("query")
             .map_err(|e| e.to_string())?;
-        
+
         count > 0
     }; // conn と stmt はここでスコープを抜けてdropされる
 
@@ -244,7 +244,7 @@ pub async fn promote_discovered_channel(
         )
         .db_context("update channel")
         .map_err(|e| e.to_string())?;
-        
+
         eprintln!(
             "[Discovery] Updated existing channel {} (user_id: {}) to manual registration",
             login_name, channel_id
@@ -254,7 +254,10 @@ pub async fn promote_discovered_channel(
         let request = AddChannelRequest {
             platform: db_constants::PLATFORM_TWITCH.to_string(),
             channel_id: stream_info.channel_id.clone(),
-            channel_name: stream_info.display_name.clone().unwrap_or(stream_info.channel_name.clone()),
+            channel_name: stream_info
+                .display_name
+                .clone()
+                .unwrap_or(stream_info.channel_name.clone()),
             poll_interval: Some(60),
             twitch_user_id: Some(stream_info.twitch_user_id),
         };
@@ -273,8 +276,8 @@ pub async fn promote_discovered_channel(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredStreamInfo {
     pub id: i64,
-    pub twitch_user_id: i64,   // 不変なTwitch user ID（内部識別子）
-    pub channel_id: String,     // login（表示用）
+    pub twitch_user_id: i64, // 不変なTwitch user ID（内部識別子）
+    pub channel_id: String,  // login（表示用）
     pub channel_name: String,
     pub display_name: Option<String>,
     pub profile_image_url: Option<String>,

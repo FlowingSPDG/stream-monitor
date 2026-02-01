@@ -267,6 +267,8 @@ mod tests {
             viewer_count: Some(100),
             chat_rate_1min: 10,
             category: None,
+            twitch_user_id: None,
+            channel_name: None,
         }];
 
         let result = DataAggregator::aggregate_stream_stats(&stats, 1);
@@ -288,6 +290,8 @@ mod tests {
                 viewer_count: Some(100),
                 chat_rate_1min: 10,
                 category: None,
+                twitch_user_id: None,
+                channel_name: None,
             },
             StreamStats {
                 id: Some(2),
@@ -296,6 +300,8 @@ mod tests {
                 viewer_count: Some(150),
                 chat_rate_1min: 15,
                 category: None,
+                twitch_user_id: None,
+                channel_name: None,
             },
         ];
 
