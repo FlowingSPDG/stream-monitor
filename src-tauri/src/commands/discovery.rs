@@ -156,6 +156,8 @@ pub async fn promote_discovered_channel(
     app_handle: AppHandle,
     channel_id: String, // Twitch user_id
 ) -> Result<(), String> {
+    use crate::commands::channels::{add_channel, AddChannelRequest};
+
     // メモリキャッシュから該当するストリーム情報を取得
     let cache: tauri::State<'_, Arc<crate::DiscoveredStreamsCache>> = app_handle.state();
     let streams_lock = cache.streams.lock().await;
@@ -168,66 +170,63 @@ pub async fn promote_discovered_channel(
     let stream_info =
         stream_info.ok_or_else(|| format!("Channel {} not found in cache", channel_id))?;
 
-    // channelsテーブルに新規登録（手動登録として）
-    let conn = db_manager
-        .get_connection()
-        .db_context("get connection")
-        .map_err(|e| e.to_string())?;
+    let login_name = stream_info.channel_id.clone();
 
-    // login name (channel_id フィールド) を使用して重複チェック
-    let login_name = &stream_info.channel_id;
-    let mut stmt = conn
-        .prepare("SELECT COUNT(*) FROM channels WHERE platform = 'twitch' AND channel_id = ?")
-        .db_context("prepare query")
-        .map_err(|e| e.to_string())?;
-    let count: i64 = stmt
-        .query_row([login_name], |row| row.get(0))
-        .db_context("query")
-        .map_err(|e| e.to_string())?;
-    drop(stmt);
+    // 重複チェック: 既に登録されているか確認
+    let already_exists = {
+        let conn = db_manager
+            .get_connection()
+            .db_context("get connection")
+            .map_err(|e| e.to_string())?;
 
-    if count > 0 {
-        // 既に登録されている場合はis_auto_discoveredフラグとtwitch_user_idを更新
+        let mut stmt = conn
+            .prepare("SELECT COUNT(*) FROM channels WHERE platform = 'twitch' AND channel_id = ?")
+            .db_context("prepare query")
+            .map_err(|e| e.to_string())?;
+        let count: i64 = stmt
+            .query_row([&login_name], |row| row.get(0))
+            .db_context("query")
+            .map_err(|e| e.to_string())?;
+        
+        count > 0
+    }; // conn と stmt はここでスコープを抜けてdropされる
+
+    if already_exists {
+        // 既に登録されている場合はis_auto_discoveredフラグを更新
+        let conn = db_manager
+            .get_connection()
+            .db_context("get connection")
+            .map_err(|e| e.to_string())?;
+
         conn.execute(
             "UPDATE channels SET is_auto_discovered = false, discovered_at = NULL, twitch_user_id = ? WHERE platform = 'twitch' AND channel_id = ?",
-            duckdb::params![stream_info.twitch_user_id, login_name],
+            duckdb::params![stream_info.twitch_user_id, &login_name],
         )
         .db_context("update channel")
         .map_err(|e| e.to_string())?;
+        
+        eprintln!(
+            "[Discovery] Updated existing channel {} (user_id: {}) to manual registration",
+            login_name, channel_id
+        );
     } else {
-        // 新規登録: channel_id に login、twitch_user_id に user ID を保存
-        let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
-            r#"
-            INSERT INTO channels (
-                platform, channel_id, channel_name,
-                enabled, poll_interval, is_auto_discovered, discovered_at,
-                twitch_user_id, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            "#,
-            duckdb::params![
-                db_constants::PLATFORM_TWITCH,
-                login_name,                  // channel_id に login を保存
-                &stream_info.channel_name,   // channel_name
-                "true",                      // enabled
-                "60",                        // poll_interval
-                "false",                     // is_auto_discovered
-                None::<String>,              // discovered_at
-                stream_info.twitch_user_id,  // twitch_user_id
-                now.as_str(),
-                now.as_str(),
-            ],
-        )
-        .db_context("insert channel")
-        .map_err(|e| e.to_string())?;
+        // 新規登録: add_channel コマンドを使用して統一
+        let request = AddChannelRequest {
+            platform: db_constants::PLATFORM_TWITCH.to_string(),
+            channel_id: stream_info.channel_id.clone(),
+            channel_name: stream_info.display_name.clone().unwrap_or(stream_info.channel_name.clone()),
+            poll_interval: Some(60),
+            twitch_user_id: Some(stream_info.twitch_user_id),
+        };
+
+        add_channel(app_handle.clone(), db_manager.clone(), request).await?;
+
+        eprintln!(
+            "[Discovery] Promoted channel {} (user_id: {}) to manual registration using add_channel",
+            login_name, channel_id
+        );
     }
 
-    drop(conn);
-
-    eprintln!(
-        "[Discovery] Promoted channel {} to manual registration",
-        channel_id
-    );
     Ok(())
 }
 

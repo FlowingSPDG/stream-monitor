@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { ChannelWithStats, TwitchRateLimitStatus, DiscoveredStreamInfo } from "../../types";
 import { Tooltip as CustomTooltip } from "../common/Tooltip";
 
@@ -13,14 +12,6 @@ interface StreamStats {
   collected_at: string;
   viewer_count?: number;
   chat_rate_1min: number;
-}
-
-interface ChannelStatsData {
-  channel_id: string;
-  channel_name: string;
-  platform: string;
-  stream_id: number;
-  stats: StreamStats[];
 }
 
 interface LiveChannelCardProps {
@@ -74,8 +65,13 @@ function LiveChannelCard({ channel }: LiveChannelCardProps) {
             onClick={async () => {
               if (confirm('このチャンネルを手動登録に昇格しますか？')) {
                 try {
+                  // twitch_user_idが必須
+                  if (!channel.twitch_user_id) {
+                    alert('このチャンネルにはTwitch User IDが設定されていません。');
+                    return;
+                  }
                   await invoke('promote_discovered_channel', { 
-                    channelId: channel.twitch_user_id?.toString() || channel.channel_id 
+                    channelId: channel.twitch_user_id.toString()
                   });
                   window.location.reload();
                 } catch (err) {
@@ -96,9 +92,10 @@ function LiveChannelCard({ channel }: LiveChannelCardProps) {
 interface DiscoveredStreamCardProps {
   stream: DiscoveredStreamInfo;
   onPromote: (channelId: string) => void;
+  isAlreadyRegistered?: boolean;
 }
 
-function DiscoveredStreamCard({ stream, onPromote }: DiscoveredStreamCardProps) {
+function DiscoveredStreamCard({ stream, onPromote, isAlreadyRegistered = false }: DiscoveredStreamCardProps) {
   const handleOpenStream = async () => {
     try {
       await openUrl(`https://www.twitch.tv/${stream.channel_name}`);
@@ -189,126 +186,15 @@ function DiscoveredStreamCard({ stream, onPromote }: DiscoveredStreamCardProps) 
           </svg>
           配信を開く
         </button>
-        <button
-          onClick={() => onPromote(stream.twitch_user_id.toString())}
-          className="text-xs px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-        >
-          手動登録に昇格
-        </button>
+        {!isAlreadyRegistered && (
+          <button
+            onClick={() => onPromote(stream.twitch_user_id.toString())}
+            className="text-xs px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+          >
+            手動登録に昇格
+          </button>
+        )}
       </div>
-    </div>
-  );
-}
-
-interface ViewerChartProps {
-  channelsData: ChannelStatsData[];
-}
-
-// チャンネルごとに異なる色を割り当て
-const CHANNEL_COLORS = [
-  '#3b82f6', // blue-500
-  '#10b981', // green-500
-  '#f59e0b', // amber-500
-  '#ef4444', // red-500
-  '#8b5cf6', // violet-500
-  '#ec4899', // pink-500
-  '#14b8a6', // teal-500
-  '#f97316', // orange-500
-];
-
-function ViewerChart({ channelsData }: ViewerChartProps) {
-  // データをグラフ用に変換
-  // 各タイムスタンプごとに、各チャンネルの視聴者数をマージ
-  const timeMap = new Map<string, Record<string, number>>();
-
-  channelsData.forEach(channelData => {
-    const channelKey = `${channelData.platform}_${channelData.channel_name}`;
-    channelData.stats.slice(-20).forEach(stat => {
-      const time = new Date(stat.collected_at).toLocaleTimeString('ja-JP', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      
-      if (!timeMap.has(time)) {
-        timeMap.set(time, {});
-      }
-      const timeData = timeMap.get(time)!;
-      timeData[channelKey] = stat.viewer_count || 0;
-    });
-  });
-
-  // Map を配列に変換してソート
-  const chartData = Array.from(timeMap.entries())
-    .map(([time, viewers]) => ({
-      time,
-      ...viewers,
-    }))
-    .sort((a, b) => {
-      // 時刻文字列を比較可能な形式に変換
-      const timeA = a.time.split(':').map(Number);
-      const timeB = b.time.split(':').map(Number);
-      return timeA[0] * 60 + timeA[1] - (timeB[0] * 60 + timeB[1]);
-    });
-
-  return (
-    <div className="card p-6 animate-fade-in">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">視聴者数推移</h3>
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          チャンネル別推移
-        </div>
-      </div>
-      {channelsData.length === 0 ? (
-        <div className="h-64 flex items-center justify-center">
-          <p className="text-gray-500 dark:text-gray-400">ライブ中のチャンネルがありません</p>
-        </div>
-      ) : (
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis 
-                dataKey="time" 
-                stroke="#64748b"
-                style={{ fontSize: '12px' }}
-              />
-              <YAxis 
-                stroke="#64748b"
-                style={{ fontSize: '12px' }}
-              />
-              <Tooltip 
-                contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                }}
-              />
-              <Legend 
-                wrapperStyle={{ fontSize: '12px' }}
-                iconType="line"
-              />
-              {channelsData.map((channelData, index) => {
-                const channelKey = `${channelData.platform}_${channelData.channel_name}`;
-                const color = CHANNEL_COLORS[index % CHANNEL_COLORS.length];
-                const platformIcon = channelData.platform === 'twitch' ? '🎮' : '▶️';
-                return (
-                  <Line
-                    key={channelKey}
-                    type="monotone"
-                    dataKey={channelKey}
-                    name={`${platformIcon} ${channelData.channel_name}`}
-                    stroke={color}
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4 }}
-                  />
-                );
-              })}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
     </div>
   );
 }
@@ -321,7 +207,7 @@ export function Dashboard() {
   const { data: allChannels, isLoading: channelsLoading } = useQuery({
     queryKey: ["channels-with-twitch-info"],
     queryFn: async () => {
-      return await invoke<ChannelWithStats[]>("list_channels_with_twitch_info");
+      return await invoke<ChannelWithStats[]>("list_channels");
     },
     refetchInterval: 30000, // 30秒ごとに更新
     staleTime: 10000, // 10秒間はキャッシュを使用
@@ -395,24 +281,6 @@ export function Dashboard() {
   }, new Map<string, ChannelWithStats>());
 
   const uniqueLiveChannels = Array.from(uniqueLiveChannelsMap.values());
-
-  const channelsStatsData: ChannelStatsData[] = uniqueLiveChannels.map(channel => {
-    // このチャンネルの統計データをフィルタ
-    // stream_idまたはchannel_idが一致するデータを取得
-    const channelStats = statsData.filter(_stat => {
-      // データに channel_id や stream_id が含まれている場合はそれで判定
-      // 現在の実装では全データを含めるが、将来的に適切なフィルタリングに変更可能
-      return true;
-    });
-
-    return {
-      channel_id: channel.channel_id,
-      channel_name: channel.channel_name,
-      platform: channel.platform,
-      stream_id: 0, // stream_idはChannelWithStatsに存在しないため、デフォルト値を使用
-      stats: channelStats,
-    };
-  });
 
   const totalViewers = uniqueLiveChannels.reduce((sum, channel) => sum + (channel.current_viewers || 0), 0);
 
@@ -524,11 +392,8 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* チャートとライブチャンネル */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ViewerChart channelsData={channelsStatsData} />
-
-        <div className="card p-6 animate-fade-in">
+      {/* ライブチャンネル */}
+      <div className="card p-6 animate-fade-in">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">ライブ中チャンネル</h3>
             {uniqueLiveChannels.length > 0 && (
@@ -558,7 +423,6 @@ export function Dashboard() {
               </div>
             )}
           </div>
-        </div>
       </div>
 
       {/* 自動発見された配信 */}
@@ -578,13 +442,26 @@ export function Dashboard() {
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {discoveredStreams.map((stream) => (
-              <DiscoveredStreamCard
-                key={stream.id}
-                stream={stream}
-                onPromote={handlePromote}
-              />
-            ))}
+            {(() => {
+              // 登録済みチャンネルのchannel_nameセットを作成
+              const registeredChannelNames = new Set(
+                (allChannels || []).map(ch => ch.channel_name.toLowerCase())
+              );
+              
+              return discoveredStreams.map((stream) => {
+                // channel_nameが登録済みかチェック
+                const isAlreadyRegistered = registeredChannelNames.has(stream.channel_name.toLowerCase());
+                
+                return (
+                  <DiscoveredStreamCard
+                    key={stream.id}
+                    stream={stream}
+                    onPromote={handlePromote}
+                    isAlreadyRegistered={isAlreadyRegistered}
+                  />
+                );
+              });
+            })()}
           </div>
         </div>
       )}
