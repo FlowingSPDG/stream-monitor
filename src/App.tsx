@@ -11,6 +11,7 @@ import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import { SplashScreen } from "./components/common/SplashScreen";
 import { ToastContainer } from "./components/common/Toast";
 import { ConfirmDialog } from "./components/common/ConfirmDialog";
+import { DonationModal, useDonationModal } from "./components/common/DonationModal";
 import { useThemeStore } from "./stores/themeStore";
 import "./App.css";
 import { SQLViewer } from "./components/SQL";
@@ -24,6 +25,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [showSplash, setShowSplash] = useState(true);
   const { theme } = useThemeStore();
+  const { show: showDonation, close: closeDonation } = useDonationModal();
 
   useEffect(() => {
     // テーマを適用
@@ -142,6 +144,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ToastContainer />
         <ConfirmDialog />
+        {showDonation && <DonationModal onClose={closeDonation} />}
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
           {/* ナビゲーションバー */}
           <nav className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl shadow-sm border-b border-gray-200/50 dark:border-slate-700/50 sticky top-0 z-40">

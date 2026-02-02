@@ -32,8 +32,8 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
             setFadeOut(true);
             setTimeout(() => {
               onComplete();
-            }, 500);
-          }, 1000);
+            }, 300);
+          }, 300);
 
           // ステータスチェックを停止
           if (statusCheckInterval) {
@@ -61,8 +61,8 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
             setFadeOut(true);
             setTimeout(() => {
               onComplete();
-            }, 500);
-          }, 1000);
+            }, 300);
+          }, 300);
 
           // ステータスチェックを停止
           if (statusCheckInterval) {
@@ -125,7 +125,7 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-500 ${
+      className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-300 ${
         fadeOut ? "opacity-0" : "opacity-100"
       }`}
       style={{
