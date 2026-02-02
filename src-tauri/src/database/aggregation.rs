@@ -339,6 +339,7 @@ mod tests {
                 message: "Hello".to_string(),
                 message_type: "normal".to_string(),
                 badges: Some(vec!["broadcaster".to_string()]),
+                badge_info: None,
             },
             ChatMessage {
                 id: Some(2),
@@ -351,6 +352,7 @@ mod tests {
                 message: "Hi".to_string(),
                 message_type: "normal".to_string(),
                 badges: None,
+                badge_info: None,
             },
         ];
 
