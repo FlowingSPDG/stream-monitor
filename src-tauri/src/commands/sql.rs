@@ -6,6 +6,77 @@ use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tauri::State;
 
+/// DuckDBのList文字列をJSON配列に変換
+/// 例: ['elem1', 'elem2'] または ["elem1", "elem2"] → ["elem1", "elem2"]
+fn parse_duckdb_list_to_json(s: &str) -> serde_json::Value {
+    let trimmed = s.trim();
+    
+    // 空配列チェック
+    if trimmed == "[]" || trimmed.is_empty() {
+        return serde_json::Value::Array(vec![]);
+    }
+    
+    // DuckDBのList形式を解析: ['elem1', 'elem2']
+    if trimmed.starts_with('[') && trimmed.ends_with(']') {
+        let inner = &trimmed[1..trimmed.len()-1];
+        
+        // 要素をパース
+        let mut elements = Vec::new();
+        let mut current = String::new();
+        let mut in_quotes = false;
+        let mut quote_char = ' ';
+        let mut escape_next = false;
+        
+        for ch in inner.chars() {
+            if escape_next {
+                current.push(ch);
+                escape_next = false;
+                continue;
+            }
+            
+            match ch {
+                '\\' => {
+                    escape_next = true;
+                }
+                '\'' | '"' if !in_quotes => {
+                    in_quotes = true;
+                    quote_char = ch;
+                }
+                c if c == quote_char && in_quotes => {
+                    in_quotes = false;
+                    // クォートを閉じた後、要素を追加
+                }
+                ',' if !in_quotes => {
+                    // 要素の区切り
+                    let elem = current.trim();
+                    if !elem.is_empty() {
+                        elements.push(serde_json::Value::String(elem.to_string()));
+                    }
+                    current.clear();
+                }
+                _ if in_quotes => {
+                    current.push(ch);
+                }
+                _ if !in_quotes && !ch.is_whitespace() => {
+                    current.push(ch);
+                }
+                _ => {}
+            }
+        }
+        
+        // 最後の要素を追加
+        let elem = current.trim();
+        if !elem.is_empty() {
+            elements.push(serde_json::Value::String(elem.to_string()));
+        }
+        
+        return serde_json::Value::Array(elements);
+    }
+    
+    // パースに失敗した場合は文字列として返す
+    serde_json::Value::String(s.to_string())
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SqlQueryResult {
     pub columns: Vec<String>,
@@ -179,9 +250,13 @@ pub async fn execute_sql(
                         serde_json::Value::String("<INTERVAL>".to_string())
                     }
                     Ok(ValueRef::List(_, _)) => {
-                        // Listを文字列に変換
+                        // Listを取得してJSON配列に変換
                         match first_row.get::<_, String>(i) {
-                            Ok(s) => serde_json::Value::String(s),
+                            Ok(s) => {
+                                // DuckDBの配列文字列を解析
+                                // 例: ['elem1', 'elem2'] または ["elem1", "elem2"]
+                                parse_duckdb_list_to_json(&s)
+                            }
                             Err(_) => serde_json::Value::String("<LIST>".to_string()),
                         }
                     }
@@ -276,9 +351,12 @@ pub async fn execute_sql(
                         serde_json::Value::String("<INTERVAL>".to_string())
                     }
                     Ok(ValueRef::List(_, _)) => {
-                        // Listを文字列に変換
+                        // Listを取得してJSON配列に変換
                         match row.get::<_, String>(i) {
-                            Ok(s) => serde_json::Value::String(s),
+                            Ok(s) => {
+                                // DuckDBの配列文字列を解析
+                                parse_duckdb_list_to_json(&s)
+                            }
                             Err(_) => serde_json::Value::String("<LIST>".to_string()),
                         }
                     }
