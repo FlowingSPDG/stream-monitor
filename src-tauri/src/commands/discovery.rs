@@ -51,6 +51,15 @@ pub async fn save_auto_discovery_settings(
         .config_context("save settings")
         .map_err(|e| e.to_string())?;
 
+    // 設定変更時はキャッシュをクリア
+    if is_enabled {
+        let cache: tauri::State<'_, Arc<crate::DiscoveredStreamsCache>> = app_handle.state();
+        let mut streams_lock = cache.streams.lock().await;
+        streams_lock.clear();
+        drop(streams_lock);
+        eprintln!("[AutoDiscovery] Cache cleared due to settings change");
+    }
+
     // ポーラーの状態を更新
     let poller_guard = auto_discovery_poller.lock().await;
     if let Some(poller) = poller_guard.as_ref() {
@@ -181,12 +190,101 @@ pub async fn get_discovered_streams(
 
 /// Twitchゲーム検索（フィルター設定用）
 #[tauri::command]
-pub async fn search_twitch_games(query: String) -> Result<Vec<TwitchGame>, String> {
-    // TODO: Twitch API のSearch Categories エンドポイントを実装
-    // 現時点では空の配列を返す
-    // 将来的に twitch_api クレートの SearchCategoriesRequest を使用して実装
+pub async fn search_twitch_games(
+    app_handle: AppHandle,
+    query: String,
+) -> Result<Vec<TwitchGame>, String> {
+    use crate::api::twitch_api::TwitchApiClient;
+    use crate::config::settings::SettingsManager;
+
+    if query.trim().is_empty() {
+        return Ok(vec![]);
+    }
+
     eprintln!("[SearchGames] Search query: {}", query);
-    Ok(vec![])
+
+    // 設定からClient IDを取得
+    let settings = SettingsManager::load_settings(&app_handle)
+        .config_context("load settings")
+        .map_err(|e| e.to_string())?;
+
+    let client_id = settings
+        .twitch
+        .client_id
+        .as_ref()
+        .ok_or_else(|| "Twitch Client ID not configured".to_string())?;
+
+    // TwitchApiClientを作成
+    let api_client = TwitchApiClient::new(client_id.clone(), None).with_app_handle(app_handle);
+
+    // カテゴリを検索（最大20件）
+    let categories = api_client
+        .search_categories(&query, Some(20))
+        .await
+        .map_err(|e| format!("Failed to search categories: {}", e))?;
+
+    // TwitchGame型にマッピング
+    let games = categories
+        .into_iter()
+        .map(|cat| TwitchGame {
+            id: cat.id.to_string(),
+            name: cat.name.to_string(),
+            box_art_url: cat.box_art_url.to_string(),
+        })
+        .collect();
+
+    Ok(games)
+}
+
+/// ゲームIDからゲーム情報を取得（既存設定の表示用）
+#[tauri::command]
+pub async fn get_games_by_ids(
+    app_handle: AppHandle,
+    game_ids: Vec<String>,
+) -> Result<Vec<TwitchGame>, String> {
+    use crate::api::twitch_api::TwitchApiClient;
+    use crate::config::settings::SettingsManager;
+
+    if game_ids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    eprintln!("[GetGames] Get games for IDs: {:?}", game_ids);
+
+    // 設定からClient IDを取得
+    let settings = SettingsManager::load_settings(&app_handle)
+        .config_context("load settings")
+        .map_err(|e| e.to_string())?;
+
+    let client_id = settings
+        .twitch
+        .client_id
+        .as_ref()
+        .ok_or_else(|| "Twitch Client ID not configured".to_string())?;
+
+    // TwitchApiClientを作成
+    let api_client = TwitchApiClient::new(client_id.clone(), None).with_app_handle(app_handle);
+
+    // ゲームIDを&str参照のベクターに変換
+    let game_id_refs: Vec<&str> = game_ids.iter().map(|s| s.as_str()).collect();
+
+    // ゲーム情報を取得
+    let categories = api_client
+        .get_games_by_ids(&game_id_refs)
+        .await
+        .map_err(|e| format!("Failed to get games: {}", e))?;
+
+    // TwitchGame型にマッピング
+    let games = categories
+        .into_iter()
+        .map(|cat| TwitchGame {
+            id: cat.id.to_string(),
+            name: cat.name.to_string(),
+            box_art_url: cat.box_art_url.to_string(),
+        })
+        .collect();
+
+    Ok(games)
 }
 
 /// 自動発見チャンネルを手動登録に昇格

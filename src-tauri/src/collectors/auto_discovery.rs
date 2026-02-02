@@ -81,12 +81,20 @@ impl AutoDiscoveryPoller {
             let mut ticker = interval(Duration::from_secs(poll_interval_secs));
 
             eprintln!(
-                "[AutoDiscovery] Started polling every {} seconds",
+                "[AutoDiscovery] Started polling every {} seconds (first run: immediate)",
                 poll_interval_secs
             );
 
+            // 初回は即座に実行
+            let mut is_first_run = true;
+
             loop {
-                ticker.tick().await;
+                if !is_first_run {
+                    ticker.tick().await;
+                } else {
+                    eprintln!("[AutoDiscovery] Running initial discovery check immediately...");
+                }
+                is_first_run = false;
 
                 // 最新の設定を再読み込み
                 let current_settings = match SettingsManager::load_settings(&app_handle) {
