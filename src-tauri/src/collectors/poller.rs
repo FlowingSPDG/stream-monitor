@@ -78,7 +78,7 @@ impl ChannelPoller {
         channel: Channel,
         db_manager: &State<'_, DatabaseManager>,
         app_handle: AppHandle,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if !channel.enabled {
             println!(
                 "[ChannelPoller] Channel {} is disabled, not starting polling",
@@ -440,7 +440,7 @@ impl ChannelPoller {
         conn: &Connection,
         channel: &Channel,
         stream_data: &StreamData,
-    ) -> Result<i64, Box<dyn std::error::Error>> {
+    ) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> {
         let channel_id = channel.id.ok_or("Channel ID is required")?;
 
         // StreamDataから配信情報を含むStreamレコードを作成
@@ -493,7 +493,7 @@ impl ChannelPoller {
         _channel: &Channel,
         _stream_id: i64,
         _video_id: Option<&str>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // チャット機能は現在無効化中
         // match channel.platform.as_str() {
         //     "twitch" => {
@@ -543,3 +543,4 @@ impl ChannelPoller {
         // }
     }
 }
+

@@ -80,7 +80,8 @@ pub async fn get_chat_messages(
         r#"
         SELECT
             cm.id, cm.stream_id, cm.timestamp, cm.platform,
-            cm.user_id, cm.user_name, cm.message, cm.message_type
+            cm.user_id, cm.user_name, cm.message, cm.message_type,
+            cm.badges, cm.badge_info, cm.channel_id
         FROM chat_messages cm
         INNER JOIN streams s ON cm.stream_id = s.id
         WHERE 1=1

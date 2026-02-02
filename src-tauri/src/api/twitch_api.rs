@@ -6,6 +6,9 @@ use serde::Serialize;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+#[allow(unused_imports)]
+use tauri::Emitter;
+use tokio::sync::Mutex as TokioMutex;
 use twitch_api::{
     helix::{
         search::{Category, SearchCategoriesRequest},
@@ -24,9 +27,16 @@ pub struct TwitchApiClient {
     client_secret: Option<String>,
     app_handle: Option<tauri::AppHandle>,
     rate_limiter: Arc<Mutex<TwitchRateLimitTracker>>,
+    /// Mutex to prevent concurrent token refresh operations
+    refresh_lock: Arc<TokioMutex<()>>,
 }
 
 impl TwitchApiClient {
+    /// Helper function to convert twitch_api errors to Send + Sync errors
+    fn convert_error<E: std::fmt::Display>(e: E) -> Box<dyn std::error::Error + Send + Sync> {
+        format!("{}", e).into()
+    }
+
     /// Create a new TwitchApiClient
     ///
     /// For Device Code Flow (user authentication), client_secret can be None.
@@ -40,6 +50,7 @@ impl TwitchApiClient {
             client_secret,
             app_handle: None,
             rate_limiter: Arc::new(Mutex::new(TwitchRateLimitTracker::new())),
+            refresh_lock: Arc::new(TokioMutex::new(())),
         }
     }
 
@@ -53,7 +64,7 @@ impl TwitchApiClient {
         self
     }
 
-    pub async fn get_access_token(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn get_access_token(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // Keyringからトークンを取得を試みる（Device Code Flowで取得したユーザートークン）
         if let Some(ref handle) = self.app_handle {
             if let Ok(token_str) =
@@ -98,8 +109,34 @@ impl TwitchApiClient {
         )
     }
 
-    /// トークンをリフレッシュ
-    async fn refresh_token(&self) -> Result<AccessToken, Box<dyn std::error::Error>> {
+    /// トークンをリフレッシュ（Mutex保護付き）
+    ///
+    /// 複数のリクエストが同時にリフレッシュを試みる競合状態を防止
+    async fn refresh_token(&self) -> Result<AccessToken, Box<dyn std::error::Error + Send + Sync>> {
+        // Mutexを取得してリフレッシュ操作をシリアライズ
+        let _guard = self.refresh_lock.lock().await;
+        
+        eprintln!("[TwitchAPI] Acquired refresh lock, checking if refresh is still needed...");
+        
+        // ロックを取得した後、現在のトークンがすでに有効かチェック
+        // （別のリクエストがすでにリフレッシュを完了した可能性がある）
+        // Note: KeyringStoreの結果をawaitの前に完全に解決する（Send境界の問題を回避）
+        let maybe_current_token: Option<String> = self.app_handle.as_ref().and_then(|handle| {
+            KeyringStore::get_token_with_app(handle, db_constants::PLATFORM_TWITCH).ok()
+        });
+        
+        if let Some(current_token) = maybe_current_token {
+            let access_token_typed = AccessToken::from(current_token.clone());
+            // トークンが有効かどうか軽量チェック
+            if let Ok(mut limiter) = self.rate_limiter.lock() {
+                limiter.track_request();
+            }
+            if TwitchApiUserToken::from_token(&*self.client, access_token_typed).await.map_err(Self::convert_error).is_ok() {
+                eprintln!("[TwitchAPI] Token is already valid (refreshed by another request), skipping refresh");
+                return Ok(AccessToken::from(current_token));
+            }
+        }
+        
         // TwitchOAuthインスタンスを作成してリフレッシュ
         let mut oauth = TwitchOAuth::new(
             self.client_id.clone(),
@@ -110,12 +147,44 @@ impl TwitchApiClient {
             oauth = oauth.with_app_handle(handle.clone());
         }
 
-        // リフレッシュ時はイベント通知なし（バックグラウンド処理のため）
-        let new_token = oauth.refresh_device_token(self.app_handle.clone()).await?;
-        Ok(AccessToken::from(new_token))
+        // リフレッシュ実行
+        match oauth.refresh_device_token(self.app_handle.clone()).await {
+            Ok(new_token) => Ok(AccessToken::from(new_token)),
+            Err(e) => {
+                let error_str = e.to_string();
+                
+                // "Invalid refresh token" エラーを検出
+                if error_str.contains("Invalid refresh token") || error_str.contains("invalid_grant") {
+                    eprintln!("[TwitchAPI] Refresh token is invalid, clearing tokens and requesting re-authentication");
+                    
+                    // 無効なトークンをクリーンアップ
+                    if let Some(ref handle) = self.app_handle {
+                        // アクセストークンを削除
+                        let _ = KeyringStore::delete_token_with_app(handle, db_constants::PLATFORM_TWITCH);
+                        // リフレッシュトークンを削除
+                        let _ = KeyringStore::delete_token_with_app(handle, "twitch_refresh");
+                        // メタデータを削除
+                        let _ = KeyringStore::delete_token_metadata_with_app(handle, db_constants::PLATFORM_TWITCH);
+                        
+                        eprintln!("[TwitchAPI] Cleared invalid tokens from keyring");
+                        
+                        // 再認証が必要であることをフロントエンドに通知
+                        if let Err(emit_err) = handle.emit("twitch-auth-required", ()) {
+                            eprintln!("[TwitchAPI] Failed to emit twitch-auth-required event: {}", emit_err);
+                        } else {
+                            eprintln!("[TwitchAPI] Emitted twitch-auth-required event to frontend");
+                        }
+                    }
+                    
+                    Err("Twitch authentication expired. Please re-authenticate via Device Code Flow.".into())
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
-    async fn get_user_token(&self) -> Result<TwitchApiUserToken, Box<dyn std::error::Error>> {
+    async fn get_user_token(&self) -> Result<TwitchApiUserToken, Box<dyn std::error::Error + Send + Sync>> {
         let access_token = self.get_access_token().await?;
 
         // トークン検証を試行（これもAPIコールなのでトラッキング）
@@ -124,7 +193,7 @@ impl TwitchApiClient {
         }
 
         let access_token_typed = AccessToken::from(access_token);
-        match TwitchApiUserToken::from_token(&*self.client, access_token_typed).await {
+        match TwitchApiUserToken::from_token(&*self.client, access_token_typed).await.map_err(Self::convert_error) {
             Ok(token) => Ok(token),
             Err(e) => {
                 // トークン検証失敗 - リフレッシュを試行
@@ -166,7 +235,7 @@ impl TwitchApiClient {
         }
     }
 
-    pub async fn authenticate(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn authenticate(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // トークンの取得と検証
         let _token = self.get_access_token().await?;
         Ok(())
@@ -177,7 +246,7 @@ impl TwitchApiClient {
     /// Returns: Ok(true) if token was refreshed, Ok(false) if refresh was not needed
     pub async fn check_and_refresh_token_if_needed(
         &self,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let handle = self.app_handle.as_ref().ok_or("No app handle available")?;
 
         // メタデータを取得
@@ -235,7 +304,7 @@ impl TwitchApiClient {
         }
     }
 
-    pub async fn get_user_by_login(&self, login: &str) -> Result<User, Box<dyn std::error::Error>> {
+    pub async fn get_user_by_login(&self, login: &str) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
         let token = self.get_user_token().await?;
 
         let login_refs: &[&types::UserNameRef] = &[login.into()];
@@ -246,7 +315,7 @@ impl TwitchApiClient {
             limiter.track_request();
         }
 
-        match self.client.req_get(request, &token).await {
+        match self.client.req_get(request, &token).await.map_err(Self::convert_error).map_err(Self::convert_error) {
             Ok(response) => response
                 .data
                 .into_iter()
@@ -269,14 +338,14 @@ impl TwitchApiClient {
                     let response = self
                         .client
                         .req_get(GetUsersRequest::logins(login_refs), &refreshed_token)
-                        .await?;
+                        .await.map_err(Self::convert_error)?;
                     response
                         .data
                         .into_iter()
                         .next()
                         .ok_or_else(|| "User not found".into())
                 } else {
-                    Err(e.into())
+                    Err(format!("{}", e).into())
                 }
             }
         }
@@ -285,7 +354,7 @@ impl TwitchApiClient {
     pub async fn get_stream_by_user_id(
         &self,
         user_id: &str,
-    ) -> Result<Option<Stream>, Box<dyn std::error::Error>> {
+    ) -> Result<Option<Stream>, Box<dyn std::error::Error + Send + Sync>> {
         let token = self.get_user_token().await?;
 
         let user_id_refs: &[&types::UserIdRef] = &[user_id.into()];
@@ -296,7 +365,7 @@ impl TwitchApiClient {
             limiter.track_request();
         }
 
-        match self.client.req_get(request, &token).await {
+        match self.client.req_get(request, &token).await.map_err(Self::convert_error) {
             Ok(response) => Ok(response.data.into_iter().next()),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
@@ -315,10 +384,10 @@ impl TwitchApiClient {
                     let response = self
                         .client
                         .req_get(GetStreamsRequest::user_ids(user_id_refs), &refreshed_token)
-                        .await?;
+                        .await.map_err(Self::convert_error)?;
                     Ok(response.data.into_iter().next())
                 } else {
-                    Err(e.into())
+                    Err(format!("{}", e).into())
                 }
             }
         }
@@ -328,7 +397,7 @@ impl TwitchApiClient {
     pub async fn get_streams_by_user_ids(
         &self,
         user_ids: &[&str],
-    ) -> Result<Vec<Stream>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Stream>, Box<dyn std::error::Error + Send + Sync>> {
         if user_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -343,7 +412,7 @@ impl TwitchApiClient {
             limiter.track_request();
         }
 
-        match self.client.req_get(request, &token).await {
+        match self.client.req_get(request, &token).await.map_err(Self::convert_error) {
             Ok(response) => Ok(response.data),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
@@ -368,7 +437,7 @@ impl TwitchApiClient {
                         .await?;
                     Ok(response.data)
                 } else {
-                    Err(e.into())
+                    Err(format!("{}", e).into())
                 }
             }
         }
@@ -378,7 +447,7 @@ impl TwitchApiClient {
     pub async fn get_users_by_ids(
         &self,
         user_ids: &[&str],
-    ) -> Result<Vec<User>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<User>, Box<dyn std::error::Error + Send + Sync>> {
         let token = self.get_user_token().await?;
 
         let user_id_refs: Vec<&types::UserIdRef> = user_ids.iter().map(|id| (*id).into()).collect();
@@ -389,7 +458,7 @@ impl TwitchApiClient {
             limiter.track_request();
         }
 
-        match self.client.req_get(request, &token).await {
+        match self.client.req_get(request, &token).await.map_err(Self::convert_error) {
             Ok(response) => Ok(response.data),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
@@ -414,7 +483,7 @@ impl TwitchApiClient {
                         .await?;
                     Ok(response.data)
                 } else {
-                    Err(e.into())
+                    Err(format!("{}", e).into())
                 }
             }
         }
@@ -424,7 +493,7 @@ impl TwitchApiClient {
     pub async fn get_users_by_logins(
         &self,
         logins: &[&str],
-    ) -> Result<Vec<User>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<User>, Box<dyn std::error::Error + Send + Sync>> {
         let token = self.get_user_token().await?;
 
         let login_refs: Vec<&types::UserNameRef> =
@@ -436,7 +505,7 @@ impl TwitchApiClient {
             limiter.track_request();
         }
 
-        match self.client.req_get(request, &token).await {
+        match self.client.req_get(request, &token).await.map_err(Self::convert_error) {
             Ok(response) => Ok(response.data),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
@@ -461,7 +530,7 @@ impl TwitchApiClient {
                         .await?;
                     Ok(response.data)
                 } else {
-                    Err(e.into())
+                    Err(format!("{}", e).into())
                 }
             }
         }
@@ -474,7 +543,7 @@ impl TwitchApiClient {
     pub async fn get_followers_batch(
         &self,
         user_ids: &[&str],
-    ) -> Result<Vec<(String, i32)>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<(String, i32)>, Box<dyn std::error::Error + Send + Sync>> {
         use twitch_api::helix::channels::GetChannelFollowersRequest;
 
         if user_ids.is_empty() {
@@ -494,7 +563,7 @@ impl TwitchApiClient {
                 limiter.track_request();
             }
 
-            match self.client.req_get(request, &token).await {
+            match self.client.req_get(request, &token).await.map_err(Self::convert_error) {
                 Ok(response) => {
                     let follower_count = response.total.unwrap_or(0) as i32;
                     results.push((user_id.to_string(), follower_count));
@@ -523,7 +592,7 @@ impl TwitchApiClient {
         game_ids: Option<Vec<String>>,
         languages: Option<Vec<String>>,
         max_results: Option<usize>,
-    ) -> Result<Vec<Stream>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Stream>, Box<dyn std::error::Error + Send + Sync>> {
         let token = self.get_user_token().await?;
 
         // GetStreamsRequestを構築
@@ -551,7 +620,7 @@ impl TwitchApiClient {
             limiter.track_request();
         }
 
-        let response = match self.client.req_get(request, &token).await {
+        let response = match self.client.req_get(request, &token).await.map_err(Self::convert_error) {
             Ok(response) => response,
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
@@ -569,9 +638,9 @@ impl TwitchApiClient {
 
                     let mut retry_request = GetStreamsRequest::default();
                     retry_request.first = Some(100);
-                    self.client.req_get(retry_request, &refreshed_token).await?
+                    self.client.req_get(retry_request, &refreshed_token).await.map_err(Self::convert_error).map_err(Self::convert_error)?
                 } else {
-                    return Err(e.into());
+                    return Err(format!("{}", e).into());
                 }
             }
         };
@@ -594,7 +663,7 @@ impl TwitchApiClient {
         &self,
         query: &str,
         first: Option<usize>,
-    ) -> Result<Vec<Category>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Category>, Box<dyn std::error::Error + Send + Sync>> {
         let token = self.get_user_token().await?;
 
         let mut request = SearchCategoriesRequest::query(query);
@@ -605,7 +674,7 @@ impl TwitchApiClient {
             limiter.track_request();
         }
 
-        let response = match self.client.req_get(request.clone(), &token).await {
+        let response = match self.client.req_get(request.clone(), &token).await.map_err(Self::convert_error) {
             Ok(response) => response,
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
@@ -621,9 +690,9 @@ impl TwitchApiClient {
                         limiter.track_request();
                     }
 
-                    self.client.req_get(request, &refreshed_token).await?
+                    self.client.req_get(request, &refreshed_token).await.map_err(Self::convert_error).map_err(Self::convert_error)?
                 } else {
-                    return Err(e.into());
+                    return Err(format!("{}", e).into());
                 }
             }
         };
@@ -637,7 +706,7 @@ impl TwitchApiClient {
     pub async fn get_games_by_ids(
         &self,
         game_ids: &[&str],
-    ) -> Result<Vec<Category>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Category>, Box<dyn std::error::Error + Send + Sync>> {
         use twitch_api::helix::games::GetGamesRequest;
 
         if game_ids.is_empty() {
@@ -655,7 +724,7 @@ impl TwitchApiClient {
             limiter.track_request();
         }
 
-        match self.client.req_get(request.clone(), &token).await {
+        match self.client.req_get(request.clone(), &token).await.map_err(Self::convert_error) {
             Ok(response) => Ok(response.data),
             Err(e) => {
                 // 401エラーの場合、トークンをリフレッシュして再試行
@@ -671,10 +740,10 @@ impl TwitchApiClient {
                         limiter.track_request();
                     }
 
-                    let response = self.client.req_get(request, &refreshed_token).await?;
+                    let response = self.client.req_get(request, &refreshed_token).await.map_err(Self::convert_error).map_err(Self::convert_error)?;
                     Ok(response.data)
                 } else {
-                    Err(e.into())
+                    Err(format!("{}", e).into())
                 }
             }
         }
@@ -803,3 +872,4 @@ pub struct TwitchRateLimitStatus {
 pub struct RateLimiter {
     // 将来的に実装
 }
+

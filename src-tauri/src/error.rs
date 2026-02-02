@@ -136,7 +136,7 @@ impl<T> ResultExt<T> for Result<T, std::io::Error> {
     }
 }
 
-impl<T> ResultExt<T> for Result<T, Box<dyn std::error::Error>> {
+impl<T> ResultExt<T> for Result<T, Box<dyn std::error::Error + Send + Sync>> {
     fn db_context(self, _context: &str) -> Result<T, AppError> {
         self.map_err(|e| AppError::General(e.to_string()))
     }
@@ -197,3 +197,4 @@ impl<T> OptionExt<T> for Option<T> {
         self.ok_or_else(|| AppError::NotFound(message.to_string()))
     }
 }
+

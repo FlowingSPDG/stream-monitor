@@ -40,7 +40,7 @@ impl YouTubeLiveChatClient {
     pub async fn get_live_chat_id_from_video(
         &mut self,
         video_id: &str,
-    ) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
         let part = vec!["liveStreamingDetails".to_string()];
 
         let (_, response) = self
@@ -68,7 +68,7 @@ impl YouTubeLiveChatClient {
     /// ライブチャットメッセージを取得
     pub async fn fetch_chat_messages(
         &mut self,
-    ) -> Result<Vec<ChatMessage>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<ChatMessage>, Box<dyn std::error::Error + Send + Sync>> {
         if self.live_chat_id.is_none() {
             return Ok(vec![]);
         }
@@ -153,7 +153,7 @@ impl YouTubeLiveChatClient {
         &mut self,
         message_tx: tokio::sync::mpsc::UnboundedSender<crate::database::models::ChatMessage>,
         poll_interval_secs: u64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut interval = interval(Duration::from_secs(poll_interval_secs));
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
@@ -223,7 +223,7 @@ impl YouTubeLiveChatCollector {
         &self,
         video_id: &str,
         poll_interval_secs: u64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut client = self.client.lock().await;
 
         // ビデオIDからライブチャットIDを取得
@@ -323,3 +323,4 @@ impl YouTubeLiveChatCollector {
         }
     }
 }
+

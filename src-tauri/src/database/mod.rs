@@ -21,7 +21,7 @@ pub struct DatabaseManager {
 }
 
 impl DatabaseManager {
-    pub fn new(app_handle: &AppHandle) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(app_handle: &AppHandle) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         // データベースファイルパスの取得
         let db_path = if let Ok(app_data_dir) = app_handle.path().app_data_dir() {
             std::fs::create_dir_all(&app_data_dir)
@@ -62,7 +62,7 @@ impl DatabaseManager {
     }
 
     /// データベース接続を取得
-    pub fn get_connection(&self) -> Result<Connection, Box<dyn std::error::Error>> {
+    pub fn get_connection(&self) -> Result<Connection, Box<dyn std::error::Error + Send + Sync>> {
         let conn = self
             .conn
             .lock()
@@ -73,7 +73,7 @@ impl DatabaseManager {
     }
 
     /// 手動バックアップを作成
-    pub fn create_backup(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    pub fn create_backup(&self) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
         // インメモリDB使用時はバックアップを作成できない
         if cfg!(debug_assertions) {
             return Err(
@@ -106,7 +106,7 @@ impl DatabaseManager {
 }
 
 // 後方互換性のための関数
-pub fn get_connection(app_handle: &AppHandle) -> Result<Connection, Box<dyn std::error::Error>> {
+pub fn get_connection(app_handle: &AppHandle) -> Result<Connection, Box<dyn std::error::Error + Send + Sync>> {
     let db_manager: tauri::State<'_, DatabaseManager> = app_handle.state();
     db_manager.get_connection()
 }
@@ -119,7 +119,7 @@ mod tests {
     // テスト用のヘルパー関数
     fn get_connection_with_path(
         db_path: PathBuf,
-    ) -> Result<Connection, Box<dyn std::error::Error>> {
+    ) -> Result<Connection, Box<dyn std::error::Error + Send + Sync>> {
         let conn = Connection::open(&db_path)
             .db_context("open test database")
             .map_err(|e| e.to_string())?;
@@ -177,3 +177,4 @@ mod tests {
         assert!(db_path.exists());
     }
 }
+

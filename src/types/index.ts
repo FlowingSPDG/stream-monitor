@@ -50,6 +50,7 @@ export interface ExportQuery {
 
 export interface ChatMessage {
   id?: number;
+  channel_id?: number;
   stream_id: number;
   timestamp: string;
   platform: string;
@@ -57,6 +58,8 @@ export interface ChatMessage {
   user_name: string;
   message: string;
   message_type: string;
+  badges?: string[];
+  badge_info?: string;
 }
 
 export interface ChatMessagesQuery {

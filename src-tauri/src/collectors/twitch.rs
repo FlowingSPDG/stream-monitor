@@ -63,7 +63,7 @@ impl Collector for TwitchCollector {
     async fn poll_channel(
         &self,
         channel: &Channel,
-    ) -> Result<Option<StreamData>, Box<dyn std::error::Error>> {
+    ) -> Result<Option<StreamData>, Box<dyn std::error::Error + Send + Sync>> {
         // twitch_user_idがあればそれを優先使用、なければloginで取得（後方互換性）
         let user_id_string = if let Some(twitch_user_id) = channel.twitch_user_id {
             twitch_user_id.to_string()
@@ -116,7 +116,7 @@ impl Collector for TwitchCollector {
         }
     }
 
-    async fn start_collection(&self, _channel: &Channel) -> Result<(), Box<dyn std::error::Error>> {
+    async fn start_collection(&self, _channel: &Channel) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // 認証を確認
         self.api_client.authenticate().await?;
         Ok(())
@@ -127,7 +127,7 @@ impl TwitchCollector {
     /// トークンの有効期限をチェックし、必要に応じてリフレッシュ
     pub async fn check_and_refresh_token_if_needed(
         &self,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let refreshed = self.api_client.check_and_refresh_token_if_needed().await?;
         
         // トークンが更新された場合、IRC Manager にも反映

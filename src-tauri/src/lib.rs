@@ -136,7 +136,7 @@ fn start_existing_channels_polling(
     db_manager: &tauri::State<'_, DatabaseManager>,
     poller: &mut ChannelPoller,
     app_handle: &tauri::AppHandle,
-) -> Result<usize, Box<dyn std::error::Error>> {
+) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
     let conn = db_manager.get_connection()?;
 
     // Get all enabled channels
@@ -571,3 +571,4 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
