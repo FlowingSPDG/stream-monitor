@@ -94,14 +94,14 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
       }
     };
 
-    // プログレスバーのアニメーション
+    // プログレスバーのアニメーション（高速化）
     progressInterval = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 90) { // DB初期化が終わるまで90%まで
           return 90;
         }
-        // 最初は速く、後半は遅く
-        const increment = prev < 50 ? 2 + Math.random() * 3 : 0.5 + Math.random() * 1;
+        // 高速化: 前半は8-12%、後半は3-6%ずつ増加
+        const increment = prev < 50 ? 8 + Math.random() * 4 : 3 + Math.random() * 3;
         return Math.min(prev + increment, 90);
       });
     }, 50);
@@ -113,7 +113,7 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
     });
 
     // 定期的にDB初期化状態を確認（フォールバック）
-    statusCheckInterval = setInterval(checkDbInitStatus, 1000); // 1秒ごとにチェック
+    statusCheckInterval = setInterval(checkDbInitStatus, 250); // 250msごとにチェック
 
     return () => {
       if (progressInterval) clearInterval(progressInterval);
