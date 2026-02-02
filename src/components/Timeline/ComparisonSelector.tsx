@@ -227,6 +227,10 @@ const ComparisonSelector: React.FC<ComparisonSelectorProps> = ({
                       peak_viewers: 0,
                       avg_viewers: 0,
                       duration_minutes: 0,
+                      minutes_watched: 0,
+                      follower_gain: 0,
+                      total_chat_messages: 0,
+                      engagement_rate: 0,
                     })
                   }
                   className="ml-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"

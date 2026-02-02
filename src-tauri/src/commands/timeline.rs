@@ -335,25 +335,34 @@ fn get_stream_info_by_id(
     "#;
 
     let stream_id_str = stream_id.to_string();
-    let result = conn.query_row(query, [&stream_id_str, &stream_id_str, &stream_id_str, &stream_id_str], |row| {
-        Ok(StreamInfo {
-            id: row.get::<_, i64>(0)?,
-            stream_id: row.get::<_, String>(1)?,
-            channel_id: row.get::<_, i64>(2)?,
-            channel_name: row.get::<_, String>(3)?,
-            title: row.get::<_, String>(4)?,
-            category: row.get::<_, String>(5)?,
-            started_at: row.get::<_, String>(6)?,
-            ended_at: row.get::<_, Option<String>>(7)?,
-            peak_viewers: row.get::<_, i32>(8)?,
-            avg_viewers: row.get::<_, i32>(9)?,
-            duration_minutes: row.get::<_, i32>(10)?,
-            minutes_watched: row.get::<_, i64>(11)?,
-            follower_gain: row.get::<_, i32>(12)?,
-            total_chat_messages: row.get::<_, i64>(13)?,
-            engagement_rate: row.get::<_, f64>(14)?,
-        })
-    })?;
+    let result = conn.query_row(
+        query,
+        [
+            &stream_id_str,
+            &stream_id_str,
+            &stream_id_str,
+            &stream_id_str,
+        ],
+        |row| {
+            Ok(StreamInfo {
+                id: row.get::<_, i64>(0)?,
+                stream_id: row.get::<_, String>(1)?,
+                channel_id: row.get::<_, i64>(2)?,
+                channel_name: row.get::<_, String>(3)?,
+                title: row.get::<_, String>(4)?,
+                category: row.get::<_, String>(5)?,
+                started_at: row.get::<_, String>(6)?,
+                ended_at: row.get::<_, Option<String>>(7)?,
+                peak_viewers: row.get::<_, i32>(8)?,
+                avg_viewers: row.get::<_, i32>(9)?,
+                duration_minutes: row.get::<_, i32>(10)?,
+                minutes_watched: row.get::<_, i64>(11)?,
+                follower_gain: row.get::<_, i32>(12)?,
+                total_chat_messages: row.get::<_, i64>(13)?,
+                engagement_rate: row.get::<_, f64>(14)?,
+            })
+        },
+    )?;
 
     Ok(result)
 }
