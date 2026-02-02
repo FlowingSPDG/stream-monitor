@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use twitch_api::{
     helix::{
-        search::{SearchCategoriesRequest, Category},
+        search::{Category, SearchCategoriesRequest},
         streams::{GetStreamsRequest, Stream},
         users::{GetUsersRequest, User},
         HelixClient,

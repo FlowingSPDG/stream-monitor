@@ -190,7 +190,7 @@ pub fn run() {
             // 2回目以降の起動時に既存のウィンドウを表示してフォーカス
             let logger = app.state::<AppLogger>();
             logger.info("Second instance detected - showing existing window");
-            
+
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.set_focus();
