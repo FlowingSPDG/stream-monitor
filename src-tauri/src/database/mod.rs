@@ -1,6 +1,7 @@
 pub mod aggregation;
 pub mod analytics;
 pub mod chat_analytics;
+pub mod data_science_analytics;
 pub mod models;
 pub mod schema;
 pub mod utils;

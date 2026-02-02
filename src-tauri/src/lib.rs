@@ -38,6 +38,11 @@ use commands::{
         get_oauth_config, get_token, has_oauth_config, has_token, initialize_database,
         recreate_database, save_oauth_config, save_token, verify_token,
     },
+    data_science::{
+        detect_anomalies, get_category_change_impact, get_chatter_activity_scores,
+        get_emote_analysis, get_message_length_stats, get_retention_cohort,
+        get_viewer_chat_correlation, get_word_frequency_analysis,
+    },
     database::{create_database_backup, get_database_info},
     discovery::{
         get_auto_discovery_settings, get_discovered_streams, get_games_by_ids,
@@ -486,6 +491,15 @@ pub fn run() {
             get_top_chatters,
             get_time_pattern_stats,
             get_chatter_behavior_stats,
+            // Data Science commands
+            get_word_frequency_analysis,
+            get_emote_analysis,
+            get_message_length_stats,
+            get_viewer_chat_correlation,
+            get_category_change_impact,
+            get_chatter_activity_scores,
+            get_retention_cohort,
+            detect_anomalies,
             // Channel commands
             add_channel,
             remove_channel,

@@ -428,3 +428,185 @@ export interface ChatAnalyticsQuery {
   limit?: number;
   groupByDay?: boolean;
 }
+
+// ========== Data Science Types ==========
+
+// Phase 1: Text Analysis
+
+export interface WordFrequency {
+  word: string;
+  count: number;
+  percentage: number;
+}
+
+export interface WordFrequencyResult {
+  words: WordFrequency[];
+  totalWords: number;
+  uniqueWords: number;
+  avgWordsPerMessage: number;
+  totalMessages: number;
+}
+
+export interface EmoteUsage {
+  name: string;
+  count: number;
+  users: number;
+  percentage: number;
+}
+
+export interface HourlyEmotePattern {
+  hour: number;
+  count: number;
+}
+
+export interface EmoteAnalysisResult {
+  emotes: EmoteUsage[];
+  totalEmoteUses: number;
+  emotePerMessageRate: number;
+  hourlyPattern: HourlyEmotePattern[];
+}
+
+export interface LengthDistribution {
+  bucket: string; // "0-10", "11-20", etc.
+  count: number;
+  percentage: number;
+}
+
+export interface SegmentLengthStats {
+  segment: string;
+  avgLength: number;
+  messageCount: number;
+}
+
+export interface MessageLengthStats {
+  avgLength: number;
+  medianLength: number;
+  stdDev: number;
+  minLength: number;
+  maxLength: number;
+  distribution: LengthDistribution[];
+  bySegment: SegmentLengthStats[];
+}
+
+// Phase 2: Correlation Analysis
+
+export interface ScatterPoint {
+  viewers: number;
+  chats: number;
+  timestamp: string;
+}
+
+export interface HourlyCorrelation {
+  hour: number;
+  correlation: number;
+  sampleCount: number;
+}
+
+export interface CorrelationResult {
+  pearsonCoefficient: number;
+  interpretation: string;
+  scatterData: ScatterPoint[];
+  hourlyCorrelation: HourlyCorrelation[];
+}
+
+export interface CategoryChange {
+  timestamp: string;
+  fromCategory: string;
+  toCategory: string;
+  beforeViewers: number;
+  afterViewers: number;
+  viewerChangePercent: number;
+  chatChangePercent: number;
+}
+
+export interface CategoryPerformance {
+  category: string;
+  avgViewers: number;
+  avgChatRate: number;
+  totalTimeMinutes: number;
+  changeCount: number;
+}
+
+export interface CategoryImpactResult {
+  changes: CategoryChange[];
+  categoryPerformance: CategoryPerformance[];
+}
+
+// Phase 3: User Behavior Analysis
+
+export interface ChatterActivityScore {
+  userName: string;
+  score: number;
+  messageCount: number;
+  streamCount: number;
+  badges: string[];
+  rank: number;
+}
+
+export interface ScoreDistribution {
+  scoreRange: string;
+  userCount: number;
+  percentage: number;
+}
+
+export interface SegmentAvgScore {
+  segment: string;
+  avgScore: number;
+  userCount: number;
+}
+
+export interface ChatterScoreResult {
+  scores: ChatterActivityScore[];
+  scoreDistribution: ScoreDistribution[];
+  segmentAvgScores: SegmentAvgScore[];
+}
+
+export interface RetentionCohort {
+  cohortWeek: string;
+  cohortSize: number;
+  week0: number;
+  week1: number;
+  week2: number;
+  week3: number;
+  week4: number;
+}
+
+export interface RetentionCohortResult {
+  cohorts: RetentionCohort[];
+  overallRetention: number;
+}
+
+// Phase 4: Anomaly Detection
+
+export interface Anomaly {
+  timestamp: string;
+  value: number;
+  zScore: number;
+  isPositive: boolean;
+}
+
+export interface TrendStats {
+  viewerTrend: string;
+  viewerAvg: number;
+  viewerStdDev: number;
+  chatTrend: string;
+  chatAvg: number;
+  chatStdDev: number;
+}
+
+export interface AnomalyResult {
+  viewerAnomalies: Anomaly[];
+  chatAnomalies: Anomaly[];
+  trendStats: TrendStats;
+}
+
+// Data Science Query Parameters
+
+export interface DataScienceQuery {
+  channelId?: number;
+  streamId?: number;
+  startTime?: string;
+  endTime?: string;
+  limit?: number;
+  zThreshold?: number;
+}
