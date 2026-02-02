@@ -116,22 +116,23 @@ impl DatabaseWriter {
                 };
 
                 // badges 以外のパラメータは ? で、badges だけは文字列補間
+                // channel_id と stream_id は Option なので NULL または値を渡す
                 conn.execute(
                     &format!(
                         "INSERT INTO chat_messages (channel_id, stream_id, timestamp, platform, user_id, user_name, message, message_type, badges, badge_info)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, {}, ?)",
                         badges_literal
                     ),
-                    [
-                        &message.channel_id.map(|v| v.to_string()).unwrap_or_default(),
-                        &message.stream_id.map(|v| v.to_string()).unwrap_or_default(),
+                    duckdb::params![
+                        message.channel_id,
+                        message.stream_id,
                         &message.timestamp,
                         &message.platform,
-                        &message.user_id.as_deref().unwrap_or("").to_string(),
+                        message.user_id.as_deref(),
                         &message.user_name,
                         &message.message,
                         &message.message_type,
-                        message.badge_info.as_deref().unwrap_or(""),
+                        message.badge_info.as_deref(),
                     ]
                 )?;
             }
