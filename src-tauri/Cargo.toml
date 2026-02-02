@@ -34,7 +34,9 @@ url = "2.5"
 twitch_api = { version = "0.7.2", features = ["helix", "client", "reqwest", "twitch_oauth2"] }
 twitch_oauth2 = { version = "0.16", features = ["reqwest"] }
 # YouTube API library
-google-youtube3 = "6"
+google-youtube3 = "7"
+yup-oauth2 = "12"
+hyper-rustls = "0.27"
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "tokio"] }
 # WebSocket libraries
 tungstenite = { version = "0.28", features = ["native-tls"] }
