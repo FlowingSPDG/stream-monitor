@@ -477,7 +477,7 @@ pub async fn execute_sql(
                     }
                     Ok(ValueRef::List(_, _)) => {
                         // 専用の関数でListを処理
-                        extract_list_from_row(&first_row, i)
+                        extract_list_from_row(first_row, i)
                     }
                     Ok(ValueRef::Enum(_, _)) => {
                         // Enumを文字列に変換
@@ -580,7 +580,7 @@ pub async fn execute_sql(
                     }
                     Ok(ValueRef::List(_, _)) => {
                         // 専用の関数でListを処理
-                        extract_list_from_row(&row, i)
+                        extract_list_from_row(row, i)
                     }
                     Ok(ValueRef::Enum(_, _)) => {
                         // Enumを文字列に変換

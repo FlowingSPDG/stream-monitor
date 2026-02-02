@@ -431,8 +431,8 @@ pub fn get_word_frequency_analysis(
             .split_whitespace()
             .filter(|w| {
                 w.len() > 1
-                    && !JAPANESE_STOPWORDS.contains(&w)
-                    && !ENGLISH_STOPWORDS.contains(&w)
+                    && !JAPANESE_STOPWORDS.contains(w)
+                    && !ENGLISH_STOPWORDS.contains(w)
                     && !w.starts_with("http")
                     && !w.starts_with("@")
             })
@@ -551,7 +551,7 @@ pub fn get_emote_analysis(
             .split_whitespace()
             .filter(|w| {
                 (w.chars().all(|c| c.is_uppercase() || c.is_numeric())
-                    || (w.chars().next().map_or(false, |c| c.is_uppercase())
+                    || (w.chars().next().is_some_and(|c| c.is_uppercase())
                         && w.chars().skip(1).any(|c| c.is_uppercase())))
                     && w.len() > 2
                     && w.len() < 30
@@ -567,7 +567,7 @@ pub fn get_emote_analysis(
             *emote_counts.entry(emote.clone()).or_insert(0) += 1;
             emote_users
                 .entry(emote)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(user.clone());
         }
     }
@@ -707,7 +707,7 @@ pub fn get_message_length_stats(
     let max_length = *sorted_lengths.last().unwrap_or(&0);
 
     // Distribution buckets
-    let buckets = vec![
+    let buckets = [
         ("0-10", 0, 10),
         ("11-30", 11, 30),
         ("31-50", 31, 50),
@@ -750,7 +750,7 @@ pub fn get_message_length_stats(
 
         segment_data
             .entry(segment.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(length);
     }
 
@@ -1385,7 +1385,7 @@ pub fn get_chatter_activity_scores(
         .collect();
 
     // Score distribution
-    let distribution_buckets = vec![
+    let distribution_buckets = [
         ("0-20", 0.0, 20.0),
         ("21-40", 21.0, 40.0),
         ("41-60", 41.0, 60.0),

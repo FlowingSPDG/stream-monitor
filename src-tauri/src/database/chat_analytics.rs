@@ -236,7 +236,7 @@ pub fn detect_chat_spikes(
         params.push(end.to_string());
     }
 
-    sql.push_str(&format!(
+    sql.push_str(
         r#"
             GROUP BY bucket
         ),
@@ -260,8 +260,8 @@ pub fn detect_chat_spikes(
             AND chat_count::FLOAT / prev_count::FLOAT >= ?
         ORDER BY spike_ratio DESC
         LIMIT 20
-        "#
-    ));
+        "#,
+    );
 
     params.push(min_spike_ratio.to_string());
 
@@ -465,13 +465,13 @@ pub fn get_top_chatters(
         params.push(end.to_string());
     }
 
-    sql.push_str(&format!(
+    sql.push_str(
         r#"
         GROUP BY cm.user_name, ub.badges
         ORDER BY message_count DESC
         LIMIT ?
-        "#
-    ));
+        "#,
+    );
     params.push(limit.to_string());
 
     let mut stmt = conn.prepare(&sql)?;
