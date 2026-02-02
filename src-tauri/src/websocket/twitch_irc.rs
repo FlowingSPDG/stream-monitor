@@ -77,15 +77,15 @@ impl TwitchIrcManager {
                             conn.message_count.fetch_add(1, Ordering::SeqCst);
                             *conn.last_message_at.lock().await = Some(Local::now().to_rfc3339());
                             
-                            // バッジ情報をJSON形式に変換
+                            // バッジ情報をJSON配列形式に変換（バッジ名のみ）
                             let badges_json = if msg.badges.is_empty() {
                                 None
                             } else {
-                                let badges_map: std::collections::HashMap<String, String> = msg.badges
+                                let badge_names: Vec<String> = msg.badges
                                     .iter()
-                                    .map(|badge| (badge.name.clone(), badge.version.clone()))
+                                    .map(|badge| badge.name.clone())
                                     .collect();
-                                serde_json::to_string(&badges_map).ok()
+                                serde_json::to_string(&badge_names).ok()
                             };
                             
                             let chat_message = ChatMessage {
