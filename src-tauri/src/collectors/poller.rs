@@ -417,6 +417,8 @@ impl ChannelPoller {
             viewer_count: stream_data.viewer_count,
             chat_rate_1min: stream_data.chat_rate_1min,
             category: stream_data.category.clone(),
+            title: stream_data.title.clone(),
+            follower_count: stream_data.follower_count,
             twitch_user_id,
             channel_name: Some(channel.channel_name.clone()),
         };

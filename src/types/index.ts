@@ -276,3 +276,45 @@ export interface TwitchGame {
   name: string;
   box_art_url: string;
 }
+
+export interface StreamInfo {
+  id: number;
+  stream_id: string;
+  channel_id: number;
+  channel_name: string;
+  title: string;
+  category: string;
+  started_at: string;
+  ended_at?: string;
+  peak_viewers: number;
+  avg_viewers: number;
+  duration_minutes: number;
+}
+
+export interface TimelinePoint {
+  collected_at: string;
+  viewer_count?: number;
+  chat_rate_1min: number;
+  category?: string;
+  title?: string;
+  follower_count?: number;
+}
+
+export interface CategoryChange {
+  timestamp: string;
+  from_category?: string;
+  to_category: string;
+}
+
+export interface TitleChange {
+  timestamp: string;
+  from_title?: string;
+  to_title: string;
+}
+
+export interface StreamTimelineData {
+  stream_info: StreamInfo;
+  stats: TimelinePoint[];
+  category_changes: CategoryChange[];
+  title_changes: TitleChange[];
+}
