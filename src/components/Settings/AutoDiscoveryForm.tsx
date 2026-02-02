@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import type { AutoDiscoverySettings } from '../../types';
+import type { AutoDiscoverySettings, TwitchGame, SelectedGame } from '../../types';
 
 export function AutoDiscoveryForm() {
   const [settings, setSettings] = useState<AutoDiscoverySettings>({
@@ -17,8 +17,16 @@ export function AutoDiscoveryForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [languageInput, setLanguageInput] = useState('');
-  const [gameIdInput, setGameIdInput] = useState('');
   const [showDetails, setShowDetails] = useState(false);
+
+  // ゲーム検索UI用のstate
+  const [gameSearchQuery, setGameSearchQuery] = useState('');
+  const [gameSearchResults, setGameSearchResults] = useState<TwitchGame[]>([]);
+  const [selectedGames, setSelectedGames] = useState<SelectedGame[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchTimeoutRef = useRef<number | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // 設定を読み込み
   useEffect(() => {
@@ -29,6 +37,20 @@ export function AutoDiscoveryForm() {
         );
         if (result) {
           setSettings(result);
+          
+          // 既存のgame_idsからゲーム名を取得
+          if (result.filters.game_ids.length > 0) {
+            try {
+              const games = await invoke<TwitchGame[]>('get_games_by_ids', {
+                gameIds: result.filters.game_ids,
+              });
+              setSelectedGames(games.map(g => ({ id: g.id, name: g.name })));
+            } catch (err) {
+              console.error('Failed to load game names:', err);
+              // エラー時はIDのみ表示
+              setSelectedGames(result.filters.game_ids.map(id => ({ id, name: id })));
+            }
+          }
         }
       } catch (err) {
         console.error('Failed to load auto-discovery settings:', err);
@@ -37,6 +59,54 @@ export function AutoDiscoveryForm() {
 
     loadSettings();
   }, []);
+
+  // ドロップダウン外クリック時に閉じる
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // 検索クエリ変更時のdebounce処理
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (gameSearchQuery.trim().length === 0) {
+      setGameSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    setIsSearching(true);
+    searchTimeoutRef.current = window.setTimeout(async () => {
+      try {
+        const results = await invoke<TwitchGame[]>('search_twitch_games', {
+          query: gameSearchQuery,
+        });
+        setGameSearchResults(results);
+        setShowDropdown(results.length > 0);
+      } catch (err) {
+        console.error('Failed to search games:', err);
+        setGameSearchResults([]);
+        setShowDropdown(false);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [gameSearchQuery]);
 
   const handleSave = async () => {
     setLoading(true);
@@ -95,21 +165,35 @@ export function AutoDiscoveryForm() {
     }));
   };
 
-  const handleAddGameId = () => {
-    const gameId = gameIdInput.trim();
-    if (gameId && !settings.filters.game_ids.includes(gameId)) {
-      setSettings((prev) => ({
-        ...prev,
-        filters: {
-          ...prev.filters,
-          game_ids: [...prev.filters.game_ids, gameId],
-        },
-      }));
-      setGameIdInput('');
+  const handleSelectGame = (game: TwitchGame) => {
+    // 既に選択済みかチェック
+    if (selectedGames.some(g => g.id === game.id)) {
+      return;
     }
+
+    // selectedGamesに追加
+    setSelectedGames((prev) => [...prev, { id: game.id, name: game.name }]);
+
+    // settingsのgame_idsに追加
+    setSettings((prev) => ({
+      ...prev,
+      filters: {
+        ...prev.filters,
+        game_ids: [...prev.filters.game_ids, game.id],
+      },
+    }));
+
+    // 検索UIをリセット
+    setGameSearchQuery('');
+    setGameSearchResults([]);
+    setShowDropdown(false);
   };
 
-  const handleRemoveGameId = (gameId: string) => {
+  const handleRemoveGame = (gameId: string) => {
+    // selectedGamesから削除
+    setSelectedGames((prev) => prev.filter((g) => g.id !== gameId));
+
+    // settingsのgame_idsから削除
     setSettings((prev) => ({
       ...prev,
       filters: {
@@ -284,36 +368,59 @@ export function AutoDiscoveryForm() {
             </p>
           </div>
 
-          {/* ゲームIDフィルター */}
+          {/* ゲーム/カテゴリフィルター */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              ゲーム/カテゴリIDフィルター（任意）
+              ゲーム/カテゴリフィルター（任意）
             </label>
-            <div className="flex gap-2 mb-2">
+            <div className="relative" ref={dropdownRef}>
               <input
                 type="text"
-                value={gameIdInput}
-                onChange={(e) => setGameIdInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddGameId()}
-                placeholder="TwitchゲームID"
-                className="input-field flex-1"
+                value={gameSearchQuery}
+                onChange={(e) => setGameSearchQuery(e.target.value)}
+                placeholder="ゲーム名で検索..."
+                className="input-field w-full"
               />
-              <button
-                onClick={handleAddGameId}
-                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors text-sm font-medium"
-              >
-                追加
-              </button>
+              {showDropdown && (
+                <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                  {isSearching ? (
+                    <div className="p-3 text-center text-sm text-gray-500 dark:text-gray-400">
+                      検索中...
+                    </div>
+                  ) : gameSearchResults.length > 0 ? (
+                    gameSearchResults.map((game) => (
+                      <button
+                        key={game.id}
+                        onClick={() => handleSelectGame(game)}
+                        className="w-full flex items-center gap-3 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left"
+                      >
+                        <img
+                          src={game.box_art_url.replace('{width}', '52').replace('{height}', '72')}
+                          alt={game.name}
+                          className="w-10 h-14 object-cover rounded"
+                        />
+                        <span className="text-sm text-gray-900 dark:text-gray-100">
+                          {game.name}
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="p-3 text-center text-sm text-gray-500 dark:text-gray-400">
+                      結果が見つかりませんでした
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {settings.filters.game_ids.map((gameId) => (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {selectedGames.map((game) => (
                 <span
-                  key={gameId}
+                  key={game.id}
                   className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-sm"
                 >
-                  {gameId}
+                  {game.name}
                   <button
-                    onClick={() => handleRemoveGameId(gameId)}
+                    onClick={() => handleRemoveGame(game.id)}
                     className="hover:text-purple-600 dark:hover:text-purple-400"
                   >
                     ×
@@ -322,7 +429,7 @@ export function AutoDiscoveryForm() {
               ))}
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Twitch API のゲームIDを指定（空の場合は全カテゴリ）
+              ゲーム名で検索して追加（空の場合は全カテゴリ）
             </p>
           </div>
 

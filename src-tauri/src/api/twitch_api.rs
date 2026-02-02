@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use twitch_api::{
     helix::{
+        search::{Category, SearchCategoriesRequest},
         streams::{GetStreamsRequest, Stream},
         users::{GetUsersRequest, User},
         HelixClient,
@@ -582,6 +583,100 @@ impl TwitchApiClient {
         }
 
         Ok(streams)
+    }
+
+    /// カテゴリ/ゲームを検索（Search Categories API）
+    ///
+    /// query: 検索クエリ
+    /// first: 最大取得件数（デフォルト20、最大100）
+    pub async fn search_categories(
+        &self,
+        query: &str,
+        first: Option<usize>,
+    ) -> Result<Vec<Category>, Box<dyn std::error::Error>> {
+        let token = self.get_user_token().await?;
+
+        let mut request = SearchCategoriesRequest::query(query);
+        request.first = first.map(|n| n.min(100));
+
+        // リクエストをトラッキング
+        if let Ok(mut limiter) = self.rate_limiter.lock() {
+            limiter.track_request();
+        }
+
+        let response = match self.client.req_get(request.clone(), &token).await {
+            Ok(response) => response,
+            Err(e) => {
+                // 401エラーの場合、トークンをリフレッシュして再試行
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED)
+                    || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT)
+                {
+                    eprintln!("Token expired, attempting refresh...");
+                    let _new_token = self.refresh_token().await?;
+                    let refreshed_token = self.get_user_token().await?;
+
+                    // 再試行もトラッキング
+                    if let Ok(mut limiter) = self.rate_limiter.lock() {
+                        limiter.track_request();
+                    }
+
+                    self.client.req_get(request, &refreshed_token).await?
+                } else {
+                    return Err(e.into());
+                }
+            }
+        };
+
+        Ok(response.data)
+    }
+
+    /// カテゴリ/ゲームをIDで取得（Get Games API）
+    ///
+    /// game_ids: ゲームIDのリスト（最大100件）
+    pub async fn get_games_by_ids(
+        &self,
+        game_ids: &[&str],
+    ) -> Result<Vec<Category>, Box<dyn std::error::Error>> {
+        use twitch_api::helix::games::GetGamesRequest;
+
+        if game_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let token = self.get_user_token().await?;
+
+        let game_id_refs: Vec<&types::CategoryIdRef> =
+            game_ids.iter().map(|id| (*id).into()).collect();
+        let request = GetGamesRequest::ids(game_id_refs.as_slice());
+
+        // リクエストをトラッキング
+        if let Ok(mut limiter) = self.rate_limiter.lock() {
+            limiter.track_request();
+        }
+
+        match self.client.req_get(request.clone(), &token).await {
+            Ok(response) => Ok(response.data),
+            Err(e) => {
+                // 401エラーの場合、トークンをリフレッシュして再試行
+                if e.to_string().contains(twitch::ERROR_UNAUTHORIZED)
+                    || e.to_string().contains(twitch::ERROR_UNAUTHORIZED_TEXT)
+                {
+                    eprintln!("Token expired, attempting refresh...");
+                    let _new_token = self.refresh_token().await?;
+                    let refreshed_token = self.get_user_token().await?;
+
+                    // 再試行もトラッキング
+                    if let Ok(mut limiter) = self.rate_limiter.lock() {
+                        limiter.track_request();
+                    }
+
+                    let response = self.client.req_get(request, &refreshed_token).await?;
+                    Ok(response.data)
+                } else {
+                    Err(e.into())
+                }
+            }
+        }
     }
 }
 

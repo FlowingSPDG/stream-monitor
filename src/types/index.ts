@@ -257,6 +257,17 @@ export interface AutoDiscoverySettings {
   filters: AutoDiscoveryFilters;
 }
 
+export interface TwitchGame {
+  id: string;
+  name: string;
+  box_art_url: string;
+}
+
+export interface SelectedGame {
+  id: string;
+  name: string;
+}
+
 export interface DiscoveredStreamInfo {
   id: number;
   twitch_user_id: number;  // 不変なTwitch user ID（内部識別子）
@@ -294,6 +305,7 @@ export interface StreamInfo {
   follower_gain: number;
   total_chat_messages: number;
   engagement_rate: number;
+  last_collected_at?: string;
 }
 
 export interface TimelinePoint {

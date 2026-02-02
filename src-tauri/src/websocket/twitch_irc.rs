@@ -40,7 +40,9 @@ impl TwitchIrcClient {
         let (mut socket, _response) = connect("wss://irc-ws.chat.twitch.tv:443")?;
 
         // 認証
-        socket.send(Message::Text(format!("PASS oauth:{}", self.access_token).into()))?;
+        socket.send(Message::Text(
+            format!("PASS oauth:{}", self.access_token).into(),
+        ))?;
         socket.send(Message::Text("NICK justinfan12345".into()))?;
         socket.send(Message::Text(format!("JOIN #{}", self.channel_name).into()))?;
 

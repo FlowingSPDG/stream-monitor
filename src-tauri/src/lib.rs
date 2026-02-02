@@ -38,9 +38,9 @@ use commands::{
     },
     database::{create_database_backup, get_database_info},
     discovery::{
-        get_auto_discovery_settings, get_discovered_streams, promote_discovered_channel,
-        save_auto_discovery_settings, search_twitch_games, toggle_auto_discovery,
-        DiscoveredStreamInfo,
+        get_auto_discovery_settings, get_discovered_streams, get_games_by_ids,
+        promote_discovered_channel, save_auto_discovery_settings, search_twitch_games,
+        toggle_auto_discovery, DiscoveredStreamInfo,
     },
     export::{export_to_csv, export_to_delimited, preview_export_data},
     logs::get_logs,
@@ -186,6 +186,17 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::Builder::new().build())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // 2回目以降の起動時に既存のウィンドウを表示してフォーカス
+            let logger = app.state::<AppLogger>();
+            logger.info("Second instance detected - showing existing window");
+
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+                let _ = window.unminimize();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -482,6 +493,7 @@ pub fn run() {
             toggle_auto_discovery,
             get_discovered_streams,
             search_twitch_games,
+            get_games_by_ids,
             promote_discovered_channel,
             // SQL commands
             execute_sql,
