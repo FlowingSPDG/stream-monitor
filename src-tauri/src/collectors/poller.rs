@@ -130,18 +130,19 @@ impl ChannelPoller {
                 && !channel.is_auto_discovered.unwrap_or(false) 
             {
                 if let Some(ref twitch_collector) = &twitch_collector_for_task {
+                    // IRC接続にはlogin name (channel_id)を使用、display name (channel_name)ではない
                     if let Err(e) = twitch_collector
-                        .start_chat_collection(channel_id, &channel.channel_name)
+                        .start_chat_collection(channel_id, &channel.channel_id)
                         .await
                     {
                         eprintln!(
-                            "[ChannelPoller] Failed to start IRC for {}: {}",
-                            channel.channel_name, e
+                            "[ChannelPoller] Failed to start IRC for {} (login: {}): {}",
+                            channel.channel_name, channel.channel_id, e
                         );
                     } else {
                         println!(
-                            "[ChannelPoller] Started IRC for channel {} ({})",
-                            channel_id, channel.channel_name
+                            "[ChannelPoller] Started IRC for channel {} ({}, login: {})",
+                            channel_id, channel.channel_name, channel.channel_id
                         );
                     }
                 }

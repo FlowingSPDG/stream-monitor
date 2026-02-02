@@ -1,10 +1,123 @@
 use crate::database::DatabaseManager;
 use crate::error::ResultExt;
 use chrono::{Local, TimeZone};
-use duckdb::{params, types::TimeUnit, types::ValueRef};
+use duckdb::{params, types::TimeUnit, types::ValueRef, Connection, Row};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tauri::State;
+
+/// クエリを前処理してLIST型カラムを文字列に変換
+fn preprocess_query_for_list_columns(conn: &Connection, query: &str) -> Result<String, String> {
+    // SELECT * FROM table のようなクエリの場合、LIST型カラムを検出して自動変換
+    // より複雑なクエリの場合は元のクエリをそのまま使用
+    
+    // シンプルなヒューリスティック: "SELECT * FROM" パターンを検出
+    let trimmed = query.trim().to_uppercase();
+    if !trimmed.starts_with("SELECT * FROM") {
+        // 複雑なクエリはそのまま返す
+        return Ok(query.to_string());
+    }
+    
+    // テーブル名を抽出（簡易版）
+    let parts: Vec<&str> = query.split_whitespace().collect();
+    let table_name = if let Some(idx) = parts.iter().position(|&p| p.to_uppercase() == "FROM") {
+        if idx + 1 < parts.len() {
+            parts[idx + 1].trim_end_matches(';')
+        } else {
+            return Ok(query.to_string());
+        }
+    } else {
+        return Ok(query.to_string());
+    };
+    
+    // テーブルのスキーマを取得してLIST型カラムを検出
+    let schema_query = format!("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{}'", table_name);
+    
+    let mut stmt = match conn.prepare(&schema_query) {
+        Ok(s) => s,
+        Err(_) => return Ok(query.to_string()), // エラー時は元のクエリを返す
+    };
+    
+    let mut list_columns = Vec::new();
+    let rows_result = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    });
+    
+    if let Ok(rows) = rows_result {
+        for row in rows.flatten() {
+            let (col_name, data_type) = row;
+            if data_type.contains("[]") || data_type.to_uppercase().contains("LIST") {
+                list_columns.push(col_name);
+            }
+        }
+    }
+    
+    // LIST型カラムがない場合は元のクエリを返す
+    if list_columns.is_empty() {
+        return Ok(query.to_string());
+    }
+    
+    // SELECT * をカラム名に展開し、LIST型カラムにlist_to_string()を適用
+    let all_columns_query = format!("SELECT column_name FROM information_schema.columns WHERE table_name = '{}' ORDER BY ordinal_position", table_name);
+    let mut stmt = match conn.prepare(&all_columns_query) {
+        Ok(s) => s,
+        Err(_) => return Ok(query.to_string()),
+    };
+    
+    let mut columns = Vec::new();
+    if let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(0)) {
+        for row in rows.flatten() {
+            if list_columns.contains(&row) {
+                // LIST型カラムは CAST で VARCHAR に変換
+                // DuckDBではLIST型をVARCHARにCASTすると ['elem1', 'elem2'] 形式の文字列になる
+                columns.push(format!("CAST({} AS VARCHAR) as {}", row, row));
+            } else {
+                columns.push(row);
+            }
+        }
+    }
+    
+    if columns.is_empty() {
+        return Ok(query.to_string());
+    }
+    
+    // クエリを再構築
+    let select_clause = columns.join(", ");
+    let rest_of_query = &query[query.to_uppercase().find("FROM").unwrap_or(0)..];
+    let new_query = format!("SELECT {} {}", select_clause, rest_of_query);
+    
+    eprintln!("[SQL] Transformed query to handle LIST columns: {}", new_query);
+    Ok(new_query)
+}
+
+/// DuckDBのLIST型をJSON配列に変換
+fn extract_list_from_row(row: &Row, col_index: usize) -> serde_json::Value {
+    // ValueRefとして取得
+    match row.get_ref(col_index) {
+        Ok(ValueRef::Null) => serde_json::Value::Null,
+        Ok(ValueRef::List(_, _)) => {
+            // LIST型の場合、文字列化を試みる（自動変換が適用されていない場合）
+            serde_json::Value::String("[LIST型カラム]".to_string())
+        }
+        Ok(ValueRef::Text(s)) => {
+            // すでに文字列化されている場合（CAST AS VARCHAR適用済み）
+            let text = String::from_utf8_lossy(s).to_string();
+            // DuckDBの配列文字列形式 ['elem1', 'elem2'] をパース
+            parse_duckdb_list_to_json(&text)
+        }
+        Ok(_) => {
+            // その他の型は文字列として取得を試みる
+            match row.get::<_, String>(col_index) {
+                Ok(s) => {
+                    // DuckDBの配列文字列形式をパース
+                    parse_duckdb_list_to_json(&s)
+                }
+                Err(_) => serde_json::Value::String("<型変換エラー>".to_string()),
+            }
+        }
+        Err(_) => serde_json::Value::String("<取得エラー>".to_string()),
+    }
+}
 
 /// DuckDBのList文字列をJSON配列に変換
 /// 例: ['elem1', 'elem2'] または ["elem1", "elem2"] → ["elem1", "elem2"]
@@ -147,7 +260,10 @@ pub async fn execute_sql(
         || query_type == "PRAGMA"
     {
         // SELECT系クエリの処理
-        let mut stmt = conn.prepare(query).map_err(|e| {
+        // LIST型カラムを自動変換するための前処理
+        let processed_query = preprocess_query_for_list_columns(&conn, query)?;
+        
+        let mut stmt = conn.prepare(&processed_query).map_err(|e| {
             eprintln!("[SQL ERROR] Failed to prepare: {}", e);
             e.to_string()
         })?;
@@ -250,15 +366,8 @@ pub async fn execute_sql(
                         serde_json::Value::String("<INTERVAL>".to_string())
                     }
                     Ok(ValueRef::List(_, _)) => {
-                        // Listを取得してJSON配列に変換
-                        match first_row.get::<_, String>(i) {
-                            Ok(s) => {
-                                // DuckDBの配列文字列を解析
-                                // 例: ['elem1', 'elem2'] または ["elem1", "elem2"]
-                                parse_duckdb_list_to_json(&s)
-                            }
-                            Err(_) => serde_json::Value::String("<LIST>".to_string()),
-                        }
+                        // 専用の関数でListを処理
+                        extract_list_from_row(&first_row, i)
                     }
                     Ok(ValueRef::Enum(_, _)) => {
                         // Enumを文字列に変換
@@ -351,14 +460,8 @@ pub async fn execute_sql(
                         serde_json::Value::String("<INTERVAL>".to_string())
                     }
                     Ok(ValueRef::List(_, _)) => {
-                        // Listを取得してJSON配列に変換
-                        match row.get::<_, String>(i) {
-                            Ok(s) => {
-                                // DuckDBの配列文字列を解析
-                                parse_duckdb_list_to_json(&s)
-                            }
-                            Err(_) => serde_json::Value::String("<LIST>".to_string()),
-                        }
+                        // 専用の関数でListを処理
+                        extract_list_from_row(&row, i)
                     }
                     Ok(ValueRef::Enum(_, _)) => {
                         // Enumを文字列に変換
