@@ -456,7 +456,7 @@ pub fn list_categories(
 /// データ可用性情報を取得
 pub fn get_data_availability(conn: &Connection) -> Result<DataAvailability, duckdb::Error> {
     // パフォーマンス最適化: 別々のクエリに分割してインデックスを使用
-    
+
     // MIN(collected_at) - インデックスを使用
     let first_record: String = conn
         .query_row(

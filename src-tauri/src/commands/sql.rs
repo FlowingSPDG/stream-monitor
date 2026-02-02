@@ -9,11 +9,11 @@ use tauri::State;
 /// SQLクエリが有効かどうかを基本的にチェック
 fn validate_sql_query(query: &str) -> Result<(), String> {
     let query_trimmed = query.trim();
-    
+
     if query_trimmed.is_empty() {
         return Err("クエリが空です".to_string());
     }
-    
+
     // コメントをスキップして最初のキーワードを取得
     let first_keyword = query_trimmed
         .lines()
@@ -23,22 +23,21 @@ fn validate_sql_query(query: &str) -> Result<(), String> {
         .find(|word| !word.is_empty())
         .unwrap_or("")
         .to_uppercase();
-    
+
     // 有効なSQLキーワードのリスト
     let valid_keywords = [
-        "SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER",
-        "TRUNCATE", "PRAGMA", "SHOW", "DESCRIBE", "DESC", "EXPLAIN",
-        "WITH", "COPY", "IMPORT", "EXPORT", "ATTACH", "DETACH",
-        "BEGIN", "COMMIT", "ROLLBACK", "SET", "CALL", "LOAD"
+        "SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER", "TRUNCATE", "PRAGMA",
+        "SHOW", "DESCRIBE", "DESC", "EXPLAIN", "WITH", "COPY", "IMPORT", "EXPORT", "ATTACH",
+        "DETACH", "BEGIN", "COMMIT", "ROLLBACK", "SET", "CALL", "LOAD",
     ];
-    
+
     if !valid_keywords.contains(&first_keyword.as_str()) {
         return Err(format!(
             "無効なSQLクエリです: '{}' は認識されないSQLキーワードです。\n有効なキーワード: SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, PRAGMA, SHOW, DESCRIBE, WITH など",
             first_keyword
         ));
     }
-    
+
     Ok(())
 }
 
@@ -46,27 +45,28 @@ fn validate_sql_query(query: &str) -> Result<(), String> {
 fn preprocess_query_for_list_columns(conn: &Connection, query: &str) -> Result<String, String> {
     // SELECT * FROM table のようなクエリの場合、LIST型カラムを検出して自動変換
     // より複雑なクエリの場合は元のクエリをそのまま使用
-    
+
     // クエリを正規化
     let query_normalized = query.trim();
-    
+
     // 複数のステートメントがある場合は前処理をスキップ
     let semicolon_count = query_normalized.matches(';').count();
-    if semicolon_count > 1 || (semicolon_count == 1 && !query_normalized.trim_end().ends_with(';')) {
+    if semicolon_count > 1 || (semicolon_count == 1 && !query_normalized.trim_end().ends_with(';'))
+    {
         eprintln!("[SQL] Multiple statements detected, skipping LIST preprocessing");
         return Ok(query.to_string());
     }
-    
+
     // セミコロンを削除して単一のステートメントとして処理
     let single_statement = query_normalized.trim_end_matches(';').trim();
-    
+
     // シンプルなヒューリスティック: "SELECT * FROM" パターンを検出
     let trimmed_upper = single_statement.to_uppercase();
     if !trimmed_upper.starts_with("SELECT * FROM") {
         // 複雑なクエリはそのまま返す
         return Ok(query.to_string());
     }
-    
+
     // テーブル名を抽出（簡易版）
     let parts: Vec<&str> = single_statement.split_whitespace().collect();
     let table_name = if let Some(idx) = parts.iter().position(|&p| p.to_uppercase() == "FROM") {
@@ -82,20 +82,23 @@ fn preprocess_query_for_list_columns(conn: &Connection, query: &str) -> Result<S
     } else {
         return Ok(query.to_string());
     };
-    
+
     // テーブルのスキーマを取得してLIST型カラムを検出
-    let schema_query = format!("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{}'", table_name);
-    
+    let schema_query = format!(
+        "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{}'",
+        table_name
+    );
+
     let mut stmt = match conn.prepare(&schema_query) {
         Ok(s) => s,
         Err(_) => return Ok(query.to_string()), // エラー時は元のクエリを返す
     };
-    
+
     let mut list_columns = Vec::new();
     let rows_result = stmt.query_map([], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     });
-    
+
     if let Ok(rows) = rows_result {
         for row in rows.flatten() {
             let (col_name, data_type) = row;
@@ -104,19 +107,19 @@ fn preprocess_query_for_list_columns(conn: &Connection, query: &str) -> Result<S
             }
         }
     }
-    
+
     // LIST型カラムがない場合は元のクエリを返す
     if list_columns.is_empty() {
         return Ok(query.to_string());
     }
-    
+
     // SELECT * をカラム名に展開し、LIST型カラムにlist_to_string()を適用
     let all_columns_query = format!("SELECT column_name FROM information_schema.columns WHERE table_name = '{}' ORDER BY ordinal_position", table_name);
     let mut stmt = match conn.prepare(&all_columns_query) {
         Ok(s) => s,
         Err(_) => return Ok(query.to_string()),
     };
-    
+
     let mut columns = Vec::new();
     if let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(0)) {
         for row in rows.flatten() {
@@ -129,24 +132,27 @@ fn preprocess_query_for_list_columns(conn: &Connection, query: &str) -> Result<S
             }
         }
     }
-    
+
     if columns.is_empty() {
         return Ok(query.to_string());
     }
-    
+
     // クエリを再構築
     let select_clause = columns.join(", ");
-    
+
     // FROM以降の部分を安全に取得（single_statementから）
     let from_pos = match single_statement.to_uppercase().find("FROM") {
         Some(pos) => pos,
         None => return Ok(query.to_string()),
     };
-    
+
     let rest_of_query = &single_statement[from_pos..];
     let new_query = format!("SELECT {} {}", select_clause, rest_of_query);
-    
-    eprintln!("[SQL] Transformed query to handle LIST columns: {}", new_query);
+
+    eprintln!(
+        "[SQL] Transformed query to handle LIST columns: {}",
+        new_query
+    );
     Ok(new_query)
 }
 
@@ -183,30 +189,30 @@ fn extract_list_from_row(row: &Row, col_index: usize) -> serde_json::Value {
 /// 例: ['elem1', 'elem2'] または ["elem1", "elem2"] → ["elem1", "elem2"]
 fn parse_duckdb_list_to_json(s: &str) -> serde_json::Value {
     let trimmed = s.trim();
-    
+
     // 空配列チェック
     if trimmed == "[]" || trimmed.is_empty() {
         return serde_json::Value::Array(vec![]);
     }
-    
+
     // DuckDBのList形式を解析: ['elem1', 'elem2']
     if trimmed.starts_with('[') && trimmed.ends_with(']') {
-        let inner = &trimmed[1..trimmed.len()-1];
-        
+        let inner = &trimmed[1..trimmed.len() - 1];
+
         // 要素をパース
         let mut elements = Vec::new();
         let mut current = String::new();
         let mut in_quotes = false;
         let mut quote_char = ' ';
         let mut escape_next = false;
-        
+
         for ch in inner.chars() {
             if escape_next {
                 current.push(ch);
                 escape_next = false;
                 continue;
             }
-            
+
             match ch {
                 '\\' => {
                     escape_next = true;
@@ -236,16 +242,16 @@ fn parse_duckdb_list_to_json(s: &str) -> serde_json::Value {
                 _ => {}
             }
         }
-        
+
         // 最後の要素を追加
         let elem = current.trim();
         if !elem.is_empty() {
             elements.push(serde_json::Value::String(elem.to_string()));
         }
-        
+
         return serde_json::Value::Array(elements);
     }
-    
+
     // パースに失敗した場合は文字列として返す
     serde_json::Value::String(s.to_string())
 }
@@ -301,7 +307,7 @@ pub async fn execute_sql(
     }
 
     eprintln!("[SQL] Executing query: {}", query);
-    
+
     // 基本的なクエリ検証：セミコロンで複数のステートメントに分割されている場合、
     // 最初のステートメントのみを実行（セキュリティとエラー防止のため）
     let query_parts: Vec<&str> = query.split(';').collect();
@@ -309,7 +315,9 @@ pub async fn execute_sql(
         let first_stmt = query_parts[0].trim();
         // 2番目以降のステートメントが空でない場合は警告
         if query_parts.iter().skip(1).any(|s| !s.trim().is_empty()) {
-            eprintln!("[SQL WARN] Multiple statements detected. Only executing the first statement.");
+            eprintln!(
+                "[SQL WARN] Multiple statements detected. Only executing the first statement."
+            );
             eprintln!("[SQL WARN] Original query: {}", query);
             eprintln!("[SQL WARN] Executing: {}", first_stmt);
         }
@@ -317,7 +325,7 @@ pub async fn execute_sql(
     } else {
         query
     };
-    
+
     // SQLクエリの基本的な妥当性チェック（DuckDBに渡す前に検証）
     if let Err(e) = validate_sql_query(query_to_execute) {
         eprintln!("[SQL ERROR] Query validation failed: {}", e);
@@ -346,11 +354,14 @@ pub async fn execute_sql(
         let processed_query = match preprocess_query_for_list_columns(&conn, query_to_execute) {
             Ok(q) => q,
             Err(e) => {
-                eprintln!("[SQL WARN] Failed to preprocess query: {}, using original query", e);
+                eprintln!(
+                    "[SQL WARN] Failed to preprocess query: {}, using original query",
+                    e
+                );
                 query_to_execute.to_string()
             }
         };
-        
+
         let mut stmt = match conn.prepare(&processed_query) {
             Ok(s) => s,
             Err(e) => {
@@ -385,7 +396,7 @@ pub async fn execute_sql(
                 return Err(format!("行データ取得エラー: {}", e));
             }
         };
-        
+
         if let Some(first_row) = first_row_result {
             column_count = first_row.as_ref().column_count();
             eprintln!("[SQL] Column count: {}", column_count);
@@ -501,7 +512,7 @@ pub async fn execute_sql(
                     return Err(format!("行データ取得エラー: {}", e));
                 }
             };
-            
+
             let row = match row_result {
                 Some(r) => r,
                 None => break,

@@ -399,15 +399,18 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
 
     if chat_messages_stream_id_notnull_count > 0 {
         eprintln!("[Migration] Migrating chat_messages table to make stream_id nullable");
-        
+
         // 既存データがあるかチェック
         let mut count_stmt = conn.prepare("SELECT COUNT(*) FROM chat_messages")?;
         let existing_count: i64 = count_stmt.query_row([], |row| row.get(0))?;
-        
+
         if existing_count > 0 {
-            eprintln!("[Migration] Found {} existing chat messages, migrating data...", existing_count);
+            eprintln!(
+                "[Migration] Found {} existing chat messages, migrating data...",
+                existing_count
+            );
         }
-        
+
         // 一時テーブルを作成（stream_idをNULL可能に）
         conn.execute(
             r#"
@@ -425,7 +428,7 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
             "#,
             [],
         )?;
-        
+
         // 既存データをコピー
         if existing_count > 0 {
             conn.execute(
@@ -437,13 +440,13 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
                 [],
             )?;
         }
-        
+
         // 古いテーブルを削除
         conn.execute("DROP TABLE chat_messages", [])?;
-        
+
         // 新しいテーブルをリネーム
         conn.execute("ALTER TABLE chat_messages_new RENAME TO chat_messages", [])?;
-        
+
         // インデックスを再作成
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_chat_messages_stream_id ON chat_messages(stream_id)",
@@ -457,14 +460,13 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
             "CREATE INDEX IF NOT EXISTS idx_chat_messages_channel_id ON chat_messages(channel_id)",
             [],
         )?;
-        
+
         eprintln!("[Migration] chat_messages table migration completed");
     }
 
     // chat_messagesテーブルにbadgesフィールドを追加（TEXT[]型）
-    let mut chat_messages_badges_info = conn.prepare(
-        "SELECT type FROM pragma_table_info('chat_messages') WHERE name = 'badges'",
-    )?;
+    let mut chat_messages_badges_info =
+        conn.prepare("SELECT type FROM pragma_table_info('chat_messages') WHERE name = 'badges'")?;
     let badges_type: Option<String> = chat_messages_badges_info
         .query_map([], |row| row.get(0))
         .ok()
@@ -480,10 +482,10 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
         Some("TEXT") => {
             // TEXT 型の場合は TEXT[] に変更（既存データを変換）
             eprintln!("[Migration] Converting badges column from TEXT to TEXT[]");
-            
+
             // 一時カラムを追加
             conn.execute("ALTER TABLE chat_messages ADD COLUMN badges_new TEXT[]", [])?;
-            
+
             // 既存のJSON文字列データを配列に変換（存在する場合）
             // 空文字列やNULLはそのまま
             conn.execute(
@@ -494,15 +496,18 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
                     ELSE TRY_CAST(badges AS TEXT[])
                 END
                 "#,
-                []
+                [],
             )?;
-            
+
             // 古いカラムを削除
             conn.execute("ALTER TABLE chat_messages DROP COLUMN badges", [])?;
-            
+
             // 新しいカラムをリネーム
-            conn.execute("ALTER TABLE chat_messages RENAME COLUMN badges_new TO badges", [])?;
-            
+            conn.execute(
+                "ALTER TABLE chat_messages RENAME COLUMN badges_new TO badges",
+                [],
+            )?;
+
             eprintln!("[Migration] badges column conversion completed");
         }
         Some("TEXT[]") => {
@@ -510,7 +515,10 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
             eprintln!("[Migration] badges column already TEXT[], skipping");
         }
         Some(other) => {
-            eprintln!("[Migration] Warning: badges column has unexpected type: {}", other);
+            eprintln!(
+                "[Migration] Warning: badges column has unexpected type: {}",
+                other
+            );
         }
     }
 
@@ -542,13 +550,19 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
         "#,
         [],
     );
-    
+
     match update_result {
         Ok(updated_rows) => {
-            eprintln!("[Migration] Updated {} chat_messages with channel_id from streams", updated_rows);
+            eprintln!(
+                "[Migration] Updated {} chat_messages with channel_id from streams",
+                updated_rows
+            );
         }
         Err(e) => {
-            eprintln!("[Migration] Warning: Failed to update chat_messages.channel_id: {}", e);
+            eprintln!(
+                "[Migration] Warning: Failed to update chat_messages.channel_id: {}",
+                e
+            );
         }
     }
 

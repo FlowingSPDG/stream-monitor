@@ -516,4 +516,3 @@ fn get_channel_by_id(conn: &Connection, id: i64) -> Option<Channel> {
 
     rows.next()?.ok()
 }
-

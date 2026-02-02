@@ -118,8 +118,8 @@ impl ChannelPoller {
 
         let task = tokio::spawn(async move {
             // 手動登録チャンネルかつTwitchの場合、IRC接続を開始
-            if channel.platform == db_constants::PLATFORM_TWITCH 
-                && !channel.is_auto_discovered.unwrap_or(false) 
+            if channel.platform == db_constants::PLATFORM_TWITCH
+                && !channel.is_auto_discovered.unwrap_or(false)
             {
                 if let Some(ref twitch_collector) = &twitch_collector_for_task {
                     // IRC接続にはlogin name (channel_id)を使用、display name (channel_name)ではない
@@ -236,13 +236,16 @@ impl ChannelPoller {
                 // 代わりに、start_polling時に一度だけ取得する方式を採用する必要がある
 
                 // ポーリング実行
-                let poll_result = collector.poll_channel(&updated_channel).await
+                let poll_result = collector
+                    .poll_channel(&updated_channel)
+                    .await
                     .map_err(|e| e.to_string());
                 match poll_result {
                     Ok(Some(stream_data)) => {
                         // ストリーム情報をデータベースに保存
-                        let save_result = Self::save_stream_data(&conn, &updated_channel, &stream_data)
-                            .map_err(|e| e.to_string());
+                        let save_result =
+                            Self::save_stream_data(&conn, &updated_channel, &stream_data)
+                                .map_err(|e| e.to_string());
                         match save_result {
                             Ok(stream_db_id) => {
                                 // Update status with success
@@ -259,7 +262,9 @@ impl ChannelPoller {
                                     && !updated_channel.is_auto_discovered.unwrap_or(false)
                                 {
                                     if let Some(ref twitch_collector) = twitch_collector_for_task {
-                                        twitch_collector.update_stream_id(channel_id, Some(stream_db_id)).await;
+                                        twitch_collector
+                                            .update_stream_id(channel_id, Some(stream_db_id))
+                                            .await;
                                     }
                                 }
 
@@ -280,7 +285,8 @@ impl ChannelPoller {
                                 // Update status with error
                                 if let Ok(mut map) = status_map.write() {
                                     if let Some(status) = map.get_mut(&channel_id) {
-                                        status.last_error = Some(format!("Failed to save data: {}", e));
+                                        status.last_error =
+                                            Some(format!("Failed to save data: {}", e));
                                         status.error_count += 1;
                                     }
                                 }
@@ -369,7 +375,10 @@ impl ChannelPoller {
         // IRC接続を停止（Twitch手動登録チャンネルの場合）
         if let Some(ref twitch_collector) = self.twitch_collector {
             if let Err(e) = twitch_collector.stop_chat_collection(channel_id).await {
-                println!("[ChannelPoller] Failed to stop IRC for channel {}: {}", channel_id, e);
+                println!(
+                    "[ChannelPoller] Failed to stop IRC for channel {}: {}",
+                    channel_id, e
+                );
             } else {
                 println!("[ChannelPoller] Stopped IRC for channel {}", channel_id);
             }
@@ -535,4 +544,3 @@ impl ChannelPoller {
         // }
     }
 }
-

@@ -240,30 +240,134 @@ pub struct TrendStats {
 
 // Japanese stopwords list
 const JAPANESE_STOPWORDS: &[&str] = &[
-    "の", "に", "は", "を", "た", "が", "で", "て", "と", "し", "れ", "さ", "ある", "いる",
-    "も", "する", "から", "な", "こと", "として", "い", "や", "れる", "など", "なっ", "ない",
-    "この", "ため", "その", "あっ", "よう", "また", "もの", "という", "あり", "まで", "られ",
-    "なる", "へ", "か", "だ", "これ", "によって", "により", "おり", "より", "による", "ず",
-    "なり", "られる", "において", "ば", "なかっ", "なく", "しかし", "について", "せ", "だっ",
-    "その後", "できる", "それ", "う", "ので", "なお", "のみ", "でき", "き", "つ", "における",
-    "および", "いう", "さらに", "でも", "ら", "たり", "その他", "に関する", "たち", "ます",
-    "ん", "なら", "に対して", "特に", "せる", "および", "これら", "とき", "では", "にて",
-    "ほか", "ながら", "うち", "そして", "とともに", "ただし", "かつて", "それぞれ", "または",
-    "お", "ほど", "ものの", "に対する", "ほとんど", "と共に", "といった", "です", "とも",
-    "ところ", "ここ", "wwww", "www", "ww", "w", "草", "くさ",
+    "の",
+    "に",
+    "は",
+    "を",
+    "た",
+    "が",
+    "で",
+    "て",
+    "と",
+    "し",
+    "れ",
+    "さ",
+    "ある",
+    "いる",
+    "も",
+    "する",
+    "から",
+    "な",
+    "こと",
+    "として",
+    "い",
+    "や",
+    "れる",
+    "など",
+    "なっ",
+    "ない",
+    "この",
+    "ため",
+    "その",
+    "あっ",
+    "よう",
+    "また",
+    "もの",
+    "という",
+    "あり",
+    "まで",
+    "られ",
+    "なる",
+    "へ",
+    "か",
+    "だ",
+    "これ",
+    "によって",
+    "により",
+    "おり",
+    "より",
+    "による",
+    "ず",
+    "なり",
+    "られる",
+    "において",
+    "ば",
+    "なかっ",
+    "なく",
+    "しかし",
+    "について",
+    "せ",
+    "だっ",
+    "その後",
+    "できる",
+    "それ",
+    "う",
+    "ので",
+    "なお",
+    "のみ",
+    "でき",
+    "き",
+    "つ",
+    "における",
+    "および",
+    "いう",
+    "さらに",
+    "でも",
+    "ら",
+    "たり",
+    "その他",
+    "に関する",
+    "たち",
+    "ます",
+    "ん",
+    "なら",
+    "に対して",
+    "特に",
+    "せる",
+    "および",
+    "これら",
+    "とき",
+    "では",
+    "にて",
+    "ほか",
+    "ながら",
+    "うち",
+    "そして",
+    "とともに",
+    "ただし",
+    "かつて",
+    "それぞれ",
+    "または",
+    "お",
+    "ほど",
+    "ものの",
+    "に対する",
+    "ほとんど",
+    "と共に",
+    "といった",
+    "です",
+    "とも",
+    "ところ",
+    "ここ",
+    "wwww",
+    "www",
+    "ww",
+    "w",
+    "草",
+    "くさ",
 ];
 
 const ENGLISH_STOPWORDS: &[&str] = &[
     "the", "be", "to", "of", "and", "a", "in", "that", "have", "i", "it", "for", "not", "on",
-    "with", "he", "as", "you", "do", "at", "this", "but", "his", "by", "from", "they", "we",
-    "say", "her", "she", "or", "an", "will", "my", "one", "all", "would", "there", "their",
-    "what", "so", "up", "out", "if", "about", "who", "get", "which", "go", "me", "when", "make",
-    "can", "like", "time", "no", "just", "him", "know", "take", "people", "into", "year", "your",
-    "good", "some", "could", "them", "see", "other", "than", "then", "now", "look", "only",
-    "come", "its", "over", "think", "also", "back", "after", "use", "two", "how", "our", "work",
-    "first", "well", "way", "even", "new", "want", "because", "any", "these", "give", "day",
-    "most", "us", "is", "was", "are", "been", "has", "had", "were", "said", "did", "having",
-    "lol", "lmao", "omg", "wtf", "brb", "afk", "gg", "ez", "pog", "kekw", "kappa", "pogchamp",
+    "with", "he", "as", "you", "do", "at", "this", "but", "his", "by", "from", "they", "we", "say",
+    "her", "she", "or", "an", "will", "my", "one", "all", "would", "there", "their", "what", "so",
+    "up", "out", "if", "about", "who", "get", "which", "go", "me", "when", "make", "can", "like",
+    "time", "no", "just", "him", "know", "take", "people", "into", "year", "your", "good", "some",
+    "could", "them", "see", "other", "than", "then", "now", "look", "only", "come", "its", "over",
+    "think", "also", "back", "after", "use", "two", "how", "our", "work", "first", "well", "way",
+    "even", "new", "want", "because", "any", "these", "give", "day", "most", "us", "is", "was",
+    "are", "been", "has", "had", "were", "said", "did", "having", "lol", "lmao", "omg", "wtf",
+    "brb", "afk", "gg", "ez", "pog", "kekw", "kappa", "pogchamp",
 ];
 
 /// Phase 1: Get word frequency analysis
@@ -312,10 +416,9 @@ pub fn get_word_frequency_analysis(
     sql.push_str(" ORDER BY cm.timestamp DESC LIMIT 100000");
 
     let mut stmt = conn.prepare(&sql)?;
-    let messages: Vec<String> = utils::query_map_with_params(&mut stmt, &params, |row| {
-        row.get::<_, String>(0)
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
+    let messages: Vec<String> =
+        utils::query_map_with_params(&mut stmt, &params, |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
 
     // Process words in Rust (more flexible than SQL for text processing)
     let mut word_counts: HashMap<String, i64> = HashMap::new();
@@ -568,10 +671,8 @@ pub fn get_message_length_stats(
 
     let mut stmt = conn.prepare(&sql)?;
     let data: Vec<(i32, Option<String>)> =
-        utils::query_map_with_params(&mut stmt, &params, |row| {
-            Ok((row.get(0)?, row.get(1).ok()))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
+        utils::query_map_with_params(&mut stmt, &params, |row| Ok((row.get(0)?, row.get(1).ok())))?
+            .collect::<Result<Vec<_>, _>>()?;
 
     if data.is_empty() {
         return Ok(MessageLengthStats {
@@ -595,7 +696,11 @@ pub fn get_message_length_stats(
     sorted_lengths.sort();
     let median = sorted_lengths[sorted_lengths.len() / 2] as f64;
 
-    let variance: f64 = lengths.iter().map(|&l| (l as f64 - avg).powi(2)).sum::<f64>() / count;
+    let variance: f64 = lengths
+        .iter()
+        .map(|&l| (l as f64 - avg).powi(2))
+        .sum::<f64>()
+        / count;
     let std_dev = variance.sqrt();
 
     let min_length = *sorted_lengths.first().unwrap_or(&0);
@@ -614,10 +719,7 @@ pub fn get_message_length_stats(
     let distribution: Vec<LengthDistribution> = buckets
         .iter()
         .map(|(label, min, max)| {
-            let count = lengths
-                .iter()
-                .filter(|&&l| l >= *min && l <= *max)
-                .count() as i64;
+            let count = lengths.iter().filter(|&&l| l >= *min && l <= *max).count() as i64;
             LengthDistribution {
                 bucket: label.to_string(),
                 count,
@@ -776,11 +878,10 @@ pub fn get_viewer_chat_correlation(
     );
 
     let mut stmt = conn.prepare(&sql)?;
-    let data: Vec<(String, f64, i64)> =
-        utils::query_map_with_params(&mut stmt, &params, |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
+    let data: Vec<(String, f64, i64)> = utils::query_map_with_params(&mut stmt, &params, |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+    })?
+    .collect::<Result<Vec<_>, _>>()?;
 
     if data.is_empty() {
         return Ok(CorrelationResult {
@@ -818,7 +919,8 @@ pub fn get_viewer_chat_correlation(
         .collect();
 
     // Calculate hourly correlation
-    let hourly_correlation = calculate_hourly_correlation(conn, channel_id, stream_id, start_time, end_time)?;
+    let hourly_correlation =
+        calculate_hourly_correlation(conn, channel_id, stream_id, start_time, end_time)?;
 
     Ok(CorrelationResult {
         pearson_coefficient: pearson,
@@ -959,11 +1061,10 @@ fn calculate_hourly_correlation(
     );
 
     let mut stmt = conn.prepare(&sql)?;
-    let data: Vec<(i32, f64, i64)> =
-        utils::query_map_with_params(&mut stmt, &params, |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
+    let data: Vec<(i32, f64, i64)> = utils::query_map_with_params(&mut stmt, &params, |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+    })?
+    .collect::<Result<Vec<_>, _>>()?;
 
     for (hour, viewers, chats) in data {
         let entry = hourly_data.entry(hour).or_insert((Vec::new(), Vec::new()));
@@ -1217,7 +1318,13 @@ pub fn get_chatter_activity_scores(
     let mut stmt = conn.prepare(&sql)?;
     let data: Vec<(String, i64, i64, i64, Option<String>)> =
         utils::query_map_with_params(&mut stmt, &params, |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4).ok()))
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4).ok(),
+            ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -1265,16 +1372,16 @@ pub fn get_chatter_activity_scores(
         .iter()
         .take(limit as usize)
         .enumerate()
-        .map(|(idx, (user, score, msg_count, str_count, badges))| {
-            ChatterActivityScore {
+        .map(
+            |(idx, (user, score, msg_count, str_count, badges))| ChatterActivityScore {
                 user_name: user.clone(),
                 score: *score,
                 message_count: *msg_count,
                 stream_count: *str_count,
                 badges: badges.clone(),
                 rank: (idx + 1) as i32,
-            }
-        })
+            },
+        )
         .collect();
 
     // Score distribution
@@ -1372,10 +1479,8 @@ pub fn detect_anomalies(
 
     let mut stmt = conn.prepare(&viewer_sql)?;
     let viewer_data: Vec<(String, i32)> =
-        utils::query_map_with_params(&mut stmt, &params, |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
+        utils::query_map_with_params(&mut stmt, &params, |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
 
     // Calculate statistics
     let viewer_values: Vec<f64> = viewer_data.iter().map(|(_, v)| *v as f64).collect();
@@ -1410,13 +1515,9 @@ pub fn detect_anomalies(
 
     // Determine trend
     let viewer_trend = if viewer_values.len() > 10 {
-        let first_half: f64 = viewer_values[..viewer_values.len() / 2]
-            .iter()
-            .sum::<f64>()
+        let first_half: f64 = viewer_values[..viewer_values.len() / 2].iter().sum::<f64>()
             / (viewer_values.len() / 2) as f64;
-        let second_half: f64 = viewer_values[viewer_values.len() / 2..]
-            .iter()
-            .sum::<f64>()
+        let second_half: f64 = viewer_values[viewer_values.len() / 2..].iter().sum::<f64>()
             / (viewer_values.len() - viewer_values.len() / 2) as f64;
 
         if second_half > first_half * 1.1 {

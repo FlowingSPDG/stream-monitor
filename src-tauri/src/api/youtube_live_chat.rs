@@ -127,7 +127,7 @@ impl YouTubeLiveChatClient {
             user_name,
             message: message_text,
             message_type,
-            badges: None, // YouTube の場合は badges を保存しない（現状未対応）
+            badges: None,     // YouTube の場合は badges を保存しない（現状未対応）
             badge_info: None, // YouTube の場合は badge_info も未対応
         })
     }
@@ -323,4 +323,3 @@ impl YouTubeLiveChatCollector {
         }
     }
 }
-

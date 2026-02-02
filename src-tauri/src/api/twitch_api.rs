@@ -58,7 +58,9 @@ impl TwitchApiClient {
         self
     }
 
-    pub async fn get_access_token(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_access_token(
+        &self,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // Keyringからトークンを取得を試みる（Device Code Flowで取得したユーザートークン）
         if let Some(ref handle) = self.app_handle {
             if let Ok(token_str) =
@@ -109,28 +111,31 @@ impl TwitchApiClient {
     async fn refresh_token(&self) -> Result<AccessToken, Box<dyn std::error::Error + Send + Sync>> {
         // Mutexを取得してリフレッシュ操作をシリアライズ
         let _guard = self.refresh_lock.lock().await;
-        
+
         eprintln!("[TwitchAPI] Acquired refresh lock, checking if refresh is still needed...");
-        
+
         // ロックを取得した後、現在のトークンがすでに有効かチェック
         // （別のリクエストがすでにリフレッシュを完了した可能性がある）
         // Note: KeyringStoreの結果をawaitの前に解決してからasync操作を行う
         let maybe_current_token: Option<String> = self.app_handle.as_ref().and_then(|handle| {
             KeyringStore::get_token_with_app(handle, db_constants::PLATFORM_TWITCH).ok()
         });
-        
+
         if let Some(current_token) = maybe_current_token {
             let access_token_typed = AccessToken::from(current_token.clone());
             // トークンが有効かどうか軽量チェック
             if let Ok(mut limiter) = self.rate_limiter.lock() {
                 limiter.track_request();
             }
-            if TwitchApiUserToken::from_token(&*self.client, access_token_typed).await.is_ok() {
+            if TwitchApiUserToken::from_token(&*self.client, access_token_typed)
+                .await
+                .is_ok()
+            {
                 eprintln!("[TwitchAPI] Token is already valid (refreshed by another request), skipping refresh");
                 return Ok(AccessToken::from(current_token));
             }
         }
-        
+
         // TwitchOAuthインスタンスを作成してリフレッシュ
         let mut oauth = TwitchOAuth::new(
             self.client_id.clone(),
@@ -146,30 +151,41 @@ impl TwitchApiClient {
             Ok(new_token) => Ok(AccessToken::from(new_token)),
             Err(e) => {
                 let error_str = e.to_string();
-                
+
                 // "Invalid refresh token" エラーを検出
-                if error_str.contains("Invalid refresh token") || error_str.contains("invalid_grant") {
+                if error_str.contains("Invalid refresh token")
+                    || error_str.contains("invalid_grant")
+                {
                     eprintln!("[TwitchAPI] Refresh token is invalid, clearing tokens and requesting re-authentication");
-                    
+
                     // 無効なトークンをクリーンアップ
                     if let Some(ref handle) = self.app_handle {
                         // アクセストークンを削除
-                        let _ = KeyringStore::delete_token_with_app(handle, db_constants::PLATFORM_TWITCH);
+                        let _ = KeyringStore::delete_token_with_app(
+                            handle,
+                            db_constants::PLATFORM_TWITCH,
+                        );
                         // リフレッシュトークンを削除
                         let _ = KeyringStore::delete_token_with_app(handle, "twitch_refresh");
                         // メタデータを削除
-                        let _ = KeyringStore::delete_token_metadata_with_app(handle, db_constants::PLATFORM_TWITCH);
-                        
+                        let _ = KeyringStore::delete_token_metadata_with_app(
+                            handle,
+                            db_constants::PLATFORM_TWITCH,
+                        );
+
                         eprintln!("[TwitchAPI] Cleared invalid tokens from keyring");
-                        
+
                         // 再認証が必要であることをフロントエンドに通知
                         if let Err(emit_err) = handle.emit("twitch-auth-required", ()) {
-                            eprintln!("[TwitchAPI] Failed to emit twitch-auth-required event: {}", emit_err);
+                            eprintln!(
+                                "[TwitchAPI] Failed to emit twitch-auth-required event: {}",
+                                emit_err
+                            );
                         } else {
                             eprintln!("[TwitchAPI] Emitted twitch-auth-required event to frontend");
                         }
                     }
-                    
+
                     Err("Twitch authentication expired. Please re-authenticate via Device Code Flow.".into())
                 } else {
                     // Convert to Send + Sync error
@@ -179,7 +195,9 @@ impl TwitchApiClient {
         }
     }
 
-    async fn get_user_token(&self) -> Result<TwitchApiUserToken, Box<dyn std::error::Error + Send + Sync>> {
+    async fn get_user_token(
+        &self,
+    ) -> Result<TwitchApiUserToken, Box<dyn std::error::Error + Send + Sync>> {
         let access_token = self.get_access_token().await?;
 
         // トークン検証を試行（これもAPIコールなのでトラッキング）
@@ -299,7 +317,10 @@ impl TwitchApiClient {
         }
     }
 
-    pub async fn get_user_by_login(&self, login: &str) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_user_by_login(
+        &self,
+        login: &str,
+    ) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
         let token = self.get_user_token().await?;
 
         let login_refs: &[&types::UserNameRef] = &[login.into()];

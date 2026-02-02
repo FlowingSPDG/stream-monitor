@@ -23,7 +23,7 @@ impl TwitchCollector {
         logger: Arc<AppLogger>,
     ) -> Self {
         let irc_manager = Arc::new(TwitchIrcManager::new(db_conn, Arc::clone(&logger)));
-        
+
         Self {
             api_client: Arc::new(
                 TwitchApiClient::new(client_id, client_secret).with_app_handle(app_handle),
@@ -101,7 +101,10 @@ impl Collector for TwitchCollector {
         }
     }
 
-    async fn start_collection(&self, _channel: &Channel) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn start_collection(
+        &self,
+        _channel: &Channel,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // 認証を確認
         self.api_client.authenticate().await?;
         Ok(())
@@ -114,15 +117,19 @@ impl TwitchCollector {
         &self,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let refreshed = self.api_client.check_and_refresh_token_if_needed().await?;
-        
+
         // トークンが更新された場合、IRC Manager にも反映
         if refreshed {
-            let token_result = self.api_client.get_access_token().await.map_err(|e| e.to_string());
+            let token_result = self
+                .api_client
+                .get_access_token()
+                .await
+                .map_err(|e| e.to_string());
             if let Ok(token) = token_result {
                 self.irc_manager.update_access_token(token).await;
             }
         }
-        
+
         Ok(refreshed)
     }
 
@@ -132,7 +139,11 @@ impl TwitchCollector {
         channel_id: i64,
         channel_name: &str,
     ) -> Result<(), String> {
-        let access_token = self.api_client.get_access_token().await.map_err(|e| e.to_string())?;
+        let access_token = self
+            .api_client
+            .get_access_token()
+            .await
+            .map_err(|e| e.to_string())?;
         self.irc_manager
             .start_channel_collection(channel_id, channel_name, &access_token)
             .await
@@ -146,7 +157,8 @@ impl TwitchCollector {
 
     /// 配信状態変更時にstream_idを更新
     pub async fn update_stream_id(&self, channel_id: i64, stream_id: Option<i64>) {
-        self.irc_manager.update_channel_stream(channel_id, stream_id).await;
+        self.irc_manager
+            .update_channel_stream(channel_id, stream_id)
+            .await;
     }
-
 }

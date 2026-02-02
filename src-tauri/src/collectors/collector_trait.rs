@@ -7,5 +7,8 @@ pub trait Collector {
         &self,
         channel: &Channel,
     ) -> Result<Option<StreamData>, Box<dyn std::error::Error + Send + Sync>>;
-    async fn start_collection(&self, channel: &Channel) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+    async fn start_collection(
+        &self,
+        channel: &Channel,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 }

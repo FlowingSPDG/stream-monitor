@@ -101,7 +101,11 @@ pub fn row_to_chat_message(row: &Row) -> DuckResult<ChatMessage> {
                         .map(|s| s.trim().trim_matches('\'').trim_matches('"').to_string())
                         .filter(|s| !s.is_empty())
                         .collect::<Vec<String>>();
-                    if json_like.is_empty() { None } else { Some(json_like) }
+                    if json_like.is_empty() {
+                        None
+                    } else {
+                        Some(json_like)
+                    }
                 })
         }
     };
@@ -126,7 +130,7 @@ pub fn parse_badges(badges_str: &str) -> Option<Vec<String>> {
     if badges_str.is_empty() {
         return None;
     }
-    
+
     // JSON としてパースを試みる
     serde_json::from_str::<Vec<String>>(badges_str)
         .ok()
@@ -141,7 +145,11 @@ pub fn parse_badges(badges_str: &str) -> Option<Vec<String>> {
                 .map(|s| s.trim().trim_matches('\'').trim_matches('"').to_string())
                 .filter(|s| !s.is_empty())
                 .collect::<Vec<String>>();
-            if json_like.is_empty() { None } else { Some(json_like) }
+            if json_like.is_empty() {
+                None
+            } else {
+                Some(json_like)
+            }
         })
 }
 

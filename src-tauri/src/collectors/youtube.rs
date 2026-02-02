@@ -89,7 +89,10 @@ impl Collector for YouTubeCollector {
         }
     }
 
-    async fn start_collection(&self, _channel: &Channel) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn start_collection(
+        &self,
+        _channel: &Channel,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // 認証はOAuthモジュールで行われているため、ここでは確認のみ
         Ok(())
     }

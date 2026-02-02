@@ -13,11 +13,13 @@ impl DatabaseWriter {
         let ended_at_value = stream.ended_at.as_deref();
 
         // まず既存レコードを検索
-        let existing_id: Option<i64> = conn.query_row(
-            "SELECT id FROM streams WHERE channel_id = ? AND stream_id = ?",
-            duckdb::params![channel_id, &stream.stream_id],
-            |row| row.get(0)
-        ).optional()?;
+        let existing_id: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM streams WHERE channel_id = ? AND stream_id = ?",
+                duckdb::params![channel_id, &stream.stream_id],
+                |row| row.get(0),
+            )
+            .optional()?;
 
         match existing_id {
             Some(id) => {
@@ -105,7 +107,7 @@ impl DatabaseWriter {
         let result = (|| {
             // パフォーマンス最適化: マルチロウINSERTを使用
             // DuckDBでは大量の行を一度にINSERTする方が効率的
-            
+
             // VALUES句を構築
             let values_placeholders: Vec<String> = messages
                 .iter()

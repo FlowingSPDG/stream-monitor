@@ -79,4 +79,3 @@ pub async fn get_stream_stats(
 
     stats.db_context("collect stats").map_err(|e| e.to_string())
 }
-

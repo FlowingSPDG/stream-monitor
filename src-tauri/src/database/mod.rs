@@ -80,7 +80,9 @@ impl DatabaseManager {
 }
 
 // 後方互換性のための関数
-pub fn get_connection(app_handle: &AppHandle) -> Result<Connection, Box<dyn std::error::Error + Send + Sync>> {
+pub fn get_connection(
+    app_handle: &AppHandle,
+) -> Result<Connection, Box<dyn std::error::Error + Send + Sync>> {
     let db_manager: tauri::State<'_, DatabaseManager> = app_handle.state();
     db_manager.get_connection()
 }

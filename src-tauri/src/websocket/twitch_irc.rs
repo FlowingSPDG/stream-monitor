@@ -36,7 +36,8 @@ impl TwitchIrcManager {
             TwitchIRCClient::<SecureTCPTransport, StaticLoginCredentials>::new(config);
 
         let client = Arc::new(client);
-        let channels: Arc<Mutex<HashMap<i64, ChannelConnection>>> = Arc::new(Mutex::new(HashMap::new()));
+        let channels: Arc<Mutex<HashMap<i64, ChannelConnection>>> =
+            Arc::new(Mutex::new(HashMap::new()));
         let db_conn_clone = Arc::clone(&db_conn);
         let logger_clone = Arc::clone(&logger);
         let channels_clone = Arc::clone(&channels);
@@ -52,15 +53,18 @@ impl TwitchIrcManager {
                         // チャンネル名から channel_id と stream_id を取得
                         let channel_name = msg.channel_login.as_str();
                         let channels_lock = channels_clone.lock().await;
-                        
-                        if let Some(conn) = channels_lock.values().find(|c| c.channel_name.to_lowercase() == channel_name) {
+
+                        if let Some(conn) = channels_lock
+                            .values()
+                            .find(|c| c.channel_name.to_lowercase() == channel_name)
+                        {
                             let channel_id = conn.channel_id;
                             let stream_id = *conn.stream_id.lock().await;
-                            
+
                             // 統計を更新
                             conn.message_count.fetch_add(1, Ordering::SeqCst);
                             *conn.last_message_at.lock().await = Some(Local::now().to_rfc3339());
-                            
+
                             // バッジ情報を配列として取得（バッジ名のみ）
                             let badges = if msg.badges.is_empty() {
                                 None
@@ -69,10 +73,10 @@ impl TwitchIrcManager {
                                     msg.badges
                                         .iter()
                                         .map(|badge| badge.name.clone())
-                                        .collect::<Vec<String>>()
+                                        .collect::<Vec<String>>(),
                                 )
                             };
-                            
+
                             // badge_info（サブスク月数等の詳細情報）を取得
                             let badge_info = if msg.badge_info.is_empty() {
                                 None
@@ -82,10 +86,10 @@ impl TwitchIrcManager {
                                         .iter()
                                         .map(|bi| format!("{}:{}", bi.name, bi.version))
                                         .collect::<Vec<_>>()
-                                        .join(",")
+                                        .join(","),
                                 )
                             };
-                            
+
                             let chat_message = ChatMessage {
                                 id: None,
                                 channel_id: Some(channel_id),
@@ -99,7 +103,7 @@ impl TwitchIrcManager {
                                 badges,
                                 badge_info,
                             };
-                            
+
                             batch.push(chat_message);
                         }
                     }
@@ -128,7 +132,7 @@ impl TwitchIrcManager {
 
         // incoming_taskを保持しないため、バックグラウンドで継続実行される
         // db_connは直接保持せず、flush_batch内で使用する
-        
+
         Self {
             channels,
             client,
@@ -138,7 +142,8 @@ impl TwitchIrcManager {
 
     /// データベース書き込みハンドラーを起動（twitch-ircでは不要だが互換性のために残す）
     pub async fn start_db_handler(&self) {
-        self.logger.info("[IRC] Database handler is integrated into message receiver");
+        self.logger
+            .info("[IRC] Database handler is integrated into message receiver");
     }
 
     /// バッチメッセージをデータベースに書き込み
@@ -154,7 +159,10 @@ impl TwitchIrcManager {
         let conn = db_conn.lock().await;
         match crate::database::writer::DatabaseWriter::insert_chat_messages_batch(&conn, batch) {
             Ok(_) => {
-                logger.info(&format!("[IRC] Saved {} chat messages to database", batch.len()));
+                logger.info(&format!(
+                    "[IRC] Saved {} chat messages to database",
+                    batch.len()
+                ));
                 batch.clear();
             }
             Err(e) => {
@@ -183,7 +191,9 @@ impl TwitchIrcManager {
 
         // チャンネルに参加
         let channel_login = channel_name.to_lowercase();
-        self.client.join(channel_login.clone()).map_err(|e| e.to_string())?;
+        self.client
+            .join(channel_login.clone())
+            .map_err(|e| e.to_string())?;
 
         let connection = ChannelConnection {
             channel_id,
@@ -206,29 +216,31 @@ impl TwitchIrcManager {
     /// 指定したチャンネルのIRC接続を停止
     pub async fn stop_channel_collection(&self, channel_id: i64) -> Result<(), String> {
         let mut channels = self.channels.lock().await;
-        
+
         if let Some(connection) = channels.remove(&channel_id) {
             // チャンネルから退出
             let channel_login = connection.channel_name.to_lowercase();
             self.client.part(channel_login);
-            
+
             connection.is_connected.store(false, Ordering::SeqCst);
-            
-            self.logger.info(&format!("[IRC] Stopped collection for channel_id: {}", channel_id));
+
+            self.logger.info(&format!(
+                "[IRC] Stopped collection for channel_id: {}",
+                channel_id
+            ));
             Ok(())
         } else {
-            Err(format!("No IRC connection found for channel_id: {}", channel_id))
+            Err(format!(
+                "No IRC connection found for channel_id: {}",
+                channel_id
+            ))
         }
     }
 
     /// 配信状態変更時にstream_idを更新
-    pub async fn update_channel_stream(
-        &self,
-        channel_id: i64,
-        stream_id: Option<i64>,
-    ) {
+    pub async fn update_channel_stream(&self, channel_id: i64, stream_id: Option<i64>) {
         let channels = self.channels.lock().await;
-        
+
         if let Some(connection) = channels.get(&channel_id) {
             *connection.stream_id.lock().await = stream_id;
             self.logger.info(&format!(
@@ -240,7 +252,7 @@ impl TwitchIrcManager {
 
     /// アクセストークンを更新（twitch-ircでは認証なし接続のため不要だが互換性のために残す）
     pub async fn update_access_token(&self, _token: String) {
-        self.logger.info("[IRC] Token update not needed for anonymous connection");
+        self.logger
+            .info("[IRC] Token update not needed for anonymous connection");
     }
-
 }

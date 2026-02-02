@@ -28,22 +28,19 @@ use commands::{
         get_game_analytics, get_game_daily_stats, get_time_pattern_stats, get_top_chatters,
         get_user_segment_stats, list_game_categories,
     },
-    channels::{
-        add_channel, list_channels, remove_channel, toggle_channel,
-        update_channel,
-    },
-    chat::{get_chat_messages},
+    channels::{add_channel, list_channels, remove_channel, toggle_channel, update_channel},
+    chat::get_chat_messages,
     config::{
         delete_oauth_config, delete_token, get_build_info, get_database_init_status,
-        get_oauth_config, has_oauth_config, recreate_database, save_oauth_config, 
-        save_token, verify_token,
+        get_oauth_config, has_oauth_config, recreate_database, save_oauth_config, save_token,
+        verify_token,
     },
     data_science::{
         detect_anomalies, get_category_change_impact, get_chatter_activity_scores,
-        get_emote_analysis, get_message_length_stats,
-        get_viewer_chat_correlation, get_word_frequency_analysis,
+        get_emote_analysis, get_message_length_stats, get_viewer_chat_correlation,
+        get_word_frequency_analysis,
     },
-    database::{get_database_info},
+    database::get_database_info,
     discovery::{
         get_auto_discovery_settings, get_discovered_streams, get_games_by_ids,
         promote_discovered_channel, save_auto_discovery_settings, search_twitch_games,
@@ -53,10 +50,10 @@ use commands::{
     logs::get_logs,
     oauth::{poll_twitch_device_token, start_twitch_device_auth},
     sql::{
-        delete_sql_template, execute_sql, list_database_tables,
-        list_sql_templates, save_sql_template,
+        delete_sql_template, execute_sql, list_database_tables, list_sql_templates,
+        save_sql_template,
     },
-    stats::{get_stream_stats},
+    stats::get_stream_stats,
     timeline::{get_channel_streams, get_stream_timeline},
     twitch::{get_twitch_rate_limit_status, validate_twitch_channel},
     window::show_main_window,
@@ -124,7 +121,6 @@ async fn check_for_updates(app: tauri::AppHandle) {
         }
     }
 }
-
 
 /// Helper function to start polling for existing enabled channels
 fn start_existing_channels_polling(
@@ -550,4 +546,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-

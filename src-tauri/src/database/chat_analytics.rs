@@ -50,7 +50,7 @@ pub struct TopChatter {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimePatternStats {
-    pub hour: i32, // 0-23
+    pub hour: i32,                // 0-23
     pub day_of_week: Option<i32>, // 0-6 (Sunday-Saturday)
     pub avg_chat_rate: f64,
     pub avg_engagement: f64,
@@ -404,7 +404,7 @@ pub fn get_top_chatters(
 
     // CTEにも同じフィルタを適用
     let mut cte_filters = Vec::new();
-    
+
     if let Some(ch_id) = channel_id {
         cte_filters.push(" AND channel_id = ?");
         params.push(ch_id.to_string());
@@ -475,26 +475,25 @@ pub fn get_top_chatters(
     params.push(limit.to_string());
 
     let mut stmt = conn.prepare(&sql)?;
-    let results: Vec<TopChatter> =
-        utils::query_map_with_params(&mut stmt, &params, |row| {
-            let badges_str: Option<String> = row.get(5).ok();
-            let badges = if let Some(b) = badges_str {
-                // DuckDBのARRAY型をパース
-                crate::database::utils::parse_badges(&b).unwrap_or_default()
-            } else {
-                Vec::new()
-            };
+    let results: Vec<TopChatter> = utils::query_map_with_params(&mut stmt, &params, |row| {
+        let badges_str: Option<String> = row.get(5).ok();
+        let badges = if let Some(b) = badges_str {
+            // DuckDBのARRAY型をパース
+            crate::database::utils::parse_badges(&b).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
 
-            Ok(TopChatter {
-                user_name: row.get(0)?,
-                message_count: row.get(1)?,
-                badges,
-                first_seen: row.get(2)?,
-                last_seen: row.get(3)?,
-                stream_count: row.get(4)?,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
+        Ok(TopChatter {
+            user_name: row.get(0)?,
+            message_count: row.get(1)?,
+            badges,
+            first_seen: row.get(2)?,
+            last_seen: row.get(3)?,
+            stream_count: row.get(4)?,
+        })
+    })?
+    .collect::<Result<Vec<_>, _>>()?;
 
     Ok(results)
 }
@@ -772,14 +771,13 @@ pub fn get_chatter_behavior_stats(
         })
     })?;
 
-    rows.next()
-        .unwrap_or_else(|| {
-            Ok(ChatterBehaviorStats {
-                total_unique_chatters: 0,
-                repeater_count: 0,
-                new_chatter_count: 0,
-                repeater_percentage: 0.0,
-                avg_participation_rate: 0.0,
-            })
+    rows.next().unwrap_or_else(|| {
+        Ok(ChatterBehaviorStats {
+            total_unique_chatters: 0,
+            repeater_count: 0,
+            new_chatter_count: 0,
+            repeater_percentage: 0.0,
+            avg_participation_rate: 0.0,
         })
+    })
 }

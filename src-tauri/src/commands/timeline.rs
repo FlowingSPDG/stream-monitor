@@ -452,4 +452,3 @@ fn detect_title_changes(stats: &[TimelinePoint]) -> Vec<TitleChange> {
 
     changes
 }
-

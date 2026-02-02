@@ -61,7 +61,8 @@ impl YouTubeApiClient {
     pub async fn get_channel_by_username(
         &mut self,
         username: &str,
-    ) -> Result<Option<google_youtube3::api::Channel>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Option<google_youtube3::api::Channel>, Box<dyn std::error::Error + Send + Sync>>
+    {
         // 認証はhubに組み込まれているため、直接呼び出す
         let part = vec![
             youtube::PART_ID.to_string(),
@@ -127,7 +128,8 @@ impl YouTubeApiClient {
     pub async fn get_channel_by_id(
         &mut self,
         channel_id: &str,
-    ) -> Result<Option<google_youtube3::api::Channel>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Option<google_youtube3::api::Channel>, Box<dyn std::error::Error + Send + Sync>>
+    {
         let part = vec![
             "id".to_string(),
             "snippet".to_string(),

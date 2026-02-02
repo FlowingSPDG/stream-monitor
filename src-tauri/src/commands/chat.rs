@@ -13,7 +13,6 @@ pub struct ChatMessagesQuery {
     pub offset: Option<i64>,
 }
 
-
 #[tauri::command]
 pub async fn get_chat_messages(
     _app_handle: AppHandle,
