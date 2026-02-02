@@ -111,18 +111,18 @@ impl DataAggregator {
     fn get_interval_start(timestamp: &str, interval_minutes: i32) -> String {
         // RFC3339形式のタイムスタンプをパース
         if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(timestamp) {
-            let dt_utc = dt.with_timezone(&chrono::Utc);
+            let dt_local = dt.with_timezone(&chrono::Local);
 
             // 分単位で丸める
-            let minutes_since_epoch = dt_utc.timestamp() / 60;
+            let minutes_since_epoch = dt_local.timestamp() / 60;
             let interval_start_minutes =
                 (minutes_since_epoch / interval_minutes as i64) * interval_minutes as i64;
-            let interval_start = chrono::Utc
+            let interval_start = chrono::Local
                 .timestamp_opt(interval_start_minutes * 60, 0)
                 .unwrap();
 
-            // RFC3339形式で出力（+00:00をZに変換）
-            interval_start.to_rfc3339().replace("+00:00", "Z")
+            // RFC3339形式で出力
+            interval_start.to_rfc3339()
         } else {
             // パース失敗時は元のタイムスタンプを返す
             timestamp.to_string()

@@ -131,7 +131,7 @@ pub async fn export_to_json(
     let mut metadata = serde_json::Map::new();
     metadata.insert(
         "exported_at".to_string(),
-        chrono::Utc::now().to_rfc3339().into(),
+        chrono::Local::now().to_rfc3339().into(),
     );
     metadata.insert("total_records".to_string(), processed_stats.len().into());
     if query.include_chat.unwrap_or(false) {
