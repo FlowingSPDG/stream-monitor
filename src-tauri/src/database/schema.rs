@@ -285,9 +285,8 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
     }
 
     // stream_statsテーブルにtitleフィールドを追加
-    let mut stream_stats_has_title = conn.prepare(
-        "SELECT COUNT(*) FROM pragma_table_info('stream_stats') WHERE name = 'title'",
-    )?;
+    let mut stream_stats_has_title = conn
+        .prepare("SELECT COUNT(*) FROM pragma_table_info('stream_stats') WHERE name = 'title'")?;
     let stream_stats_has_title_count: i64 =
         stream_stats_has_title.query_row([], |row| row.get(0))?;
 
@@ -305,7 +304,10 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
 
     if stream_stats_has_follower_count_count == 0 {
         eprintln!("[Migration] Adding follower_count column to stream_stats table");
-        conn.execute("ALTER TABLE stream_stats ADD COLUMN follower_count INTEGER", [])?;
+        conn.execute(
+            "ALTER TABLE stream_stats ADD COLUMN follower_count INTEGER",
+            [],
+        )?;
     }
 
     Ok(())

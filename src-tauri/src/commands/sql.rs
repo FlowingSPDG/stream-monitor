@@ -1,6 +1,6 @@
 use crate::database::DatabaseManager;
 use crate::error::ResultExt;
-use chrono::{TimeZone, Local};
+use chrono::{Local, TimeZone};
 use duckdb::{params, types::TimeUnit, types::ValueRef};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;

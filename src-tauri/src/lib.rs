@@ -74,7 +74,9 @@ async fn check_for_updates(app: tauri::AppHandle) {
         Err(_) => {
             // 署名鍵が未設定の場合
             app.dialog()
-                .message("アップデート機能は未設定です。\n署名鍵とエンドポイントを設定してください。")
+                .message(
+                    "アップデート機能は未設定です。\n署名鍵とエンドポイントを設定してください。",
+                )
                 .kind(MessageDialogKind::Warning)
                 .blocking_show();
             return;

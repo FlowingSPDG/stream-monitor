@@ -10,7 +10,6 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  ReferenceLine,
 } from 'recharts';
 import EventMarkers from './EventMarkers';
 
@@ -38,28 +37,6 @@ const TimelineChart: React.FC<TimelineChartProps> = ({ timelineData }) => {
       };
     });
   }, [timelineData.stats]);
-
-  // カテゴリ変更マーカー用のデータ
-  const categoryMarkers = useMemo(() => {
-    return timelineData.category_changes.map((change) => {
-      const date = new Date(change.timestamp);
-      return {
-        timestamp: change.timestamp,
-        label: `${change.to_category}`,
-      };
-    });
-  }, [timelineData.category_changes]);
-
-  // タイトル変更マーカー用のデータ
-  const titleMarkers = useMemo(() => {
-    return timelineData.title_changes.map((change) => {
-      const date = new Date(change.timestamp);
-      return {
-        timestamp: change.timestamp,
-        label: change.to_title.substring(0, 30) + (change.to_title.length > 30 ? '...' : ''),
-      };
-    });
-  }, [timelineData.title_changes]);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {

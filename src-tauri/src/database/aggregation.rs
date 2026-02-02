@@ -111,18 +111,18 @@ impl DataAggregator {
     fn get_interval_start(timestamp: &str, interval_minutes: i32) -> String {
         // RFC3339形式のタイムスタンプをパース
         if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(timestamp) {
-            let dt_local = dt.with_timezone(&chrono::Local);
+            let dt_utc = dt.with_timezone(&chrono::Utc);
 
             // 分単位で丸める
-            let minutes_since_epoch = dt_local.timestamp() / 60;
+            let minutes_since_epoch = dt_utc.timestamp() / 60;
             let interval_start_minutes =
                 (minutes_since_epoch / interval_minutes as i64) * interval_minutes as i64;
-            let interval_start = chrono::Local
+            let interval_start = chrono::Utc
                 .timestamp_opt(interval_start_minutes * 60, 0)
                 .unwrap();
 
-            // RFC3339形式で出力
-            interval_start.to_rfc3339()
+            // RFC3339形式で出力（末尾の+00:00をZに置換）
+            interval_start.to_rfc3339().replace("+00:00", "Z")
         } else {
             // パース失敗時は元のタイムスタンプを返す
             timestamp.to_string()
@@ -267,6 +267,8 @@ mod tests {
             viewer_count: Some(100),
             chat_rate_1min: 10,
             category: None,
+            title: None,
+            follower_count: None,
             twitch_user_id: None,
             channel_name: None,
         }];
@@ -290,6 +292,8 @@ mod tests {
                 viewer_count: Some(100),
                 chat_rate_1min: 10,
                 category: None,
+                title: None,
+                follower_count: None,
                 twitch_user_id: None,
                 channel_name: None,
             },
@@ -300,6 +304,8 @@ mod tests {
                 viewer_count: Some(150),
                 chat_rate_1min: 15,
                 category: None,
+                title: None,
+                follower_count: None,
                 twitch_user_id: None,
                 channel_name: None,
             },
