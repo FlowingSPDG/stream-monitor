@@ -367,3 +367,64 @@ export interface SelectedStream {
   startedAt: string;
   color: string; // グラフ表示用の色
 }
+
+// ========== Chat Analytics Types ==========
+
+export interface ChatEngagementStats {
+  timestamp: string;
+  chatCount: number;
+  uniqueChatters: number;
+  viewerCount: number;
+  engagementRate: number;
+}
+
+export interface ChatSpike {
+  timestamp: string;
+  chatCount: number;
+  spikeRatio: number;
+  prevCount: number;
+}
+
+export interface UserSegmentStats {
+  segment: 'subscriber' | 'vip' | 'moderator' | 'broadcaster' | 'regular';
+  messageCount: number;
+  userCount: number;
+  avgMessagesPerUser: number;
+  percentage: number;
+}
+
+export interface TopChatter {
+  userName: string;
+  messageCount: number;
+  badges: string[];
+  firstSeen: string;
+  lastSeen: string;
+  streamCount: number;
+}
+
+export interface TimePatternStats {
+  hour: number;
+  dayOfWeek?: number;
+  avgChatRate: number;
+  avgEngagement: number;
+  totalMessages: number;
+}
+
+export interface ChatterBehaviorStats {
+  totalUniqueChatters: number;
+  repeaterCount: number;
+  newChatterCount: number;
+  repeaterPercentage: number;
+  avgParticipationRate: number;
+}
+
+export interface ChatAnalyticsQuery {
+  channelId?: number;
+  streamId?: number;
+  startTime?: string;
+  endTime?: string;
+  intervalMinutes?: number;
+  minSpikeRatio?: number;
+  limit?: number;
+  groupByDay?: boolean;
+}

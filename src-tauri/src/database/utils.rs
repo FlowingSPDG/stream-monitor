@@ -129,7 +129,32 @@ pub fn row_to_chat_message(row: &Row) -> DuckResult<ChatMessage> {
         message: row.get(7)?,
         message_type: row.get(8)?,
         badges,
+        badge_info: row.get::<_, Option<String>>(10).ok().flatten(),
     })
+}
+
+/// バッジ文字列をVec<String>にパースするヘルパー関数
+pub fn parse_badges(badges_str: &str) -> Option<Vec<String>> {
+    if badges_str.is_empty() {
+        return None;
+    }
+    
+    // JSON としてパースを試みる
+    serde_json::from_str::<Vec<String>>(badges_str)
+        .ok()
+        .or_else(|| {
+            // JSON パースに失敗した場合は DuckDB 配列リテラル形式をパース
+            // ['elem1', 'elem2'] → ["elem1", "elem2"]
+            let json_like = badges_str
+                .trim()
+                .trim_start_matches('[')
+                .trim_end_matches(']')
+                .split(',')
+                .map(|s| s.trim().trim_matches('\'').trim_matches('"').to_string())
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<String>>();
+            if json_like.is_empty() { None } else { Some(json_like) }
+        })
 }
 
 /// チャットメッセージのクエリ結果をChatMessageベクターに変換するヘルパー関数

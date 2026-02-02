@@ -89,6 +89,7 @@ pub struct ChatMessage {
     pub message: String,
     pub message_type: String,
     pub badges: Option<Vec<String>>,
+    pub badge_info: Option<String>, // サブスク月数等の詳細情報 (例: "subscriber:24")
 }
 
 #[cfg(test)]

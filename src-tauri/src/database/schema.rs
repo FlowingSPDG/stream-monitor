@@ -459,5 +459,18 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
         }
     }
 
+    // chat_messagesテーブルにbadge_infoフィールドを追加（サブスク月数等の詳細情報）
+    let mut chat_messages_has_badge_info = conn.prepare(
+        "SELECT COUNT(*) FROM pragma_table_info('chat_messages') WHERE name = 'badge_info'",
+    )?;
+    let chat_messages_has_badge_info_count: i64 =
+        chat_messages_has_badge_info.query_row([], |row| row.get(0))?;
+
+    if chat_messages_has_badge_info_count == 0 {
+        eprintln!("[Migration] Adding badge_info column to chat_messages table");
+        conn.execute("ALTER TABLE chat_messages ADD COLUMN badge_info TEXT", [])?;
+        eprintln!("[Migration] badge_info column added successfully");
+    }
+
     Ok(())
 }

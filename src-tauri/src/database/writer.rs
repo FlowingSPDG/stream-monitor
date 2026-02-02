@@ -118,8 +118,8 @@ impl DatabaseWriter {
                 // badges 以外のパラメータは ? で、badges だけは文字列補間
                 conn.execute(
                     &format!(
-                        "INSERT INTO chat_messages (channel_id, stream_id, timestamp, platform, user_id, user_name, message, message_type, badges)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, {})",
+                        "INSERT INTO chat_messages (channel_id, stream_id, timestamp, platform, user_id, user_name, message, message_type, badges, badge_info)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, {}, ?)",
                         badges_literal
                     ),
                     [
@@ -131,6 +131,7 @@ impl DatabaseWriter {
                         &message.user_name,
                         &message.message,
                         &message.message_type,
+                        message.badge_info.as_deref().unwrap_or(""),
                     ]
                 )?;
             }

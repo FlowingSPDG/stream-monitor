@@ -89,6 +89,19 @@ impl TwitchIrcManager {
                                 )
                             };
                             
+                            // badge_info（サブスク月数等の詳細情報）を取得
+                            let badge_info = if msg.badge_info.is_empty() {
+                                None
+                            } else {
+                                Some(
+                                    msg.badge_info
+                                        .iter()
+                                        .map(|bi| format!("{}:{}", bi.name, bi.version))
+                                        .collect::<Vec<_>>()
+                                        .join(",")
+                                )
+                            };
+                            
                             let chat_message = ChatMessage {
                                 id: None,
                                 channel_id: Some(channel_id),
@@ -100,6 +113,7 @@ impl TwitchIrcManager {
                                 message: msg.message_text.clone(),
                                 message_type: "normal".to_string(),
                                 badges,
+                                badge_info,
                             };
                             
                             batch.push(chat_message);

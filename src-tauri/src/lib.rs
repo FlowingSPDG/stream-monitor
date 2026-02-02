@@ -23,8 +23,10 @@ use collectors::{
 };
 use commands::{
     analytics::{
-        get_broadcaster_analytics, get_channel_daily_stats, get_data_availability,
-        get_game_analytics, get_game_daily_stats, list_game_categories,
+        detect_chat_spikes, get_broadcaster_analytics, get_channel_daily_stats,
+        get_chat_engagement_timeline, get_chatter_behavior_stats, get_data_availability,
+        get_game_analytics, get_game_daily_stats, get_time_pattern_stats, get_top_chatters,
+        get_user_segment_stats, list_game_categories,
     },
     channels::{
         add_channel, list_channels, migrate_twitch_user_ids, remove_channel, toggle_channel,
@@ -477,6 +479,13 @@ pub fn run() {
             get_data_availability,
             get_game_daily_stats,
             get_channel_daily_stats,
+            // Chat Analytics commands
+            get_chat_engagement_timeline,
+            detect_chat_spikes,
+            get_user_segment_stats,
+            get_top_chatters,
+            get_time_pattern_stats,
+            get_chatter_behavior_stats,
             // Channel commands
             add_channel,
             remove_channel,
