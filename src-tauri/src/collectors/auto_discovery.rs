@@ -266,15 +266,14 @@ impl AutoDiscoveryPoller {
             conn.execute(
                 r#"
                 INSERT INTO stream_stats (
-                    stream_id, collected_at, viewer_count, chat_rate_1min,
+                    stream_id, collected_at, viewer_count,
                     twitch_user_id, channel_name, category
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?)
                 "#,
                 duckdb::params![
                     None::<i64>, // stream_id = NULL
                     now.as_str(),
                     stream.viewer_count as i32,
-                    0, // chat_rate_1min（AutoDiscoveryでは収集しない）
                     user_id.as_str(),
                     user_login.as_str(),
                     stream.game_name.as_str(),
