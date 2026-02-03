@@ -1,4 +1,4 @@
-use crate::database::utils;
+use crate::database::{query_helpers::chat_query, utils};
 use duckdb::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -609,15 +609,16 @@ pub fn get_message_length_stats(
     start_time: Option<&str>,
     end_time: Option<&str>,
 ) -> Result<MessageLengthStats, duckdb::Error> {
-    let mut sql = String::from(
+    let mut sql = format!(
         r#"
         SELECT 
             LENGTH(cm.message) as msg_length,
-            cm.badges
+            {}
         FROM chat_messages cm
         LEFT JOIN streams s ON cm.stream_id = s.id
         WHERE 1=1
         "#,
+        chat_query::badges_select("cm")
     );
 
     let mut params: Vec<String> = Vec::new();
@@ -1237,16 +1238,22 @@ pub fn get_chatter_activity_scores(
     limit: i32,
 ) -> Result<ChatterScoreResult, duckdb::Error> {
     // Get chatter data with badges - N+1クエリを避けるため一度に取得
-    let mut sql = String::from(
+    let mut sql = format!(
         r#"
         WITH user_badges AS (
             SELECT 
                 user_name,
-                badges,
+                {},
                 ROW_NUMBER() OVER (PARTITION BY user_name ORDER BY timestamp DESC) as rn
             FROM chat_messages
             WHERE badges IS NOT NULL
         ),
+        "#,
+        chat_query::badges_select("chat_messages")
+    );
+    
+    sql.push_str(
+        r#"
         chatter_stats AS (
             SELECT 
                 cm.user_name,

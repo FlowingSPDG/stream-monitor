@@ -3,6 +3,7 @@ pub mod analytics;
 pub mod chat_analytics;
 pub mod data_science_analytics;
 pub mod models;
+pub mod query_helpers;
 pub mod schema;
 pub mod utils;
 pub mod writer;

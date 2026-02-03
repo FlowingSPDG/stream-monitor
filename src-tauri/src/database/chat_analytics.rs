@@ -1,4 +1,4 @@
-use crate::database::utils;
+use crate::database::{query_helpers::chat_query, utils};
 use duckdb::Connection;
 use serde::{Deserialize, Serialize};
 
@@ -286,17 +286,18 @@ pub fn get_user_segment_stats(
     start_time: Option<&str>,
     end_time: Option<&str>,
 ) -> Result<Vec<UserSegmentStats>, duckdb::Error> {
-    let mut sql = String::from(
+    let mut sql = format!(
         r#"
         WITH all_messages AS (
             SELECT 
                 cm.user_name,
-                cm.badges,
+                {},
                 COUNT(*) as message_count
             FROM chat_messages cm
             LEFT JOIN streams s ON cm.stream_id = s.id
             WHERE 1=1
         "#,
+        chat_query::badges_select("cm")
     );
 
     let mut params: Vec<String> = Vec::new();
@@ -331,10 +332,10 @@ pub fn get_user_segment_stats(
                 message_count,
                 CASE 
                     WHEN badges IS NULL THEN 'regular'
-                    WHEN list_contains(badges, 'broadcaster') THEN 'broadcaster'
-                    WHEN list_contains(badges, 'moderator') THEN 'moderator'
-                    WHEN list_contains(badges, 'vip') THEN 'vip'
-                    WHEN list_contains(badges, 'subscriber') THEN 'subscriber'
+                    WHEN badges LIKE '%broadcaster%' THEN 'broadcaster'
+                    WHEN badges LIKE '%moderator%' THEN 'moderator'
+                    WHEN badges LIKE '%vip%' THEN 'vip'
+                    WHEN badges LIKE '%subscriber%' THEN 'subscriber'
                     ELSE 'regular'
                 END as segment
             FROM all_messages
@@ -388,16 +389,17 @@ pub fn get_top_chatters(
     limit: i32,
 ) -> Result<Vec<TopChatter>, duckdb::Error> {
     // N+1クエリを避けるため、バッジ取得をメインクエリに統合
-    let mut sql = String::from(
+    let mut sql = format!(
         r#"
         WITH user_badges AS (
             SELECT 
                 user_name,
-                badges,
+                {},
                 ROW_NUMBER() OVER (PARTITION BY user_name ORDER BY timestamp DESC) as rn
             FROM chat_messages
             WHERE badges IS NOT NULL
         "#,
+        chat_query::badges_select("chat_messages")
     );
 
     let mut params: Vec<String> = Vec::new();

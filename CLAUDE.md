@@ -182,6 +182,27 @@ FROM chat_messages
 - `chat_messages.timestamp`: `TIMESTAMP` → `VARCHAR`
 - その他、LIST型やTIMESTAMP型のカラム全般
 
+**ベストプラクティス**: Query Helperの使用（推奨）
+```rust
+use crate::database::query_helpers::chat_query;
+
+// 個別カラムの取得
+let sql = format!("SELECT {}", chat_query::badges_select("cm"));
+// 生成: "SELECT CAST(cm.badges AS VARCHAR) as badges"
+
+let sql = format!("SELECT {}", chat_query::timestamp_select("cm"));
+// 生成: "SELECT CAST(cm.timestamp AS VARCHAR) as timestamp"
+
+// 標準カラムセット（id, channel_id, stream_id, timestamp, platform, user_id, user_name, message, message_type, badges, badge_info）
+let sql = format!("SELECT {} FROM chat_messages cm", 
+                  chat_query::standard_columns("cm"));
+```
+
+**利点**:
+- DuckDB型変換の仕様変更時、1箇所の修正で対応可能
+- コードの可読性向上
+- 型変換忘れによるバグを防止
+
 ### UIコンポーネント追加
 - Tailwind CSS 4使用、`dark:`でダークモード対応
 - TanStack Query（サーバー状態）+ Zustand（グローバル状態）
