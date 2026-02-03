@@ -68,6 +68,10 @@ export default function TopChannelsAnalytics({
     return hours.toFixed(1);
   };
 
+  const formatDecimal = (num: number): string => {
+    return num.toFixed(2);
+  };
+
   // Top 30 for ranking
   const top30Channels = channelAnalytics.slice(0, 30);
 
@@ -112,6 +116,12 @@ export default function TopChannelsAnalytics({
             {formatNumber(channelAnalytics.reduce((sum, ch) => sum + ch.total_chat_messages, 0))}
           </p>
         </div>
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Avg Chat Rate</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {formatDecimal(channelAnalytics.reduce((sum, ch) => sum + ch.avg_chat_rate, 0) / channelAnalytics.length)}
+          </p>
+        </div>
       </div>
 
       {/* ランキングチャート */}
@@ -152,6 +162,9 @@ export default function TopChannelsAnalytics({
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Avg CCU
                 </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Avg Chat Rate
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Main Game
                 </th>
@@ -184,6 +197,9 @@ export default function TopChannelsAnalytics({
                   </td>
                   <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
                     {formatNumber(channel.average_ccu)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
+                    {formatDecimal(channel.avg_chat_rate)}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                     {channel.main_played_title || '-'}

@@ -472,7 +472,6 @@ impl ChannelPoller {
             stream_id: stream_db_id,
             collected_at: Local::now().to_rfc3339(),
             viewer_count: stream_data.viewer_count,
-            chat_rate_1min: stream_data.chat_rate_1min,
             category: stream_data.category.clone(),
             title: stream_data.title.clone(),
             follower_count: stream_data.follower_count,

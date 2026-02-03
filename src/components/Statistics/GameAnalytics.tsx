@@ -97,6 +97,10 @@ export default function GameAnalytics({
     return hours.toFixed(1);
   };
 
+  const formatDecimal = (num: number): string => {
+    return num.toFixed(2);
+  };
+
   // MinutesWatched チャート用データ（上位10件）
   const mwChartData = sortedItems
     .slice(0, 10)
@@ -127,6 +131,22 @@ export default function GameAnalytics({
     .map((item) => ({
       name: item.category,
       value: item.unique_broadcasters,
+    }));
+
+  // Average Chat Rate チャート用データ（上位10件）
+  const chatRateChartData = sortedItems
+    .slice(0, 10)
+    .map((item) => ({
+      name: item.category,
+      value: parseFloat(item.avg_chat_rate.toFixed(2)),
+    }));
+
+  // Engagement Rate チャート用データ（上位10件）
+  const engagementChartData = sortedItems
+    .slice(0, 10)
+    .map((item) => ({
+      name: item.category,
+      value: parseFloat(item.engagement_rate.toFixed(2)),
     }));
 
   return (
@@ -222,6 +242,32 @@ export default function GameAnalytics({
             )}
           </div>
         </div>
+        <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+          <Tooltip content="このゲーム/カテゴリでのチャットメッセージ総数（概算値）">
+            <div className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+              Total Chat Messages
+              <span className="text-xs opacity-60">ℹ️</span>
+            </div>
+          </Tooltip>
+          <div className="text-2xl font-bold text-white">
+            {formatNumber(
+              analytics.reduce((sum, item) => sum + item.total_chat_messages, 0)
+            )}
+          </div>
+        </div>
+        <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+          <Tooltip content="1分あたりの平均チャット数">
+            <div className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+              Avg Chat Rate
+              <span className="text-xs opacity-60">ℹ️</span>
+            </div>
+          </Tooltip>
+          <div className="text-2xl font-bold text-white">
+            {formatDecimal(
+              analytics.reduce((sum, item) => sum + item.avg_chat_rate, 0) / analytics.length
+            )}
+          </div>
+        </div>
       </div>
 
       {/* チャート */}
@@ -268,6 +314,29 @@ export default function GameAnalytics({
           color="#8b5cf6"
           height={300}
           yAxisLabel="Broadcasters"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <BarChart
+          data={chatRateChartData}
+          dataKey="value"
+          xAxisKey="name"
+          title="Top 10 Games by Average Chat Rate"
+          tooltipDescription="1分あたりの平均チャット数が最も多いゲームTop 10。チャットの活発度を示します。"
+          color="#06b6d4"
+          height={300}
+          yAxisLabel="Messages/min"
+        />
+        <BarChart
+          data={engagementChartData}
+          dataKey="value"
+          xAxisKey="name"
+          title="Top 10 Games by Engagement Rate"
+          tooltipDescription="エンゲージメント率（チャット数 / Minutes Watched × 1000）が最も高いゲームTop 10。視聴者の参加度を示します。"
+          color="#14b8a6"
+          height={300}
+          yAxisLabel="Messages/1000MW"
         />
       </div>
 
@@ -326,6 +395,33 @@ export default function GameAnalytics({
                   Unique Broadcasters
                 </SortableTableHeader>
                 <SortableTableHeader
+                  sortKey="total_chat_messages"
+                  currentSortKey={sortConfig.key as string}
+                  currentDirection={sortConfig.direction}
+                  onSort={requestSort}
+                  align="right"
+                >
+                  Chat Messages
+                </SortableTableHeader>
+                <SortableTableHeader
+                  sortKey="avg_chat_rate"
+                  currentSortKey={sortConfig.key as string}
+                  currentDirection={sortConfig.direction}
+                  onSort={requestSort}
+                  align="right"
+                >
+                  Avg Chat Rate
+                </SortableTableHeader>
+                <SortableTableHeader
+                  sortKey="engagement_rate"
+                  currentSortKey={sortConfig.key as string}
+                  currentDirection={sortConfig.direction}
+                  onSort={requestSort}
+                  align="right"
+                >
+                  Engagement
+                </SortableTableHeader>
+                <SortableTableHeader
                   sortKey="top_channel"
                   currentSortKey={sortConfig.key as string}
                   currentDirection={sortConfig.direction}
@@ -353,6 +449,15 @@ export default function GameAnalytics({
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-300 text-right">
                     {item.unique_broadcasters}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                    {formatNumber(item.total_chat_messages)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                    {formatDecimal(item.avg_chat_rate)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                    {formatDecimal(item.engagement_rate)}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-300">
                     {item.top_channel ? (

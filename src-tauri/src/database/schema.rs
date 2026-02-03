@@ -74,7 +74,6 @@ pub fn init_database(conn: &Connection) -> Result<(), duckdb::Error> {
             stream_id BIGINT,
             collected_at TIMESTAMP NOT NULL,
             viewer_count INTEGER,
-            chat_rate_1min INTEGER DEFAULT 0,
             twitch_user_id TEXT,
             channel_name TEXT,
             FOREIGN KEY (stream_id) REFERENCES streams(id)
@@ -565,6 +564,27 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
             );
         }
     }
+
+    // chat_rate_1min列を削除（存在する場合）
+    let mut stream_stats_has_chat_rate = conn.prepare(
+        "SELECT COUNT(*) FROM pragma_table_info('stream_stats') WHERE name = 'chat_rate_1min'",
+    )?;
+    let stream_stats_has_chat_rate_count: i64 =
+        stream_stats_has_chat_rate.query_row([], |row| row.get(0))?;
+
+    if stream_stats_has_chat_rate_count > 0 {
+        eprintln!("[Migration] Dropping chat_rate_1min column from stream_stats table");
+        conn.execute("ALTER TABLE stream_stats DROP COLUMN chat_rate_1min", [])?;
+        eprintln!("[Migration] chat_rate_1min column dropped successfully");
+    }
+
+    // chat_messagesテーブルに複合インデックス追加（パフォーマンス最適化）
+    eprintln!("[Migration] Creating composite index on chat_messages(stream_id, timestamp)");
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_chat_messages_stream_timestamp ON chat_messages(stream_id, timestamp)",
+        [],
+    )?;
+    eprintln!("[Migration] Composite index created successfully");
 
     Ok(())
 }

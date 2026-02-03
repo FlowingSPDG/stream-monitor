@@ -380,15 +380,21 @@ fn get_timeline_stats(
 ) -> Result<Vec<TimelinePoint>, Box<dyn std::error::Error + Send + Sync>> {
     let query = r#"
         SELECT 
-            CAST(collected_at AS VARCHAR) as collected_at,
-            viewer_count,
-            chat_rate_1min,
-            category,
-            title,
-            follower_count
-        FROM stream_stats
-        WHERE stream_id = ?
-        ORDER BY collected_at ASC
+            CAST(ss.collected_at AS VARCHAR) as collected_at,
+            ss.viewer_count,
+            COALESCE((
+                SELECT COUNT(*)
+                FROM chat_messages cm
+                WHERE cm.stream_id = ss.stream_id
+                  AND cm.timestamp >= ss.collected_at - INTERVAL '1 minute'
+                  AND cm.timestamp < ss.collected_at
+            ), 0) AS chat_rate_1min,
+            ss.category,
+            ss.title,
+            ss.follower_count
+        FROM stream_stats ss
+        WHERE ss.stream_id = ?
+        ORDER BY ss.collected_at ASC
     "#;
 
     let stream_id_str = stream_id.to_string();

@@ -1165,7 +1165,13 @@ pub fn get_category_change_impact(
             SELECT 
                 ss.category,
                 ss.viewer_count,
-                ss.chat_rate_1min,
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM chat_messages cm
+                    WHERE cm.stream_id = ss.stream_id
+                      AND cm.timestamp >= ss.collected_at - INTERVAL '1 minute'
+                      AND cm.timestamp < ss.collected_at
+                ), 0) AS chat_rate_1min,
                 EXTRACT(EPOCH FROM (
                     LEAD(ss.collected_at) OVER (ORDER BY ss.collected_at) - ss.collected_at
                 )) / 60.0 AS interval_minutes

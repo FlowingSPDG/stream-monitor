@@ -31,6 +31,9 @@ pub struct GameAnalytics {
     pub average_ccu: f64,
     pub unique_broadcasters: i32,
     pub top_channel: Option<String>,
+    pub total_chat_messages: i64,
+    pub avg_chat_rate: f64,
+    pub engagement_rate: f64,
 }
 
 /// データ可用性情報
@@ -68,7 +71,13 @@ pub fn get_broadcaster_analytics(
                 ss.stream_id,
                 ss.viewer_count,
                 ss.category,
-                ss.chat_rate_1min,
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM chat_messages cm
+                    WHERE cm.stream_id = ss.stream_id
+                      AND cm.timestamp >= ss.collected_at - INTERVAL '1 minute'
+                      AND cm.timestamp < ss.collected_at
+                ), 0) AS chat_rate_1min,
                 ss.collected_at,
                 ss.twitch_user_id,
                 EXTRACT(EPOCH FROM (
@@ -305,6 +314,13 @@ pub fn get_game_analytics(
                 ss.collected_at,
                 ss.stream_id,
                 ss.twitch_user_id,
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM chat_messages cm
+                    WHERE cm.stream_id = ss.stream_id
+                      AND cm.timestamp >= ss.collected_at - INTERVAL '1 minute'
+                      AND cm.timestamp < ss.collected_at
+                ), 0) AS chat_rate_1min,
                 EXTRACT(EPOCH FROM (
                     LEAD(ss.collected_at) OVER (PARTITION BY COALESCE(CAST(ss.stream_id AS VARCHAR), ss.channel_name || '_' || CAST(DATE(ss.collected_at) AS VARCHAR)) ORDER BY ss.collected_at) 
                     - ss.collected_at
@@ -343,7 +359,9 @@ pub fn get_game_analytics(
                 COALESCE(SUM(viewer_count * COALESCE(interval_minutes, 1)), 0)::BIGINT AS minutes_watched,
                 COALESCE(SUM(COALESCE(interval_minutes, 1)) / 60.0, 0) AS hours_broadcasted,
                 COALESCE(AVG(viewer_count), 0) AS average_ccu,
-                COUNT(DISTINCT channel_name) AS unique_broadcasters
+                COUNT(DISTINCT channel_name) AS unique_broadcasters,
+                COALESCE(SUM(chat_rate_1min * COALESCE(interval_minutes, 1)), 0)::BIGINT AS total_chat_messages,
+                COALESCE(AVG(chat_rate_1min), 0) AS avg_chat_rate
             FROM stats_with_interval
             WHERE viewer_count IS NOT NULL
                 AND channel_name IS NOT NULL
@@ -373,7 +391,14 @@ pub fn get_game_analytics(
             gs.hours_broadcasted,
             gs.average_ccu,
             gs.unique_broadcasters,
-            tc.top_channel
+            tc.top_channel,
+            gs.total_chat_messages,
+            gs.avg_chat_rate,
+            CASE 
+                WHEN gs.minutes_watched > 0 
+                THEN (gs.total_chat_messages::DOUBLE / gs.minutes_watched::DOUBLE) * 1000.0
+                ELSE 0.0
+            END as engagement_rate
         FROM game_stats gs
         LEFT JOIN top_channels tc ON gs.category = tc.category
         ORDER BY gs.minutes_watched DESC
@@ -389,6 +414,9 @@ pub fn get_game_analytics(
             average_ccu: row.get::<_, f64>(3)?,
             unique_broadcasters: row.get::<_, i32>(4)?,
             top_channel: row.get::<_, Option<String>>(5)?,
+            total_chat_messages: row.get::<_, i64>(6)?,
+            avg_chat_rate: row.get::<_, f64>(7)?,
+            engagement_rate: row.get::<_, f64>(8)?,
         })
     })?
     .collect::<Result<Vec<_>, _>>()?;

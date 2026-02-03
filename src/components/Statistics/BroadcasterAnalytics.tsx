@@ -194,6 +194,12 @@ export default function BroadcasterAnalytics({
     value: parseFloat(item.engagement_rate.toFixed(2)),
   }));
 
+  // Average Chat Rate チャート用データ
+  const chatRateChartData = sortedItems.map((item) => ({
+    name: item.channel_name,
+    value: parseFloat(item.avg_chat_rate.toFixed(2)),
+  }));
+
   return (
     <div className="space-y-6">
       {/* チャンネルフィルター */}
@@ -291,6 +297,19 @@ export default function BroadcasterAnalytics({
             )}
           </div>
         </div>
+        <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+          <Tooltip content="1分あたりの平均チャット数">
+            <div className="text-gray-400 text-sm mb-1 flex items-center gap-1">
+              Avg Chat Rate
+              <span className="text-xs opacity-60">ℹ️</span>
+            </div>
+          </Tooltip>
+          <div className="text-2xl font-bold text-white">
+            {formatDecimal(
+              analytics.reduce((sum, item) => sum + item.avg_chat_rate, 0) / analytics.length
+            )}
+          </div>
+        </div>
       </div>
 
       {/* チャート */}
@@ -354,6 +373,16 @@ export default function BroadcasterAnalytics({
           color="#14b8a6"
           height={300}
           yAxisLabel="Messages/1000MW"
+        />
+        <BarChart
+          data={chatRateChartData}
+          dataKey="value"
+          xAxisKey="name"
+          title="Average Chat Rate by Broadcaster"
+          tooltipDescription="1分あたりの平均チャット数。配信の活発度を示します。"
+          color="#06b6d4"
+          height={300}
+          yAxisLabel="Messages/min"
         />
       </div>
 
@@ -439,6 +468,15 @@ export default function BroadcasterAnalytics({
                   Chat Msgs
                 </SortableTableHeader>
                 <SortableTableHeader
+                  sortKey="avg_chat_rate"
+                  currentSortKey={sortConfig.key as string}
+                  currentDirection={sortConfig.direction}
+                  onSort={requestSort}
+                  align="right"
+                >
+                  Avg Chat Rate
+                </SortableTableHeader>
+                <SortableTableHeader
                   sortKey="engagement_rate"
                   currentSortKey={sortConfig.key as string}
                   currentDirection={sortConfig.direction}
@@ -498,6 +536,9 @@ export default function BroadcasterAnalytics({
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-300 text-right">
                     {formatNumber(item.total_chat_messages)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                    {formatDecimal(item.avg_chat_rate)}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-300 text-right">
                     {formatDecimal(item.engagement_rate)}

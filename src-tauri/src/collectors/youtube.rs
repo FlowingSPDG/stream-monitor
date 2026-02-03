@@ -81,7 +81,6 @@ impl Collector for YouTubeCollector {
                 thumbnail_url,
                 started_at,
                 viewer_count,
-                chat_rate_1min: 0,    // Phase 2で実装（チャット機能）
                 follower_count: None, // YouTube APIではフォロワー数は取得していない
             }))
         } else {

@@ -69,6 +69,10 @@ export default function TopGamesAnalytics({
     return hours.toFixed(1);
   };
 
+  const formatDecimal = (num: number): string => {
+    return num.toFixed(2);
+  };
+
   // Top 30 for ranking
   const top30Games = gameAnalytics.slice(0, 30);
 
@@ -129,6 +133,12 @@ export default function TopGamesAnalytics({
           <p className="text-sm text-gray-500 dark:text-gray-400">Avg CCU</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             {formatNumber(gameAnalytics.reduce((sum, g) => sum + g.average_ccu, 0) / gameAnalytics.length)}
+          </p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Avg Chat Rate</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {formatDecimal(gameAnalytics.reduce((sum, g) => sum + g.avg_chat_rate, 0) / gameAnalytics.length)}
           </p>
         </div>
       </div>
@@ -202,6 +212,9 @@ export default function TopGamesAnalytics({
                   Avg CCU
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Avg Chat Rate
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Unique Broadcasters
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -233,6 +246,9 @@ export default function TopGamesAnalytics({
                   </td>
                   <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
                     {formatNumber(game.average_ccu)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
+                    {formatDecimal(game.avg_chat_rate)}
                   </td>
                   <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
                     {game.unique_broadcasters}

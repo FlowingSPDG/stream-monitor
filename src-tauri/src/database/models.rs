@@ -38,7 +38,6 @@ pub struct StreamStats {
     pub stream_id: i64,
     pub collected_at: String,
     pub viewer_count: Option<i32>,
-    pub chat_rate_1min: i32,
     pub category: Option<String>,
     pub title: Option<String>,
     pub follower_count: Option<i32>,
@@ -55,7 +54,6 @@ pub struct StreamData {
     pub thumbnail_url: Option<String>,
     pub started_at: String,
     pub viewer_count: Option<i32>,
-    pub chat_rate_1min: i32,
     pub follower_count: Option<i32>,
 }
 
@@ -134,7 +132,6 @@ mod tests {
             stream_id: 1,
             collected_at: "2024-01-01T00:00:00Z".to_string(),
             viewer_count: Some(100),
-            chat_rate_1min: 10,
             category: Some("Just Chatting".to_string()),
             title: Some("Test Stream Title".to_string()),
             follower_count: Some(5000),
@@ -146,7 +143,6 @@ mod tests {
         let deserialized: StreamStats = serde_json::from_str(&json).unwrap();
 
         assert_eq!(stats.viewer_count, deserialized.viewer_count);
-        assert_eq!(stats.chat_rate_1min, deserialized.chat_rate_1min);
         assert_eq!(stats.category, deserialized.category);
         assert_eq!(stats.title, deserialized.title);
         assert_eq!(stats.follower_count, deserialized.follower_count);

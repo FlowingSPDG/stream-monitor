@@ -172,7 +172,7 @@ src-tauri/src/         # バックエンド (Rust)
 ## デバッグ方法
 
 ### フロントエンド
-- **コマンド**: `npm run tauri dev`（ユーザーが実行）
+- **コマンド**: `bun run tauri dev`（ユーザーが実行）
 - **ツール**: React Query Devtools, Zustand DevTools, Network Tab
 
 ### バックエンド
@@ -195,8 +195,8 @@ src-tauri/src/         # バックエンド (Rust)
 - E2E/統合テスト: 未実装
 
 ### ビルド
-- **開発**: `npm install` → `npm run tauri dev`
-- **本番**: `npm run tauri build`
+- **開発**: `bun install` → `npm run tauri dev`
+- **本番**: `bun run tauri build`
 - **注意**: DuckDB初回ビルド5-10分、CMake必須、スタックサイズ512MB
 
 ### 依存関係追加

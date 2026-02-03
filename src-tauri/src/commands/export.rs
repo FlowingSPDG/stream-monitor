@@ -18,7 +18,15 @@ fn get_stream_stats_internal(
     query: &ExportQuery,
 ) -> Result<Vec<StreamStats>, duckdb::Error> {
     let mut sql = String::from(
-        "SELECT ss.id, ss.stream_id, CAST(ss.collected_at AS VARCHAR) as collected_at, ss.viewer_count, ss.chat_rate_1min, ss.category, ss.title, ss.follower_count, ss.twitch_user_id, ss.channel_name 
+        "SELECT ss.id, ss.stream_id, CAST(ss.collected_at AS VARCHAR) as collected_at, ss.viewer_count,
+         COALESCE((
+             SELECT COUNT(*)
+             FROM chat_messages cm
+             WHERE cm.stream_id = ss.stream_id
+               AND cm.timestamp >= ss.collected_at - INTERVAL '1 minute'
+               AND cm.timestamp < ss.collected_at
+         ), 0) AS chat_rate_1min,
+         ss.category, ss.title, ss.follower_count, ss.twitch_user_id, ss.channel_name 
          FROM stream_stats ss
          INNER JOIN streams s ON ss.stream_id = s.id
          WHERE 1=1",
@@ -52,7 +60,7 @@ fn get_stream_stats_internal(
                 stream_id: row.get(1)?,
                 collected_at: row.get(2)?,
                 viewer_count: row.get(3)?,
-                chat_rate_1min: row.get(4)?,
+                // chat_rate_1min (index 4) is skipped - it's calculated dynamically in the query
                 category: row.get(5)?,
                 title: row.get(6)?,
                 follower_count: row.get(7)?,
@@ -123,7 +131,9 @@ pub async fn export_to_delimited(
         let viewer_count = stat.viewer_count.unwrap_or(0).to_string();
         let category = stat.category.as_deref().unwrap_or("");
         let title = stat.title.as_deref().unwrap_or("");
-        let chat_rate = stat.chat_rate_1min.to_string();
+        // Note: chat_rate_1min is now calculated dynamically from chat_messages table
+        // and is not stored in StreamStats. For CSV export, we output "N/A".
+        let chat_rate = "N/A";
 
         output.push_str(&format!(
             "{}{}{}{}{}{}{}{}{}{}{}\n",
@@ -191,7 +201,9 @@ pub async fn preview_export_data(
         let viewer_count = stat.viewer_count.unwrap_or(0).to_string();
         let category = stat.category.as_deref().unwrap_or("");
         let title = stat.title.as_deref().unwrap_or("");
-        let chat_rate = stat.chat_rate_1min.to_string();
+        // Note: chat_rate_1min is now calculated dynamically from chat_messages table
+        // and is not stored in StreamStats. For CSV preview, we output "N/A".
+        let chat_rate = "N/A";
 
         output.push_str(&format!(
             "{}{}{}{}{}{}{}{}{}{}{}\n",

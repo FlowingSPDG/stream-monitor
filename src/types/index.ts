@@ -171,6 +171,9 @@ export interface GameAnalytics {
   average_ccu: number;
   unique_broadcasters: number;
   top_channel: string | null;
+  total_chat_messages: number;
+  avg_chat_rate: number;
+  engagement_rate: number;
 }
 
 export interface DataAvailability {

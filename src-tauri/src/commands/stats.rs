@@ -23,7 +23,15 @@ pub async fn get_stream_stats(
         .map_err(|e| e.to_string())?;
 
     let mut sql = String::from(
-        "SELECT ss.id, ss.stream_id, ss.collected_at, ss.viewer_count, ss.chat_rate_1min, ss.category, ss.title, ss.follower_count, ss.twitch_user_id, ss.channel_name 
+        "SELECT ss.id, ss.stream_id, ss.collected_at, ss.viewer_count, 
+         COALESCE((
+             SELECT COUNT(*)
+             FROM chat_messages cm
+             WHERE cm.stream_id = ss.stream_id
+               AND cm.timestamp >= ss.collected_at - INTERVAL '1 minute'
+               AND cm.timestamp < ss.collected_at
+         ), 0) AS chat_rate_1min,
+         ss.category, ss.title, ss.follower_count, ss.twitch_user_id, ss.channel_name 
          FROM stream_stats ss
          INNER JOIN streams s ON ss.stream_id = s.id
          WHERE 1=1",
@@ -65,7 +73,7 @@ pub async fn get_stream_stats(
                 stream_id: row.get(1)?,
                 collected_at: row.get(2)?,
                 viewer_count: row.get(3)?,
-                chat_rate_1min: row.get(4)?,
+                // chat_rate_1min (index 4) is skipped - it's calculated dynamically in the query
                 category: row.get(5)?,
                 title: row.get(6)?,
                 follower_count: row.get(7)?,
