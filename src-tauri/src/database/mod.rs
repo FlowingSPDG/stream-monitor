@@ -9,24 +9,30 @@ pub mod writer;
 
 use crate::error::ResultExt;
 use duckdb::Connection;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager};
 
 /// 起動前のリカバリ処理（一時ファイルのクリーンアップ）
-fn cleanup_stale_files(db_path: &PathBuf) {
+fn cleanup_stale_files(db_path: &Path) {
     // DuckDBの一時ファイルパス
     let wal_path = db_path.with_extension("wal");
     let tmp_path = db_path.with_extension("tmp");
-    
+
     // .wal ファイルが存在する場合は警告ログ（DuckDBが自動リカバリ）
     if wal_path.exists() {
-        eprintln!("[DB Recovery] WAL file found at {}, DuckDB will auto-recover", wal_path.display());
+        eprintln!(
+            "[DB Recovery] WAL file found at {}, DuckDB will auto-recover",
+            wal_path.display()
+        );
     }
-    
+
     // .tmp ファイルは削除（不完全な操作の残骸）
     if tmp_path.exists() {
-        eprintln!("[DB Recovery] Removing stale tmp file: {}", tmp_path.display());
+        eprintln!(
+            "[DB Recovery] Removing stale tmp file: {}",
+            tmp_path.display()
+        );
         if let Err(e) = std::fs::remove_file(&tmp_path) {
             eprintln!("[DB Recovery] Failed to remove tmp file: {}", e);
         }
@@ -98,16 +104,18 @@ impl DatabaseManager {
     /// グレースフルシャットダウン - WALをフラッシュ
     pub fn shutdown(&self) -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("[DB Shutdown] Starting graceful shutdown...");
-        
-        let conn = self.conn.lock()
+
+        let conn = self
+            .conn
+            .lock()
             .map_err(|e| format!("Lock failed: {}", e))?;
-        
+
         // WALチェックポイントを強制実行（全データをメインDBにフラッシュ）
         match conn.execute("CHECKPOINT", []) {
             Ok(_) => eprintln!("[DB Shutdown] CHECKPOINT completed successfully"),
             Err(e) => eprintln!("[DB Shutdown] CHECKPOINT failed: {}", e),
         }
-        
+
         eprintln!("[DB Shutdown] Shutdown completed");
         Ok(())
     }
