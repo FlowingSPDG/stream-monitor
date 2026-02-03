@@ -33,7 +33,11 @@ const EngagementTab = ({ channelId, startTime, endTime }: EngagementTabProps) =>
   });
 
   if (timelineLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="flex justify-center items-center p-8">
+        <LoadingSpinner size="lg" message="エンゲージメントデータを読み込み中..." />
+      </div>
+    );
   }
 
   // Summary Cards

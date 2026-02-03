@@ -32,7 +32,11 @@ const ChatterBehaviorTab = ({ channelId, startTime, endTime }: ChatterBehaviorTa
   });
 
   if (chattersLoading || behaviorLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="flex justify-center items-center p-8">
+        <LoadingSpinner size="lg" message="チャット者行動データを読み込み中..." />
+      </div>
+    );
   }
 
   return (

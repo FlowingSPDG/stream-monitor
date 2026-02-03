@@ -22,7 +22,11 @@ const AnomalyDetectionTab = ({ channelId, startTime, endTime }: AnomalyDetection
   });
 
   if (isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="flex justify-center items-center p-8">
+        <LoadingSpinner size="lg" message="異常検知データを読み込み中..." />
+      </div>
+    );
   }
 
   if (!data) {

@@ -425,14 +425,17 @@ fn detect_category_changes(stats: &[TimelinePoint]) -> Vec<CategoryChange> {
 
     for stat in stats {
         if let Some(ref current_category) = stat.category {
-            if prev_category.as_ref() != Some(current_category) {
-                changes.push(CategoryChange {
-                    timestamp: stat.collected_at.clone(),
-                    from_category: prev_category.clone(),
-                    to_category: current_category.clone(),
-                });
-                prev_category = Some(current_category.clone());
+            // Only record changes where prev_category is Some and differs from current
+            if let Some(ref prev) = prev_category {
+                if prev != current_category {
+                    changes.push(CategoryChange {
+                        timestamp: stat.collected_at.clone(),
+                        from_category: Some(prev.clone()),
+                        to_category: current_category.clone(),
+                    });
+                }
             }
+            prev_category = Some(current_category.clone());
         }
     }
 
@@ -445,14 +448,17 @@ fn detect_title_changes(stats: &[TimelinePoint]) -> Vec<TitleChange> {
 
     for stat in stats {
         if let Some(ref current_title) = stat.title {
-            if prev_title.as_ref() != Some(current_title) {
-                changes.push(TitleChange {
-                    timestamp: stat.collected_at.clone(),
-                    from_title: prev_title.clone(),
-                    to_title: current_title.clone(),
-                });
-                prev_title = Some(current_title.clone());
+            // Only record changes where prev_title is Some and differs from current
+            if let Some(ref prev) = prev_title {
+                if prev != current_title {
+                    changes.push(TitleChange {
+                        timestamp: stat.collected_at.clone(),
+                        from_title: Some(prev.clone()),
+                        to_title: current_title.clone(),
+                    });
+                }
             }
+            prev_title = Some(current_title.clone());
         }
     }
 

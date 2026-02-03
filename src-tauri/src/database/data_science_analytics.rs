@@ -770,7 +770,7 @@ pub fn get_viewer_chat_correlation(
     let mut sql = String::from(
         r#"
         WITH time_buckets AS (
-            SELECT 
+            SELECT
                 time_bucket(INTERVAL '5 minutes', ss.collected_at) as bucket,
                 AVG(ss.viewer_count) as avg_viewers
             FROM stream_stats ss
@@ -781,16 +781,39 @@ pub fn get_viewer_chat_correlation(
     let mut params: Vec<String> = Vec::new();
 
     if let Some(ch_id) = channel_id {
-        let channel_name = conn
-            .query_row(
-                "SELECT channel_id FROM channels WHERE id = ?",
-                [ch_id.to_string()],
-                |row| row.get::<_, String>(0),
-            )
-            .ok();
-        if let Some(ch_name) = channel_name {
-            sql.push_str(" AND ss.channel_name = ?");
-            params.push(ch_name);
+        match conn.query_row(
+            "SELECT channel_id FROM channels WHERE id = ?",
+            [ch_id.to_string()],
+            |row| row.get::<_, String>(0),
+        ) {
+            Ok(ch_name) => {
+                sql.push_str(" AND ss.channel_name = ?");
+                params.push(ch_name);
+            }
+            Err(_) => {
+                // Channel not found, return empty result
+                return Ok(CorrelationResult {
+                    correlation: ViewerChatCorrelation {
+                        correlation: 0.0,
+                        data_points: vec![],
+                        viewer_stats: CorrelationStats {
+                            mean: 0.0,
+                            std_dev: 0.0,
+                            min: 0.0,
+                            max: 0.0,
+                        },
+                        chat_stats: CorrelationStats {
+                            mean: 0.0,
+                            std_dev: 0.0,
+                            min: 0.0,
+                            max: 0.0,
+                        },
+                    },
+                    hourly_correlation: HourlyCorrelation {
+                        correlations: vec![],
+                    },
+                });
+            }
         }
     }
 
@@ -952,7 +975,7 @@ fn calculate_hourly_correlation(
     let mut sql = String::from(
         r#"
         WITH hourly_viewers AS (
-            SELECT 
+            SELECT
                 EXTRACT(HOUR FROM ss.collected_at) as hour,
                 time_bucket(INTERVAL '5 minutes', ss.collected_at) as bucket,
                 AVG(ss.viewer_count) as avg_viewers
@@ -964,16 +987,19 @@ fn calculate_hourly_correlation(
     let mut params: Vec<String> = Vec::new();
 
     if let Some(ch_id) = channel_id {
-        let channel_name = conn
-            .query_row(
-                "SELECT channel_id FROM channels WHERE id = ?",
-                [ch_id.to_string()],
-                |row| row.get::<_, String>(0),
-            )
-            .ok();
-        if let Some(ch_name) = channel_name {
-            sql.push_str(" AND ss.channel_name = ?");
-            params.push(ch_name);
+        match conn.query_row(
+            "SELECT channel_id FROM channels WHERE id = ?",
+            [ch_id.to_string()],
+            |row| row.get::<_, String>(0),
+        ) {
+            Ok(ch_name) => {
+                sql.push_str(" AND ss.channel_name = ?");
+                params.push(ch_name);
+            }
+            Err(_) => {
+                // Channel not found, return empty result
+                return Ok(vec![]);
+            }
         }
     }
 
@@ -1110,14 +1136,14 @@ pub fn get_category_change_impact(
     sql.push_str(
         r#"
         )
-        SELECT 
-            collected_at::VARCHAR as timestamp,
+        SELECT
+            strftime(collected_at, '%Y-%m-%dT%H:%M:%S.000Z') as timestamp,
             prev_category,
             category,
             prev_viewers,
             COALESCE(after_viewers, viewer_count) as after_viewers
         FROM ordered_stats
-        WHERE prev_category IS NOT NULL 
+        WHERE prev_category IS NOT NULL
             AND prev_category != category
             AND prev_viewers > 0
         ORDER BY collected_at DESC
@@ -1429,8 +1455,8 @@ pub fn detect_anomalies(
     // Get viewer data
     let mut viewer_sql = String::from(
         r#"
-        SELECT 
-            collected_at::VARCHAR as timestamp,
+        SELECT
+            strftime(collected_at, '%Y-%m-%dT%H:%M:%S.000Z') as timestamp,
             viewer_count
         FROM stream_stats ss
         WHERE viewer_count IS NOT NULL
@@ -1440,16 +1466,32 @@ pub fn detect_anomalies(
     let mut params: Vec<String> = Vec::new();
 
     if let Some(ch_id) = channel_id {
-        let channel_name = conn
-            .query_row(
-                "SELECT channel_id FROM channels WHERE id = ?",
-                [ch_id.to_string()],
-                |row| row.get::<_, String>(0),
-            )
-            .ok();
-        if let Some(ch_name) = channel_name {
-            viewer_sql.push_str(" AND ss.channel_name = ?");
-            params.push(ch_name);
+        match conn.query_row(
+            "SELECT channel_id FROM channels WHERE id = ?",
+            [ch_id.to_string()],
+            |row| row.get::<_, String>(0),
+        ) {
+            Ok(ch_name) => {
+                viewer_sql.push_str(" AND ss.channel_name = ?");
+                params.push(ch_name);
+            }
+            Err(_) => {
+                // Channel not found, return empty result
+                return Ok(AnomalyResult {
+                    anomalies: vec![],
+                    total_points: 0,
+                    anomaly_count: 0,
+                    threshold_used: z_threshold,
+                    statistics: AnomalyStatistics {
+                        mean: 0.0,
+                        std_dev: 0.0,
+                        min: 0.0,
+                        max: 0.0,
+                        percentile_25: 0.0,
+                        percentile_75: 0.0,
+                    },
+                });
+            }
         }
     }
 

@@ -34,7 +34,11 @@ const CategoryImpactTab = ({ channelId, startTime, endTime }: CategoryImpactTabP
   }
 
   if (isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="flex justify-center items-center p-8">
+        <LoadingSpinner size="lg" message="カテゴリ影響分析データを読み込み中..." />
+      </div>
+    );
   }
 
   if (!data || (data.changes.length === 0 && data.categoryPerformance.length === 0)) {

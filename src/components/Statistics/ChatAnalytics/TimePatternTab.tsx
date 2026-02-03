@@ -24,7 +24,11 @@ const TimePatternTab = ({ channelId, startTime, endTime }: TimePatternTabProps) 
   });
 
   if (isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="flex justify-center items-center p-8">
+        <LoadingSpinner size="lg" message="時間帯パターンデータを読み込み中..." />
+      </div>
+    );
   }
 
   const dayLabels = ['日', '月', '火', '水', '木', '金', '土'];

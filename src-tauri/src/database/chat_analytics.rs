@@ -91,14 +91,19 @@ pub fn get_chat_engagement_timeline(
         end_time,
     )?;
 
-    // channel_idからchannel_nameを取得
+    // channel_idからchannel_nameを取得（エラーハンドリングを改善）
     let channel_name = if let Some(ch_id) = channel_id {
-        conn.query_row(
+        match conn.query_row(
             "SELECT channel_id FROM channels WHERE id = ?",
             [ch_id.to_string()],
             |row| row.get::<_, String>(0),
-        )
-        .ok()
+        ) {
+            Ok(name) => Some(name),
+            Err(_) => {
+                // チャンネルが見つからない場合は空の結果を返す
+                return Ok(vec![]);
+            }
+        }
     } else {
         None
     };

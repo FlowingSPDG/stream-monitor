@@ -20,7 +20,11 @@ const UserSegmentTab = ({ channelId, startTime, endTime }: UserSegmentTabProps) 
   });
 
   if (isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="flex justify-center items-center p-8">
+        <LoadingSpinner size="lg" message="ユーザーセグメントデータを読み込み中..." />
+      </div>
+    );
   }
 
   const segmentLabels: Record<string, string> = {

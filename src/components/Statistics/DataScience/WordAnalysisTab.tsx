@@ -46,7 +46,11 @@ const WordAnalysisTab = ({ channelId, startTime, endTime }: WordAnalysisTabProps
   });
 
   if (wordLoading || emoteLoading || lengthLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="flex justify-center items-center p-8">
+        <LoadingSpinner size="lg" message="ワード分析データを読み込み中..." />
+      </div>
+    );
   }
 
   return (

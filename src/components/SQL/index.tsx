@@ -10,6 +10,7 @@ import type {
 } from "../../types";
 import { toast } from "../../utils/toast";
 import { confirm } from "../../utils/confirm";
+import { LoadingSpinner } from "../common/LoadingSpinner";
 
 export function SQLViewer() {
   const [query, setQuery] = useState<string>(
@@ -412,8 +413,15 @@ export function SQLViewer() {
             </div>
           )}
 
+          {/* クエリ実行中 */}
+          {isExecuting && (
+            <div className="card p-8">
+              <LoadingSpinner size="lg" message="クエリを実行中..." />
+            </div>
+          )}
+
           {/* クエリ結果 */}
-          {result && (
+          {!isExecuting && result && (
             <div className="card p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">

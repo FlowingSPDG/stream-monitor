@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import { ExportForm } from './ExportForm';
+import { LoadingSpinner } from '../common/LoadingSpinner';
 import type { Channel, ExportQuery } from '../../types';
 
 export function Export() {
@@ -232,7 +233,7 @@ export function Export() {
                 データプレビュー（最初の10行）
               </h3>
               {isLoadingPreview && (
-                <span className="text-xs text-gray-500 dark:text-gray-400">読み込み中...</span>
+                <LoadingSpinner size="sm" message="" />
               )}
             </div>
             

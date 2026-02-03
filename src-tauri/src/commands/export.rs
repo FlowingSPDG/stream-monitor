@@ -26,7 +26,7 @@ fn get_stream_stats_internal(
                AND cm.timestamp >= ss.collected_at - INTERVAL '1 minute'
                AND cm.timestamp < ss.collected_at
          ), 0) AS chat_rate_1min,
-         ss.category, ss.title, ss.follower_count, ss.twitch_user_id, ss.channel_name 
+         ss.category, ss.title, ss.follower_count, ss.twitch_user_id, ss.channel_name
          FROM stream_stats ss
          INNER JOIN streams s ON ss.stream_id = s.id
          WHERE 1=1",
@@ -35,6 +35,23 @@ fn get_stream_stats_internal(
     let mut params: Vec<String> = Vec::new();
 
     if let Some(channel_id) = query.channel_id {
+        eprintln!("[Export Debug] Filtering by channel_id: {}", channel_id);
+
+        // Debug: Check if channel exists and has streams
+        let channel_check: Result<(String, i64), _> = conn.query_row(
+            "SELECT channel_id, (SELECT COUNT(*) FROM streams WHERE channel_id = c.id) as stream_count FROM channels c WHERE id = ?",
+            [channel_id.to_string()],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        );
+        match channel_check {
+            Ok((ch_id, stream_count)) => {
+                eprintln!("[Export Debug] Channel found: platform_id={}, streams={}", ch_id, stream_count);
+            }
+            Err(e) => {
+                eprintln!("[Export Debug] Channel not found or error: {:?}", e);
+            }
+        }
+
         sql.push_str(" AND s.channel_id = ?");
         params.push(channel_id.to_string());
     }
@@ -50,6 +67,9 @@ fn get_stream_stats_internal(
     }
 
     sql.push_str(" ORDER BY ss.collected_at ASC");
+
+    eprintln!("[Export Debug] SQL: {}", sql);
+    eprintln!("[Export Debug] Params: {:?}", params);
 
     let mut stmt = conn.prepare(&sql)?;
 
@@ -69,6 +89,11 @@ fn get_stream_stats_internal(
             })
         })?
         .collect();
+
+    match &stats {
+        Ok(data) => eprintln!("[Export Debug] Query returned {} records", data.len()),
+        Err(e) => eprintln!("[Export Debug] Query error: {:?}", e),
+    }
 
     stats
 }

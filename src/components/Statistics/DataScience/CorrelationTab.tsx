@@ -22,7 +22,11 @@ const CorrelationTab = ({ channelId, startTime, endTime }: CorrelationTabProps) 
   });
 
   if (isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="flex justify-center items-center p-8">
+        <LoadingSpinner size="lg" message="相関分析データを読み込み中..." />
+      </div>
+    );
   }
 
   if (!data) {

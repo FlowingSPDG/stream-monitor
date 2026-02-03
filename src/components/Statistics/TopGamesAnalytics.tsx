@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { HorizontalBarChart, PieChart, BubbleChart } from '../common/charts';
 import { DataAvailabilityBanner } from './DataAvailabilityBanner';
+import { LoadingSpinner } from '../common/LoadingSpinner';
+import { useSortableData } from '../../hooks/useSortableData';
 import { getGameAnalytics, getDataAvailability } from '../../api/statistics';
 
 interface TopGamesAnalyticsProps {
@@ -33,7 +35,7 @@ export default function TopGamesAnalytics({
   if (isLoading) {
     return (
       <div className="flex justify-center items-center p-8">
-        <div className="text-gray-400">Loading top games analytics...</div>
+        <LoadingSpinner size="lg" message="トップゲーム統計を読み込み中..." />
       </div>
     );
   }
@@ -67,10 +69,16 @@ export default function TopGamesAnalytics({
     return num.toFixed(2);
   };
 
-  // Top 30 for ranking
-  const top30Games = gameAnalytics.slice(0, 30);
+  // ソート機能を追加
+  const { sortedItems, sortConfig, requestSort } = useSortableData(gameAnalytics, {
+    key: 'minutes_watched',
+    direction: 'desc',
+  });
 
-  // Top 10 for pie chart
+  // Top 30 for ranking
+  const top30Games = sortedItems.slice(0, 30);
+
+  // Top 10 for pie chart (元のソート順を使用)
   const top10Games = gameAnalytics.slice(0, 10);
   const totalMW = gameAnalytics.reduce((sum, game) => sum + game.minutes_watched, 0);
 
@@ -85,6 +93,12 @@ export default function TopGamesAnalytics({
     name: game.category,
     value: game.minutes_watched,
   }));
+
+  // ソート表示用のヘルパー
+  const getSortIndicator = (key: string) => {
+    if (sortConfig.key !== key) return null;
+    return sortConfig.direction === 'asc' ? ' ↑' : ' ↓';
+  };
 
   // バブルチャート用データ
   const bubbleData = top30Games.map(game => ({
@@ -193,26 +207,47 @@ export default function TopGamesAnalytics({
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Rank
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Game Title
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+                  onClick={() => requestSort('category')}
+                >
+                  Game Title{getSortIndicator('category')}
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Minutes Watched
+                <th
+                  className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+                  onClick={() => requestSort('minutes_watched')}
+                >
+                  Minutes Watched{getSortIndicator('minutes_watched')}
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Hours Broadcasted
+                <th
+                  className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+                  onClick={() => requestSort('hours_broadcasted')}
+                >
+                  Hours Broadcasted{getSortIndicator('hours_broadcasted')}
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Avg CCU
+                <th
+                  className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+                  onClick={() => requestSort('average_ccu')}
+                >
+                  Avg CCU{getSortIndicator('average_ccu')}
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Avg Chat Rate
+                <th
+                  className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+                  onClick={() => requestSort('average_chat_rate')}
+                >
+                  Avg Chat Rate{getSortIndicator('average_chat_rate')}
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Unique Broadcasters
+                <th
+                  className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+                  onClick={() => requestSort('unique_broadcasters')}
+                >
+                  Unique Broadcasters{getSortIndicator('unique_broadcasters')}
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Exp Ad Value
+                <th
+                  className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+                  onClick={() => requestSort('expected_ad_value')}
+                >
+                  Exp Ad Value{getSortIndicator('expected_ad_value')}
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Top Channel
