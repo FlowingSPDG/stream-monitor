@@ -775,6 +775,8 @@ pub fn get_viewer_chat_correlation(
                 AVG(ss.viewer_count) as avg_viewers
             FROM stream_stats ss
             WHERE ss.viewer_count IS NOT NULL
+              AND ss.collected_at IS NOT NULL
+              AND ss.collected_at > '1971-01-01'
         "#,
     );
 
@@ -1445,6 +1447,8 @@ pub fn detect_anomalies(
             viewer_count
         FROM stream_stats ss
         WHERE viewer_count IS NOT NULL
+          AND collected_at IS NOT NULL
+          AND collected_at > '1971-01-01'
         "#,
     );
 

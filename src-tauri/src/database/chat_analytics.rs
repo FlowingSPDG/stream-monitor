@@ -98,13 +98,18 @@ pub fn get_chat_engagement_timeline(
             [ch_id.to_string()],
             |row| row.get::<_, String>(0),
         ) {
-            Ok(name) => Some(name),
-            Err(_) => {
+            Ok(name) => {
+                eprintln!("[Engagement Debug] Channel ID {} -> Channel Name: {}", ch_id, name);
+                Some(name)
+            }
+            Err(e) => {
                 // チャンネルが見つからない場合は空の結果を返す
+                eprintln!("[Engagement Debug] Channel ID {} not found: {:?}", ch_id, e);
                 return Ok(vec![]);
             }
         }
     } else {
+        eprintln!("[Engagement Debug] No channel_id provided, fetching all channels");
         None
     };
 

@@ -203,7 +203,7 @@ export default function TopChannelsAnalytics({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {channelAnalytics.map((channel, index) => (
+              {sortedItems.map((channel, index) => (
                 <tr
                   key={channel.channel_id}
                   className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"

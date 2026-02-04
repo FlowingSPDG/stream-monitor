@@ -255,7 +255,7 @@ export default function TopGamesAnalytics({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {gameAnalytics.map((game, index) => (
+              {sortedItems.map((game, index) => (
                 <tr
                   key={game.category}
                   className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
