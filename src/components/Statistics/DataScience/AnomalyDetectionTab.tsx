@@ -65,6 +65,17 @@ const AnomalyDetectionTab = ({ channelId, startTime, endTime }: AnomalyDetection
     );
   }
 
+  // フィルター: 1971年以前の不正なタイムスタンプを除外
+  const validViewerAnomalies = data.viewerAnomalies.filter(a => {
+    const date = new Date(a.timestamp);
+    return date.getTime() > new Date('1971-01-01').getTime();
+  });
+
+  const validChatAnomalies = data.chatAnomalies.filter(a => {
+    const date = new Date(a.timestamp);
+    return date.getTime() > new Date('1971-01-01').getTime();
+  });
+
   const getTrendIcon = (trend: string) => {
     switch (trend) {
       case 'increasing':
@@ -119,7 +130,7 @@ const AnomalyDetectionTab = ({ channelId, startTime, endTime }: AnomalyDetection
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">検出異常数:</span>
               <span className="font-medium text-gray-900 dark:text-gray-100">
-                {data.viewerAnomalies.length}
+                {validViewerAnomalies.length}
               </span>
             </div>
           </div>
@@ -157,7 +168,7 @@ const AnomalyDetectionTab = ({ channelId, startTime, endTime }: AnomalyDetection
       </div>
 
       {/* Viewer Anomalies */}
-      {data.viewerAnomalies.length > 0 && (
+      {validViewerAnomalies.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">視聴者数の異常値</h3>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
@@ -204,14 +215,14 @@ const AnomalyDetectionTab = ({ channelId, startTime, endTime }: AnomalyDetection
                 <ReferenceLine y={data.trendStats.viewerAvg} stroke="#3b82f6" strokeDasharray="3 3" />
                 <Scatter
                   name="異常値"
-                  data={data.viewerAnomalies.map((a) => ({
+                  data={validViewerAnomalies.map((a) => ({
                     timestampMs: new Date(a.timestamp).getTime(),
                     value: a.value,
                     zScore: a.zScore,
                   }))}
                   fill="#ef4444"
                 >
-                  {data.viewerAnomalies.map((a, index) => (
+                  {validViewerAnomalies.map((a, index) => (
                     <Cell key={index} fill={a.isPositive ? '#10b981' : '#ef4444'} />
                   ))}
                 </Scatter>
@@ -239,7 +250,7 @@ const AnomalyDetectionTab = ({ channelId, startTime, endTime }: AnomalyDetection
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {data.viewerAnomalies.map((anomaly, idx) => (
+                {validViewerAnomalies.map((anomaly, idx) => (
                   <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                       {new Date(anomaly.timestamp).toLocaleString('ja-JP')}
@@ -270,7 +281,7 @@ const AnomalyDetectionTab = ({ channelId, startTime, endTime }: AnomalyDetection
       )}
 
       {/* No Anomalies Message */}
-      {data.viewerAnomalies.length === 0 && (
+      {validViewerAnomalies.length === 0 && (
         <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
           <p className="text-green-800 dark:text-green-200">
             ✅ 選択した期間に大きな異常値は検出されませんでした。データは安定しています。

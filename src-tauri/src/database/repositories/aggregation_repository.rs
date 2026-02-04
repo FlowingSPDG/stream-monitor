@@ -23,7 +23,7 @@ impl AggregationRepository {
         // channel_id が指定されている場合、channel_name を取得
         let filter_channel_name = if let Some(ch_id) = channel_id {
             conn.query_row(
-                "SELECT channel_id FROM channels WHERE id = ? AND platform = 'twitch'",
+                "SELECT channel_name FROM channels WHERE id = ? AND platform = 'twitch'",
                 [ch_id.to_string()],
                 |row| row.get::<_, String>(0),
             )

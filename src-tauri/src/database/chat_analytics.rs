@@ -94,7 +94,7 @@ pub fn get_chat_engagement_timeline(
     // channel_idからchannel_nameを取得（エラーハンドリングを改善）
     let channel_name = if let Some(ch_id) = channel_id {
         match conn.query_row(
-            "SELECT channel_id FROM channels WHERE id = ?",
+            "SELECT channel_name FROM channels WHERE id = ?",
             [ch_id.to_string()],
             |row| row.get::<_, String>(0),
         ) {

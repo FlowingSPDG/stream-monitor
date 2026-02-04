@@ -245,9 +245,9 @@ export default function TopGamesAnalytics({
                 </th>
                 <th
                   className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
-                  onClick={() => requestSort('average_chat_rate')}
+                  onClick={() => requestSort('avg_chat_rate')}
                 >
-                  Avg Chat Rate{getSortIndicator('average_chat_rate')}
+                  Avg Chat Rate{getSortIndicator('avg_chat_rate')}
                 </th>
                 <th
                   className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"

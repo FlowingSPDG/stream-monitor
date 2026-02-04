@@ -169,7 +169,7 @@ impl StreamStatsRepository {
         let sql = format!(
             r#"
             WITH channel_lookup AS (
-                SELECT channel_id FROM channels WHERE id = ?
+                SELECT channel_name FROM channels WHERE id = ?
             ),
             stats_with_interval AS (
                 SELECT 

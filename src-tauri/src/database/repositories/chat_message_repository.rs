@@ -470,7 +470,7 @@ impl ChatMessageRepository {
         if let Some(ch_id) = channel_id {
             let channel_name = conn
                 .query_row(
-                    "SELECT channel_id FROM channels WHERE id = ?",
+                    "SELECT channel_name FROM channels WHERE id = ?",
                     [ch_id.to_string()],
                     |row| row.get::<_, String>(0),
                 )
@@ -615,7 +615,7 @@ impl ChatMessageRepository {
         if let Some(ch_id) = channel_id {
             let channel_name = conn
                 .query_row(
-                    "SELECT channel_id FROM channels WHERE id = ?",
+                    "SELECT channel_name FROM channels WHERE id = ?",
                     [ch_id.to_string()],
                     |row| row.get::<_, String>(0),
                 )

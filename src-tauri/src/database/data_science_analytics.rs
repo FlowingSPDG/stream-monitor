@@ -784,16 +784,18 @@ pub fn get_viewer_chat_correlation(
 
     if let Some(ch_id) = channel_id {
         match conn.query_row(
-            "SELECT channel_id FROM channels WHERE id = ?",
+            "SELECT channel_name FROM channels WHERE id = ?",
             [ch_id.to_string()],
             |row| row.get::<_, String>(0),
         ) {
             Ok(ch_name) => {
+                eprintln!("[Correlation Debug] Channel ID {} -> Channel Name: {}", ch_id, ch_name);
                 sql.push_str(" AND ss.channel_name = ?");
                 params.push(ch_name);
             }
-            Err(_) => {
+            Err(e) => {
                 // Channel not found, return empty result
+                eprintln!("[Correlation Debug] Channel ID {} not found: {:?}", ch_id, e);
                 return Ok(CorrelationResult {
                     pearson_coefficient: 0.0,
                     interpretation: "No data available".to_string(),
@@ -975,7 +977,7 @@ fn calculate_hourly_correlation(
 
     if let Some(ch_id) = channel_id {
         match conn.query_row(
-            "SELECT channel_id FROM channels WHERE id = ?",
+            "SELECT channel_name FROM channels WHERE id = ?",
             [ch_id.to_string()],
             |row| row.get::<_, String>(0),
         ) {
@@ -1091,7 +1093,7 @@ pub fn get_category_change_impact(
     let mut sql = String::from(
         r#"
         WITH channel_lookup AS (
-            SELECT channel_id FROM channels WHERE id = ?
+            SELECT channel_name FROM channels WHERE id = ?
         ),
         ordered_stats AS (
             SELECT 
@@ -1176,7 +1178,7 @@ pub fn get_category_change_impact(
     let mut perf_sql = String::from(
         r#"
         WITH channel_lookup AS (
-            SELECT channel_id FROM channels WHERE id = ?
+            SELECT channel_name FROM channels WHERE id = ?
         ),
         stats_with_interval AS (
             SELECT 
@@ -1456,16 +1458,18 @@ pub fn detect_anomalies(
 
     if let Some(ch_id) = channel_id {
         match conn.query_row(
-            "SELECT channel_id FROM channels WHERE id = ?",
+            "SELECT channel_name FROM channels WHERE id = ?",
             [ch_id.to_string()],
             |row| row.get::<_, String>(0),
         ) {
             Ok(ch_name) => {
+                eprintln!("[Anomaly Debug] Channel ID {} -> Channel Name: {}", ch_id, ch_name);
                 viewer_sql.push_str(" AND ss.channel_name = ?");
                 params.push(ch_name);
             }
-            Err(_) => {
+            Err(e) => {
                 // Channel not found, return empty result
+                eprintln!("[Anomaly Debug] Channel ID {} not found: {:?}", ch_id, e);
                 return Ok(AnomalyResult {
                     viewer_anomalies: vec![],
                     chat_anomalies: vec![],

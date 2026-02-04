@@ -113,7 +113,7 @@ fn get_broadcaster_analytics_old(
     // channel_id が指定されている場合、channel_name を取得してフィルター
     let filter_channel_name = if let Some(ch_id) = channel_id {
         conn.query_row(
-            "SELECT channel_id FROM channels WHERE id = ? AND platform = 'twitch'",
+            "SELECT channel_name FROM channels WHERE id = ? AND platform = 'twitch'",
             [ch_id.to_string()],
             |row| row.get::<_, String>(0),
         )
@@ -647,7 +647,7 @@ fn get_channel_daily_stats_old(
 ) -> Result<Vec<DailyStats>, duckdb::Error> {
     let sql = r#"
         WITH channel_lookup AS (
-            SELECT channel_id FROM channels WHERE id = ? AND platform = 'twitch'
+            SELECT channel_name FROM channels WHERE id = ? AND platform = 'twitch'
         ),
         stats_with_interval AS (
             SELECT 
