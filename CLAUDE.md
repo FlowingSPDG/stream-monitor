@@ -50,6 +50,12 @@ TwitchとYouTubeの配信統計を収集・分析するTauriベースのデス�
 
 ```
 src/                    # フロントエンド (React + TypeScript)
+├── api/               # 🔹 Tauri API呼び出し統合レイヤー（全てのinvokeをここに集約）
+│   ├── channels.ts    # チャンネル管理API
+│   ├── config.ts      # 設定管理API
+│   ├── discovery.ts   # 自動発見API
+│   ├── sql.ts         # SQLクエリAPI
+│   └── statistics.ts  # 統計・分析API
 ├── components/
 │   ├── ChannelList/, Dashboard/, Statistics/, Settings/
 │   ├── Export/, Logs/, MultiView/, SQL/
@@ -61,11 +67,19 @@ src/                    # フロントエンド (React + TypeScript)
 src-tauri/src/         # バックエンド (Rust)
 ├── api/               # twitch_api.rs, youtube_api.rs
 ├── collectors/        # poller.rs, twitch.rs, youtube.rs, auto_discovery.rs
-├── database/          # models.rs, schema.rs, writer.rs, analytics.rs
+├── database/
+│   ├── repositories/  # 🔹 DB操作統合レイヤー（全てのSQLをここに集約）
+│   │   ├── aggregation_repository.rs      # 集計クエリ
+│   │   ├── base.rs                        # 共通型・ユーティリティ
+│   │   ├── chat_message_repository.rs     # チャットメッセージクエリ
+│   │   ├── stream_stats_repository.rs     # 配信統計クエリ
+│   │   └── mod.rs
+│   ├── models.rs, schema.rs, writer.rs, analytics.rs
+│   └── query_helpers/  # DuckDB特殊型の安全な取り扱い（CAST等）
 ├── commands/          # channels.rs, stats.rs, analytics.rs, export.rs等
 ├── config/            # keyring_store.rs, settings.rs
 ├── oauth/             # twitch.rs (Device Code Flow)
-├── websocket/         # twitch_irc.rs (未使用)
+├── websocket/         # twitch_irc.rs
 ├── main.rs, lib.rs, logger.rs
 ```
 
@@ -95,10 +109,13 @@ let count = ChatMessageRepository::count_messages(&conn, None, None, None, None)
 - テスタビリティ向上
 - 保守性向上
 
+**配置場所**: `src-tauri/src/database/repositories/`
+
 **既存Repository**:
-- `ChatMessageRepository` (`src-tauri/src/database/repositories/chat_message_repository.rs`)
-- `StreamStatsRepository` (`src-tauri/src/database/repositories/stream_stats_repository.rs`)
-- `AggregationRepository` (`src-tauri/src/database/repositories/aggregation_repository.rs`)
+- `ChatMessageRepository` - チャットメッセージ関連クエリ（カウント、集計、検索等）
+- `StreamStatsRepository` - 配信統計関連クエリ（タイムライン、集計等）
+- `AggregationRepository` - 複雑な集計クエリ（MW計算、エンゲージメント等）
+- `mod.rs` - 公開インターフェース
 
 #### 2. API呼び出しの共通化
 **全てのTauri API呼び出しは共通レイヤーを経由する**
@@ -122,12 +139,14 @@ const data = await statisticsApi.getRealtimeChatRate();
 - エラーハンドリングの統一
 - モックテストの容易化
 
-**既存APIレイヤー**:
-- `src/api/channels.ts` - チャンネル管理
-- `src/api/config.ts` - 設定管理
-- `src/api/discovery.ts` - 自動発見
-- `src/api/sql.ts` - SQLクエリ
-- `src/api/statistics.ts` - 統計・分析
+**配置場所**: `src/api/`
+
+**既存APIファイル**:
+- `channels.ts` - チャンネル管理（追加、削除、更新、一覧取得）
+- `config.ts` - 設定管理（トークン、OAuth設定）
+- `discovery.ts` - 自動発見（設定、検索、昇格）
+- `sql.ts` - SQLクエリ（実行、テンプレート管理）
+- `statistics.ts` - 統計・分析（分析結果、チャット統計、リアルタイム統計）
 
 ### コーディング規約
 
