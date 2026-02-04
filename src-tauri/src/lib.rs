@@ -53,7 +53,7 @@ use commands::{
         delete_sql_template, execute_sql, list_database_tables, list_sql_templates,
         save_sql_template,
     },
-    stats::get_stream_stats,
+    stats::{get_realtime_chat_rate, get_stream_stats},
     timeline::{get_channel_streams, get_stream_timeline},
     twitch::{get_twitch_rate_limit_status, validate_twitch_channel},
     window::show_main_window,
@@ -551,6 +551,7 @@ pub fn run() {
             poll_twitch_device_token,
             // Stats commands
             get_stream_stats,
+            get_realtime_chat_rate,
             // Timeline commands
             get_channel_streams,
             get_stream_timeline,

@@ -257,3 +257,9 @@ export const detectAnomalies = async (params: {
     zThreshold:params.zThreshold,
   });
 };
+
+// ========== Realtime Stats ==========
+
+export const getRealtimeChatRate = async (): Promise<number> => {
+  return await invoke<number>('get_realtime_chat_rate');
+};

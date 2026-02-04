@@ -2,20 +2,13 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { ChannelWithStats, TwitchRateLimitStatus, DiscoveredStreamInfo } from "../../types";
 import { Tooltip as CustomTooltip } from "../common/Tooltip";
 import { toast } from "../../utils/toast";
 import { confirm } from "../../utils/confirm";
 import * as discoveryApi from "../../api/discovery";
-
-interface StreamStats {
-  id?: number;
-  stream_id: number;
-  collected_at: string;
-  viewer_count?: number;
-  chat_rate_1min: number;
-}
+import * as statisticsApi from "../../api/statistics";
 
 interface LiveChannelCardProps {
   channel: ChannelWithStats;
@@ -210,7 +203,6 @@ function DiscoveredStreamCard({ stream, onPromote, isAlreadyRegistered = false }
 }
 
 export function Dashboard() {
-  const [statsData, setStatsData] = useState<StreamStats[]>([]);
   const queryClient = useQueryClient();
 
   // チャンネル情報を取得し、ライブチャンネルのみをフィルタリング
@@ -226,16 +218,10 @@ export function Dashboard() {
 
   const liveChannels = allChannels?.filter(c => c.is_live) ?? [];
 
-  // 最新の統計データを取得
-  const { data: recentStats } = useQuery({
-    queryKey: ["recent-stats"],
-    queryFn: async () => {
-      return await invoke<StreamStats[]>("get_stream_stats", {
-        query: {
-          start_time: new Date(Date.now() - 3600000).toISOString(), // 1時間前から
-        },
-      });
-    },
+  // リアルタイムのチャットレートを取得
+  const { data: realtimeChatRate } = useQuery({
+    queryKey: ["realtime-chat-rate"],
+    queryFn: () => statisticsApi.getRealtimeChatRate(),
     refetchInterval: 10000, // 10秒ごとに更新
   });
 
@@ -343,12 +329,6 @@ export function Dashboard() {
       promoteMutation.mutate(channelId);
     }
   };
-
-  useEffect(() => {
-    if (recentStats) {
-      setStatsData(recentStats);
-    }
-  }, [recentStats]);
 
   // チャンネルごとの統計データを整形
   // 重複を削除: channel_id + platform の組み合わせで一意にする
@@ -463,7 +443,7 @@ export function Dashboard() {
             </div>
             <div className="ml-4">
               <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {statsData.length > 0 ? statsData[statsData.length - 1]?.chat_rate_1min || 0 : 0}
+                {(realtimeChatRate ?? 0).toLocaleString()}
               </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">1分間チャット数</p>
             </div>

@@ -71,6 +71,64 @@ src-tauri/src/         # バックエンド (Rust)
 
 ## 開発ガイドライン
 
+### アーキテクチャ原則（重要）
+
+#### 1. Repositoryパターンの徹底
+**全てのデータベース操作はRepositoryを経由する**
+
+❌ **禁止**: コマンドやその他のコードで直接SQLを実行
+```rust
+// NG
+let count: i64 = conn.query_row("SELECT COUNT(*) FROM chat_messages", [], |row| row.get(0))?;
+```
+
+✅ **推奨**: Repositoryメソッドを使用
+```rust
+// OK
+use crate::database::repositories::chat_message_repository::ChatMessageRepository;
+let count = ChatMessageRepository::count_messages(&conn, None, None, None, None)?;
+```
+
+**理由**:
+- SQLロジックの一元管理
+- DuckDB特殊型（LIST, TIMESTAMP）の安全な取り扱い
+- テスタビリティ向上
+- 保守性向上
+
+**既存Repository**:
+- `ChatMessageRepository` (`src-tauri/src/database/repositories/chat_message_repository.rs`)
+- `StreamStatsRepository` (`src-tauri/src/database/repositories/stream_stats_repository.rs`)
+- `AggregationRepository` (`src-tauri/src/database/repositories/aggregation_repository.rs`)
+
+#### 2. API呼び出しの共通化
+**全てのTauri API呼び出しは共通レイヤーを経由する**
+
+❌ **禁止**: コンポーネントで直接invoke
+```typescript
+// NG
+const data = await invoke('get_realtime_chat_rate');
+```
+
+✅ **推奨**: 共通化されたAPIレイヤーを使用
+```typescript
+// OK
+import * as statisticsApi from '../../api/statistics';
+const data = await statisticsApi.getRealtimeChatRate();
+```
+
+**理由**:
+- API呼び出しの一元管理
+- 型安全性の向上
+- エラーハンドリングの統一
+- モックテストの容易化
+
+**既存APIレイヤー**:
+- `src/api/channels.ts` - チャンネル管理
+- `src/api/config.ts` - 設定管理
+- `src/api/discovery.ts` - 自動発見
+- `src/api/sql.ts` - SQLクエリ
+- `src/api/statistics.ts` - 統計・分析
+
 ### コーディング規約
 
 #### Rust
@@ -203,6 +261,44 @@ let sql = format!("SELECT {} FROM chat_messages cm",
 - コードの可読性向上
 - 型変換忘れによるバグを防止
 
+### タイムスタンプの取り扱い（重要）
+
+**問題**: DuckDBの`CURRENT_TIMESTAMP`はUTCを返すが、アプリケーションでは`Local::now()`でローカル時刻を保存している
+
+**症状**: タイムスタンプを使った検索で結果が返らない（常に0件、時差分ずれる）
+
+**原因**:
+```rust
+// 保存時: ローカルタイム（例: JST）
+timestamp: Local::now().to_rfc3339()  // "2024-01-01T12:00:00+09:00"
+
+// クエリ時: UTC
+WHERE timestamp >= CURRENT_TIMESTAMP - INTERVAL '1 minute'  // UTCとの比較
+```
+
+**解決策**: Rust側でローカル時刻を計算してパラメータとして渡す
+```rust
+// ✅ 正しい実装
+let now = chrono::Local::now();
+let one_minute_ago = now - chrono::Duration::minutes(1);
+let one_minute_ago_str = one_minute_ago.to_rfc3339();
+
+let sql = "SELECT COUNT(*) FROM chat_messages WHERE timestamp >= ?";
+conn.query_row(sql, [&one_minute_ago_str], |row| row.get(0))
+```
+
+❌ **避けるべき**: `CURRENT_TIMESTAMP`を直接使用
+```sql
+-- NG: タイムゾーンが一致しない
+SELECT COUNT(*) FROM chat_messages
+WHERE timestamp >= CURRENT_TIMESTAMP - INTERVAL '1 minute'
+```
+
+**ベストプラクティス**:
+- タイムスタンプ保存は常に`Local::now().to_rfc3339()`
+- タイムスタンプ比較は常にRust側で`chrono::Local`を使って計算
+- SQLの`CURRENT_TIMESTAMP`は使用しない
+
 ### UIコンポーネント追加
 - Tailwind CSS 4使用、`dark:`でダークモード対応
 - TanStack Query（サーバー状態）+ Zustand（グローバル状態）
@@ -261,6 +357,7 @@ let sql = format!("SELECT {} FROM chat_messages cm",
 | DuckDB型変換エラー | LIST/TIMESTAMP型を直接取得 | SQLで`CAST(column AS VARCHAR)` |
 | Tauriコマンド引数エラー | 構造体引数のラッピング不足 | フロントエンド: `{query: {...}}`でラップ |
 | serdeデシリアライズ失敗 | 命名規則の不一致(camelCase/snake_case) | `#[serde(rename_all = "camelCase")]`追加 |
+| タイムスタンプ比較で常に0 | `CURRENT_TIMESTAMP`(UTC)とLocal時刻の時差 | `chrono::Local::now()`で計算してパラメータ渡し |
 
 ## 実装状況
 

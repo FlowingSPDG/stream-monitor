@@ -634,4 +634,20 @@ impl ChatMessageRepository {
 
         rows.next().unwrap_or(Ok((0, 0, 0, 0.0)))
     }
+
+    /// 直近1分間の全チャンネルの合計チャットメッセージ数を取得
+    pub fn get_realtime_chat_rate(conn: &Connection) -> Result<i64, duckdb::Error> {
+        // ローカル時刻で1分前を計算（chat_messagesのtimestampはLocal::now()で保存されているため）
+        let now = chrono::Local::now();
+        let one_minute_ago = now - chrono::Duration::minutes(1);
+        let one_minute_ago_str = one_minute_ago.to_rfc3339();
+
+        let sql = "
+            SELECT COUNT(*) as chat_count
+            FROM chat_messages
+            WHERE timestamp >= ?
+        ";
+
+        conn.query_row(sql, [&one_minute_ago_str], |row| row.get(0))
+    }
 }

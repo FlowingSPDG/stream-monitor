@@ -1,4 +1,9 @@
-use crate::database::{models::StreamStats, utils, DatabaseManager};
+use crate::database::{
+    models::StreamStats,
+    repositories::chat_message_repository::ChatMessageRepository,
+    utils,
+    DatabaseManager
+};
 use crate::error::ResultExt;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
@@ -73,7 +78,7 @@ pub async fn get_stream_stats(
                 stream_id: row.get(1)?,
                 collected_at: row.get(2)?,
                 viewer_count: row.get(3)?,
-                chat_rate_1min: None, // Not selected in this query
+                chat_rate_1min: row.get(4)?,
                 category: row.get(5)?,
                 game_id: None,
                 title: row.get(6)?,
@@ -87,4 +92,18 @@ pub async fn get_stream_stats(
         .collect();
 
     stats.db_context("collect stats").map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_realtime_chat_rate(
+    _app_handle: AppHandle,
+    db_manager: State<'_, DatabaseManager>,
+) -> Result<i64, String> {
+    let conn = db_manager
+        .get_connection()
+        .db_context("get database connection")
+        .map_err(|e| e.to_string())?;
+
+    ChatMessageRepository::get_realtime_chat_rate(&conn)
+        .map_err(|e| e.to_string())
 }
