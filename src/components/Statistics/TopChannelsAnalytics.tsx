@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { HorizontalBarChart } from '../common/charts';
 import { DataAvailabilityBanner } from './DataAvailabilityBanner';
-import { LoadingSpinner } from '../common/LoadingSpinner';
+import { StatCardSkeleton, ChartSkeleton, TableSkeleton } from '../common/Skeleton';
 import { useSortableData } from '../../hooks/useSortableData';
 import { getBroadcasterAnalytics, getDataAvailability } from '../../api/statistics';
 
@@ -40,8 +40,14 @@ export default function TopChannelsAnalytics({
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center p-8">
-        <LoadingSpinner size="lg" message="トップチャンネル統計を読み込み中..." />
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <StatCardSkeleton key={i} />
+          ))}
+        </div>
+        <ChartSkeleton height={600} />
+        <TableSkeleton rows={30} columns={9} />
       </div>
     );
   }

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Scatter, ScatterChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine, Cell } from 'recharts';
-import { LoadingSpinner } from '../../common/LoadingSpinner';
+import { StatCardSkeleton, ChartSkeleton } from '../../common/Skeleton';
 import { detectAnomalies } from '../../../api/statistics';
 
 interface AnomalyDetectionTabProps {
@@ -47,8 +47,12 @@ const AnomalyDetectionTab = ({ channelId, startTime, endTime }: AnomalyDetection
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center p-8">
-        <LoadingSpinner size="lg" message="異常検知データを読み込み中..." />
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+        <ChartSkeleton height={400} />
       </div>
     );
   }

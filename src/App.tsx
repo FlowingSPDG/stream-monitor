@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Settings } from "./components/Settings";
 import { Dashboard } from "./components/Dashboard";
@@ -20,7 +20,14 @@ import Timeline from "./components/Timeline";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      retry: 1,
+    },
+  },
+});
 
 type Tab = "dashboard" | "channels" | "statistics" | "timeline" | "export" | "logs" | "settings" | "multiview" | "sqlviewer";
 
