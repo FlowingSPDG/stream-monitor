@@ -80,7 +80,7 @@ fn get_stream_stats_internal(
                 stream_id: row.get(1)?,
                 collected_at: row.get(2)?,
                 viewer_count: row.get(3)?,
-                // chat_rate_1min (index 4) is skipped - it's calculated dynamically in the query
+                chat_rate_1min: Some(row.get(4)?), // Now properly mapped from query
                 category: row.get(5)?,
                 game_id: None,
                 title: row.get(6)?,
@@ -157,9 +157,7 @@ pub async fn export_to_delimited(
         let viewer_count = stat.viewer_count.unwrap_or(0).to_string();
         let category = stat.category.as_deref().unwrap_or("");
         let title = stat.title.as_deref().unwrap_or("");
-        // Note: chat_rate_1min is now calculated dynamically from chat_messages table
-        // and is not stored in StreamStats. For CSV export, we output "N/A".
-        let chat_rate = "N/A";
+        let chat_rate = stat.chat_rate_1min.map(|c| c.to_string()).unwrap_or_else(|| "0".to_string());
 
         output.push_str(&format!(
             "{}{}{}{}{}{}{}{}{}{}{}\n",

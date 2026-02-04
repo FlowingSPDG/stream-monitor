@@ -38,6 +38,7 @@ pub struct StreamStats {
     pub stream_id: i64,
     pub collected_at: String,
     pub viewer_count: Option<i32>,
+    pub chat_rate_1min: Option<i64>, // Chat messages in the last 1 minute
     pub category: Option<String>,
     pub game_id: Option<String>,
     pub title: Option<String>,
@@ -134,7 +135,9 @@ mod tests {
             stream_id: 1,
             collected_at: "2024-01-01T00:00:00Z".to_string(),
             viewer_count: Some(100),
+            chat_rate_1min: Some(5),
             category: Some("Just Chatting".to_string()),
+            game_id: Some("509658".to_string()),
             title: Some("Test Stream Title".to_string()),
             follower_count: Some(5000),
             twitch_user_id: Some("123456789".to_string()),

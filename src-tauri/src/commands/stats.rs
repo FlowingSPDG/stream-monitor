@@ -73,7 +73,7 @@ pub async fn get_stream_stats(
                 stream_id: row.get(1)?,
                 collected_at: row.get(2)?,
                 viewer_count: row.get(3)?,
-                // chat_rate_1min (index 4) is skipped - it's calculated dynamically in the query
+                chat_rate_1min: None, // Not selected in this query
                 category: row.get(5)?,
                 game_id: None,
                 title: row.get(6)?,
