@@ -1456,6 +1456,10 @@ pub fn detect_anomalies(
 
     let mut params: Vec<String> = Vec::new();
 
+    eprintln!("[Anomaly Debug] Input channel_id: {:?}", channel_id);
+    eprintln!("[Anomaly Debug] Input start_time: {:?}", start_time);
+    eprintln!("[Anomaly Debug] Input end_time: {:?}", end_time);
+
     if let Some(ch_id) = channel_id {
         match conn.query_row(
             "SELECT channel_name FROM channels WHERE id = ?",
@@ -1466,6 +1470,7 @@ pub fn detect_anomalies(
                 eprintln!("[Anomaly Debug] Channel ID {} -> Channel Name: {}", ch_id, ch_name);
                 viewer_sql.push_str(" AND ss.channel_name = ?");
                 params.push(ch_name);
+                eprintln!("[Anomaly Debug] Added filter: ss.channel_name = {}", params.last().unwrap());
             }
             Err(e) => {
                 // Channel not found, return empty result
@@ -1503,10 +1508,22 @@ pub fn detect_anomalies(
 
     viewer_sql.push_str(" ORDER BY ss.collected_at");
 
+    eprintln!("[Anomaly Debug] Final SQL: {}", viewer_sql);
+    eprintln!("[Anomaly Debug] Params count: {}", params.len());
+    for (i, p) in params.iter().enumerate() {
+        eprintln!("[Anomaly Debug] Param[{}]: {}", i, p);
+    }
+
     let mut stmt = conn.prepare(&viewer_sql)?;
     let viewer_data: Vec<(String, i32)> =
         utils::query_map_with_params(&mut stmt, &params, |row| Ok((row.get(0)?, row.get(1)?)))?
             .collect::<Result<Vec<_>, _>>()?;
+
+    eprintln!("[Anomaly Debug] Query returned {} data points", viewer_data.len());
+    if !viewer_data.is_empty() {
+        eprintln!("[Anomaly Debug] First timestamp: {}", viewer_data[0].0);
+        eprintln!("[Anomaly Debug] Last timestamp: {}", viewer_data[viewer_data.len()-1].0);
+    }
 
     // Calculate statistics
     let viewer_values: Vec<f64> = viewer_data.iter().map(|(_, v)| *v as f64).collect();
