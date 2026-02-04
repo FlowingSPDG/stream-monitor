@@ -39,6 +39,7 @@ pub struct StreamStats {
     pub collected_at: String,
     pub viewer_count: Option<i32>,
     pub category: Option<String>,
+    pub game_id: Option<String>,
     pub title: Option<String>,
     pub follower_count: Option<i32>,
     pub twitch_user_id: Option<String>,
@@ -51,6 +52,7 @@ pub struct StreamData {
     pub stream_id: String, // Platform-specific stream ID
     pub title: Option<String>,
     pub category: Option<String>,
+    pub game_id: Option<String>, // Platform-specific game/category ID
     pub thumbnail_url: Option<String>,
     pub started_at: String,
     pub viewer_count: Option<i32>,

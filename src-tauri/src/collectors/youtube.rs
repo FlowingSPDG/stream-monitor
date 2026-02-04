@@ -78,6 +78,7 @@ impl Collector for YouTubeCollector {
                 stream_id,
                 title: video.snippet.as_ref().and_then(|s| s.title.clone()),
                 category: video.snippet.as_ref().and_then(|s| s.category_id.clone()),
+                game_id: video.snippet.as_ref().and_then(|s| s.category_id.clone()),
                 thumbnail_url,
                 started_at,
                 viewer_count,

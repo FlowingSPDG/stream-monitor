@@ -586,5 +586,38 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
     )?;
     eprintln!("[Migration] Composite index created successfully");
 
+    // game_categoriesテーブルを作成（カテゴリIDキャッシュ用）
+    eprintln!("[Migration] Creating game_categories table if not exists");
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS game_categories (
+            game_id TEXT PRIMARY KEY,
+            game_name TEXT NOT NULL,
+            box_art_url TEXT,
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        "#,
+        [],
+    )?;
+    eprintln!("[Migration] game_categories table created");
+
+    // stream_statsテーブルにgame_idフィールドを追加
+    let mut stream_stats_has_game_id = conn.prepare(
+        "SELECT COUNT(*) FROM pragma_table_info('stream_stats') WHERE name = 'game_id'",
+    )?;
+    let stream_stats_has_game_id_count: i64 =
+        stream_stats_has_game_id.query_row([], |row| row.get(0))?;
+
+    if stream_stats_has_game_id_count == 0 {
+        eprintln!("[Migration] Adding game_id column to stream_stats table");
+        conn.execute("ALTER TABLE stream_stats ADD COLUMN game_id TEXT", [])?;
+        // インデックスを作成（検索パフォーマンス向上のため）
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stream_stats_game_id ON stream_stats(game_id)",
+            [],
+        )?;
+        eprintln!("[Migration] Created index on stream_stats.game_id");
+    }
+
     Ok(())
 }
