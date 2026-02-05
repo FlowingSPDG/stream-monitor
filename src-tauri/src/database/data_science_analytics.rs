@@ -2038,11 +2038,20 @@ fn deduplicate_consecutive_values_with_metadata(
 /// Parse timestamp to get Unix timestamp in seconds
 fn parse_timestamp(ts: &str) -> i64 {
     use chrono::prelude::*;
+
+    // Try parsing as RFC3339 first (with timezone)
     if let Ok(dt) = DateTime::parse_from_rfc3339(ts) {
-        dt.timestamp()
-    } else {
-        0
+        return dt.timestamp();
     }
+
+    // Try parsing as local time without timezone (new format)
+    if let Ok(naive) = NaiveDateTime::parse_from_str(ts, "%Y-%m-%dT%H:%M:%S") {
+        if let Some(local) = Local.from_local_datetime(&naive).single() {
+            return local.timestamp();
+        }
+    }
+
+    0
 }
 
 fn create_empty_anomaly_result() -> AnomalyResult {
