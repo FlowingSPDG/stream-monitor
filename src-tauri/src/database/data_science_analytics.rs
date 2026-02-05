@@ -1462,10 +1462,10 @@ pub fn detect_anomalies(
     let mut viewer_sql = String::from(
         r#"
         SELECT
-            strftime(ss.collected_at::TIMESTAMP, '%Y-%m-%dT%H:%M:%S.000Z') as timestamp,
+            strftime(ss.collected_at::TIMESTAMP, '%Y-%m-%dT%H:%M:%S') as timestamp,
             ss.viewer_count,
             ss.stream_id,
-            strftime(s.started_at::TIMESTAMP, '%Y-%m-%dT%H:%M:%S.000Z') as stream_started_at
+            strftime(s.started_at::TIMESTAMP, '%Y-%m-%dT%H:%M:%S') as stream_started_at
         FROM stream_stats ss
         LEFT JOIN streams s ON ss.stream_id = s.id
         WHERE ss.viewer_count IS NOT NULL
@@ -1701,7 +1701,7 @@ pub fn detect_anomalies(
     let mut chat_sql = String::from(
         r#"
         SELECT
-            strftime(ss.collected_at::TIMESTAMP, '%Y-%m-%dT%H:%M:%S.000Z') as timestamp,
+            strftime(ss.collected_at::TIMESTAMP, '%Y-%m-%dT%H:%M:%S') as timestamp,
             COALESCE((
                 SELECT COUNT(*)
                 FROM chat_messages cm
@@ -1710,7 +1710,7 @@ pub fn detect_anomalies(
                   AND cm.timestamp < ss.collected_at
             ), 0) AS chat_rate_1min,
             ss.stream_id,
-            strftime(s.started_at::TIMESTAMP, '%Y-%m-%dT%H:%M:%S.000Z') as stream_started_at
+            strftime(s.started_at::TIMESTAMP, '%Y-%m-%dT%H:%M:%S') as stream_started_at
         FROM stream_stats ss
         LEFT JOIN streams s ON ss.stream_id = s.id
         WHERE ss.collected_at IS NOT NULL

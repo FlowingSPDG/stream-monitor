@@ -1,6 +1,6 @@
 use crate::database::{models::ChatMessage, utils, DatabaseManager};
 use crate::error::ResultExt;
-use chrono::{DateTime, Duration};
+use chrono::{Duration, Local, NaiveDateTime, TimeZone};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
@@ -98,9 +98,13 @@ pub async fn get_chat_messages_around_timestamp(
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
-    // Parse the timestamp and calculate the time window
-    let anomaly_time = DateTime::parse_from_rfc3339(&query.timestamp)
+    // Parse the timestamp as local time (no timezone info)
+    let naive_time = NaiveDateTime::parse_from_str(&query.timestamp, "%Y-%m-%dT%H:%M:%S")
         .map_err(|e| format!("Invalid timestamp format: {}", e))?;
+
+    // Convert to local timezone
+    let anomaly_time = Local.from_local_datetime(&naive_time).single()
+        .ok_or_else(|| "Ambiguous local time".to_string())?;
 
     let window_minutes = query.window_minutes.unwrap_or(2);
     let window_duration = Duration::minutes(window_minutes as i64);
