@@ -1,5 +1,5 @@
 /// レポジトリパターンの共通基盤
-/// 
+///
 /// クエリフィルターとヘルパートレイトを定義
 use serde::{Deserialize, Serialize};
 
@@ -20,7 +20,7 @@ pub struct ChannelFilter {
 /// クエリフィルタートレイト
 pub trait QueryFilter {
     /// WHERE句とパラメータを生成
-    /// 
+    ///
     /// # Returns
     /// (WHERE句の文字列, パラメータのVec)
     fn to_where_clause(&self, table_alias: &str) -> (String, Vec<String>);

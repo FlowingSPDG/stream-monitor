@@ -529,15 +529,24 @@ export interface ChatterScoreResult {
 export interface Anomaly {
   timestamp: string;
   value: number;
-  zScore: number;
+  previousValue: number;
+  changeAmount: number;
+  changeRate: number;
+  modifiedZScore: number;
   isPositive: boolean;
+  minutesFromStreamStart?: number;
+  streamPhase: string;
 }
 
 export interface TrendStats {
   viewerTrend: string;
+  viewerMedian: number;
+  viewerMad: number;
   viewerAvg: number;
   viewerStdDev: number;
   chatTrend: string;
+  chatMedian: number;
+  chatMad: number;
   chatAvg: number;
   chatStdDev: number;
 }

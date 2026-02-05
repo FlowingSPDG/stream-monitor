@@ -1,4 +1,4 @@
-use crate::database::{query_helpers::chat_query, repositories::ChatMessageRepository, utils};
+use crate::database::repositories::ChatMessageRepository;
 use duckdb::Connection;
 use serde::{Deserialize, Serialize};
 
@@ -69,7 +69,7 @@ pub struct ChatterBehaviorStats {
 }
 
 /// エンゲージメント統計を時系列で取得（5分間隔）
-/// 
+///
 /// ChatMessageRepositoryとStreamStatsRepositoryを使用します。
 pub fn get_chat_engagement_timeline(
     conn: &Connection,
@@ -80,7 +80,7 @@ pub fn get_chat_engagement_timeline(
     interval_minutes: i32,
 ) -> Result<Vec<ChatEngagementStats>, duckdb::Error> {
     use crate::database::repositories::StreamStatsRepository;
-    
+
     // チャットバケットを取得
     let chat_buckets = ChatMessageRepository::count_by_time_bucket(
         conn,
@@ -99,7 +99,10 @@ pub fn get_chat_engagement_timeline(
             |row| row.get::<_, String>(0),
         ) {
             Ok(name) => {
-                eprintln!("[Engagement Debug] Channel ID {} -> Channel Name: {}", ch_id, name);
+                eprintln!(
+                    "[Engagement Debug] Channel ID {} -> Channel Name: {}",
+                    ch_id, name
+                );
                 Some(name)
             }
             Err(e) => {
@@ -153,7 +156,7 @@ pub fn get_chat_engagement_timeline(
 }
 
 /// チャットスパイク（急増ポイント）を検出
-/// 
+///
 /// ChatMessageRepositoryを使用してスパイクを検出します。
 pub fn detect_chat_spikes(
     conn: &Connection,
@@ -165,12 +168,7 @@ pub fn detect_chat_spikes(
 ) -> Result<Vec<ChatSpike>, duckdb::Error> {
     // 5分間隔でバケット取得
     let buckets = ChatMessageRepository::count_by_time_bucket(
-        conn,
-        5,
-        channel_id,
-        stream_id,
-        start_time,
-        end_time,
+        conn, 5, channel_id, stream_id, start_time, end_time,
     )?;
 
     // 前のバケットとの比較でスパイクを検出
@@ -200,7 +198,7 @@ pub fn detect_chat_spikes(
 }
 
 /// ユーザーセグメント別統計を取得
-/// 
+///
 /// ChatMessageRepositoryを使用して、badges直接SELECT問題を回避します。
 pub fn get_user_segment_stats(
     conn: &Connection,
@@ -211,16 +209,12 @@ pub fn get_user_segment_stats(
 ) -> Result<Vec<UserSegmentStats>, duckdb::Error> {
     // ChatMessageRepositoryを使用して安全にセグメント別統計を取得
     let segment_stats = ChatMessageRepository::count_by_user_segment(
-        conn,
-        channel_id,
-        stream_id,
-        start_time,
-        end_time,
+        conn, channel_id, stream_id, start_time, end_time,
     )?;
 
     // パーセンテージと平均メッセージ数を計算
     let total_messages: i64 = segment_stats.iter().map(|s| s.message_count).sum();
-    
+
     let results: Vec<UserSegmentStats> = segment_stats
         .into_iter()
         .map(|s| {
@@ -229,13 +223,13 @@ pub fn get_user_segment_stats(
             } else {
                 0.0
             };
-            
+
             let percentage = if total_messages > 0 {
                 (s.message_count as f64 / total_messages as f64) * 100.0
             } else {
                 0.0
             };
-            
+
             UserSegmentStats {
                 segment: s.segment,
                 message_count: s.message_count,
@@ -250,7 +244,7 @@ pub fn get_user_segment_stats(
 }
 
 /// 上位チャッターを取得
-/// 
+///
 /// ChatMessageRepositoryを使用して上位チャッターを取得します。
 pub fn get_top_chatters(
     conn: &Connection,
@@ -261,12 +255,7 @@ pub fn get_top_chatters(
     limit: i32,
 ) -> Result<Vec<TopChatter>, duckdb::Error> {
     let chatters = ChatMessageRepository::get_top_chatters(
-        conn,
-        channel_id,
-        stream_id,
-        start_time,
-        end_time,
-        limit,
+        conn, channel_id, stream_id, start_time, end_time, limit,
     )?;
 
     // ChatterWithBadgesからTopChatterに変換
@@ -302,15 +291,15 @@ pub fn get_time_pattern_stats(
 
     Ok(results
         .into_iter()
-        .map(|(hour, day_of_week, avg_chat_rate, avg_engagement, total_messages)| {
-            TimePatternStats {
+        .map(
+            |(hour, day_of_week, avg_chat_rate, avg_engagement, total_messages)| TimePatternStats {
                 hour,
                 day_of_week,
                 avg_chat_rate,
                 avg_engagement,
                 total_messages,
-            }
-        })
+            },
+        )
         .collect())
 }
 

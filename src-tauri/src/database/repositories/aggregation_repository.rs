@@ -1,8 +1,7 @@
 /// AggregationRepository - 複雑な統計集計用レポジトリ
-/// 
+///
 /// MW（Minutes Watched）計算、配信者別/ゲーム別統計など、
 /// 複数のCTEを使用する複雑な集計クエリを提供します。
-
 use crate::database::analytics::{BroadcasterAnalytics, GameAnalytics};
 use crate::database::query_helpers::stream_stats_query;
 use crate::database::utils;
@@ -12,7 +11,7 @@ pub struct AggregationRepository;
 
 impl AggregationRepository {
     /// 配信者別統計を計算
-    /// 
+    ///
     /// MW、Hours Broadcasted、Peak CCU、チャット統計などを一度に計算します。
     pub fn calculate_broadcaster_analytics(
         conn: &Connection,
@@ -355,20 +354,21 @@ impl AggregationRepository {
         );
 
         let mut stmt = conn.prepare(&sql)?;
-        let results: Vec<GameAnalytics> = utils::query_map_with_params(&mut stmt, &params, |row| {
-            Ok(GameAnalytics {
-                category: row.get::<_, String>(0)?,
-                minutes_watched: row.get::<_, i64>(1)?,
-                hours_broadcasted: row.get::<_, f64>(2)?,
-                average_ccu: row.get::<_, f64>(3)?,
-                unique_broadcasters: row.get::<_, i32>(4)?,
-                top_channel: row.get::<_, Option<String>>(5)?,
-                total_chat_messages: row.get::<_, i64>(6)?,
-                avg_chat_rate: row.get::<_, f64>(7)?,
-                engagement_rate: row.get::<_, f64>(8)?,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
+        let results: Vec<GameAnalytics> =
+            utils::query_map_with_params(&mut stmt, &params, |row| {
+                Ok(GameAnalytics {
+                    category: row.get::<_, String>(0)?,
+                    minutes_watched: row.get::<_, i64>(1)?,
+                    hours_broadcasted: row.get::<_, f64>(2)?,
+                    average_ccu: row.get::<_, f64>(3)?,
+                    unique_broadcasters: row.get::<_, i32>(4)?,
+                    top_channel: row.get::<_, Option<String>>(5)?,
+                    total_chat_messages: row.get::<_, i64>(6)?,
+                    avg_chat_rate: row.get::<_, f64>(7)?,
+                    engagement_rate: row.get::<_, f64>(8)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(results)
     }

@@ -1,7 +1,4 @@
-use crate::database::{
-    query_helpers::chat_query, repositories::ChatMessageRepository,
-    repositories::StreamStatsRepository, utils,
-};
+use crate::database::{query_helpers::chat_query, utils};
 use duckdb::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -202,17 +199,26 @@ pub struct AnomalyResult {
 pub struct Anomaly {
     pub timestamp: String,
     pub value: f64,
-    pub z_score: f64,
-    pub is_positive: bool, // true = spike, false = drop
+    pub previous_value: f64,
+    pub change_amount: f64,
+    pub change_rate: f64,
+    pub modified_z_score: f64,
+    pub is_positive: bool,                      // true = spike, false = drop
+    pub minutes_from_stream_start: Option<i64>, // Minutes since stream started
+    pub stream_phase: String,                   // "early", "mid", "late", "unknown"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrendStats {
     pub viewer_trend: String, // "increasing", "decreasing", "stable"
+    pub viewer_median: f64,
+    pub viewer_mad: f64, // Median Absolute Deviation
     pub viewer_avg: f64,
     pub viewer_std_dev: f64,
     pub chat_trend: String,
+    pub chat_median: f64,
+    pub chat_mad: f64,
     pub chat_avg: f64,
     pub chat_std_dev: f64,
 }
@@ -375,7 +381,10 @@ pub fn get_word_frequency_analysis(
     let mut params: Vec<String> = Vec::new();
 
     if let Some(ch_id) = channel_id {
-        sql.push_str(&format!(" AND (cm.channel_id = {} OR s.channel_id = {})", ch_id, ch_id));
+        sql.push_str(&format!(
+            " AND (cm.channel_id = {} OR s.channel_id = {})",
+            ch_id, ch_id
+        ));
     }
 
     if let Some(st_id) = stream_id {
@@ -484,7 +493,10 @@ pub fn get_emote_analysis(
     let mut params: Vec<String> = Vec::new();
 
     if let Some(ch_id) = channel_id {
-        sql.push_str(&format!(" AND (cm.channel_id = {} OR s.channel_id = {})", ch_id, ch_id));
+        sql.push_str(&format!(
+            " AND (cm.channel_id = {} OR s.channel_id = {})",
+            ch_id, ch_id
+        ));
     }
 
     if let Some(st_id) = stream_id {
@@ -621,7 +633,10 @@ pub fn get_message_length_stats(
     let mut params: Vec<String> = Vec::new();
 
     if let Some(ch_id) = channel_id {
-        sql.push_str(&format!(" AND (cm.channel_id = {} OR s.channel_id = {})", ch_id, ch_id));
+        sql.push_str(&format!(
+            " AND (cm.channel_id = {} OR s.channel_id = {})",
+            ch_id, ch_id
+        ));
     }
 
     if let Some(st_id) = stream_id {
@@ -780,13 +795,19 @@ pub fn get_viewer_chat_correlation(
             |row| row.get::<_, String>(0),
         ) {
             Ok(ch_name) => {
-                eprintln!("[Correlation Debug] Channel ID {} -> Channel Name: {}", ch_id, ch_name);
+                eprintln!(
+                    "[Correlation Debug] Channel ID {} -> Channel Name: {}",
+                    ch_id, ch_name
+                );
                 sql.push_str(" AND ss.channel_name = ?");
                 params.push(ch_name);
             }
             Err(e) => {
                 // Channel not found, return empty result
-                eprintln!("[Correlation Debug] Channel ID {} not found: {:?}", ch_id, e);
+                eprintln!(
+                    "[Correlation Debug] Channel ID {} not found: {:?}",
+                    ch_id, e
+                );
                 return Ok(CorrelationResult {
                     pearson_coefficient: 0.0,
                     interpretation: "No data available".to_string(),
@@ -827,7 +848,10 @@ pub fn get_viewer_chat_correlation(
     );
 
     if let Some(ch_id) = channel_id {
-        sql.push_str(&format!(" AND (cm.channel_id = {} OR s.channel_id = {})", ch_id, ch_id));
+        sql.push_str(&format!(
+            " AND (cm.channel_id = {} OR s.channel_id = {})",
+            ch_id, ch_id
+        ));
     }
 
     if let Some(st_id) = stream_id {
@@ -1011,7 +1035,10 @@ fn calculate_hourly_correlation(
     );
 
     if let Some(ch_id) = channel_id {
-        sql.push_str(&format!(" AND (cm.channel_id = {} OR s.channel_id = {})", ch_id, ch_id));
+        sql.push_str(&format!(
+            " AND (cm.channel_id = {} OR s.channel_id = {})",
+            ch_id, ch_id
+        ));
     }
 
     if let Some(st_id) = stream_id {
@@ -1254,7 +1281,7 @@ pub fn get_chatter_activity_scores(
         "#,
         chat_query::badges_select("chat_messages")
     );
-    
+
     sql.push_str(
         r#"
         chatter_stats AS (
@@ -1272,7 +1299,10 @@ pub fn get_chatter_activity_scores(
     let mut params: Vec<String> = Vec::new();
 
     if let Some(ch_id) = channel_id {
-        sql.push_str(&format!(" AND (cm.channel_id = {} OR s.channel_id = {})", ch_id, ch_id));
+        sql.push_str(&format!(
+            " AND (cm.channel_id = {} OR s.channel_id = {})",
+            ch_id, ch_id
+        ));
     }
 
     if let Some(st_id) = stream_id {
@@ -1414,7 +1444,11 @@ pub fn get_chatter_activity_scores(
     })
 }
 
-/// Phase 4: Detect anomalies
+/// Phase 4: Detect anomalies using Modified Z-Score (MAD-based)
+/// This method is:
+/// - Statistically robust (not affected by outliers)
+/// - Scale-independent (works for both small and large streams)
+/// - Correlated with trend detection (uses same statistical base)
 pub fn detect_anomalies(
     conn: &Connection,
     channel_id: Option<i64>,
@@ -1423,24 +1457,24 @@ pub fn detect_anomalies(
     end_time: Option<&str>,
     z_threshold: f64,
 ) -> Result<AnomalyResult, duckdb::Error> {
-    // Get viewer data
+    // Get viewer data with stream information
     let mut viewer_sql = String::from(
         r#"
         SELECT
-            strftime(collected_at::TIMESTAMP, '%Y-%m-%dT%H:%M:%S.000Z') as timestamp,
-            viewer_count
+            strftime(ss.collected_at::TIMESTAMP, '%Y-%m-%dT%H:%M:%S.000Z') as timestamp,
+            ss.viewer_count,
+            ss.stream_id,
+            strftime(s.started_at::TIMESTAMP, '%Y-%m-%dT%H:%M:%S.000Z') as stream_started_at
         FROM stream_stats ss
-        WHERE viewer_count IS NOT NULL
-          AND collected_at IS NOT NULL
-          AND collected_at > TIMESTAMP '1971-01-01'
+        LEFT JOIN streams s ON ss.stream_id = s.id
+        WHERE ss.viewer_count IS NOT NULL
+          AND ss.collected_at IS NOT NULL
+          AND ss.collected_at > TIMESTAMP '1971-01-01'
+          AND ss.viewer_count > 0
         "#,
     );
 
     let mut params: Vec<String> = Vec::new();
-
-    eprintln!("[Anomaly Debug] Input channel_id: {:?}", channel_id);
-    eprintln!("[Anomaly Debug] Input start_time: {:?}", start_time);
-    eprintln!("[Anomaly Debug] Input end_time: {:?}", end_time);
 
     if let Some(ch_id) = channel_id {
         match conn.query_row(
@@ -1449,26 +1483,11 @@ pub fn detect_anomalies(
             |row| row.get::<_, String>(0),
         ) {
             Ok(ch_name) => {
-                eprintln!("[Anomaly Debug] Channel ID {} -> Channel Name: {}", ch_id, ch_name);
                 viewer_sql.push_str(" AND ss.channel_name = ?");
                 params.push(ch_name);
-                eprintln!("[Anomaly Debug] Added filter: ss.channel_name = {}", params.last().unwrap());
             }
-            Err(e) => {
-                // Channel not found, return empty result
-                eprintln!("[Anomaly Debug] Channel ID {} not found: {:?}", ch_id, e);
-                return Ok(AnomalyResult {
-                    viewer_anomalies: vec![],
-                    chat_anomalies: vec![],
-                    trend_stats: TrendStats {
-                        viewer_trend: "stable".to_string(),
-                        chat_trend: "stable".to_string(),
-                        viewer_avg: 0.0,
-                        viewer_std_dev: 0.0,
-                        chat_avg: 0.0,
-                        chat_std_dev: 0.0,
-                    },
-                });
+            Err(_) => {
+                return Ok(create_empty_anomaly_result());
             }
         }
     }
@@ -1490,83 +1509,324 @@ pub fn detect_anomalies(
 
     viewer_sql.push_str(" ORDER BY ss.collected_at");
 
-    eprintln!("[Anomaly Debug] Final SQL: {}", viewer_sql);
-    eprintln!("[Anomaly Debug] Params count: {}", params.len());
-    for (i, p) in params.iter().enumerate() {
-        eprintln!("[Anomaly Debug] Param[{}]: {}", i, p);
-    }
-
     let mut stmt = conn.prepare(&viewer_sql)?;
-    let viewer_data: Vec<(String, i32)> =
-        utils::query_map_with_params(&mut stmt, &params, |row| Ok((row.get(0)?, row.get(1)?)))?
-            .collect::<Result<Vec<_>, _>>()?;
+    let viewer_data_raw: Vec<(String, i32, Option<i64>, Option<String>)> =
+        utils::query_map_with_params(&mut stmt, &params, |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2).ok(), row.get(3).ok()))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
 
-    eprintln!("[Anomaly Debug] Query returned {} data points", viewer_data.len());
-    if !viewer_data.is_empty() {
-        eprintln!("[Anomaly Debug] First timestamp: {}", viewer_data[0].0);
-        eprintln!("[Anomaly Debug] Last timestamp: {}", viewer_data[viewer_data.len()-1].0);
+    if viewer_data_raw.len() < 10 {
+        return Ok(create_empty_anomaly_result());
     }
 
-    // Calculate statistics
-    let viewer_values: Vec<f64> = viewer_data.iter().map(|(_, v)| *v as f64).collect();
-    let viewer_avg = viewer_values.iter().sum::<f64>() / viewer_values.len() as f64;
+    // Remove consecutive duplicates (Twitch viewer count updates in intervals, not real-time)
+    // This prevents normal platform updates from being flagged as anomalies
+    let viewer_data = deduplicate_consecutive_values_with_metadata(&viewer_data_raw);
+
+    if viewer_data.len() < 5 {
+        return Ok(create_empty_anomaly_result());
+    }
+
+    let n = viewer_data.len();
+    let viewer_values: Vec<f64> = viewer_data.iter().map(|(_, v, _, _)| *v as f64).collect();
+
+    // Calculate robust statistics (median and MAD)
+    let (viewer_median, viewer_mad) = calculate_median_and_mad(&viewer_values);
+
+    // Also calculate mean and std dev for reference
+    let viewer_avg = viewer_values.iter().sum::<f64>() / n as f64;
     let viewer_variance = viewer_values
         .iter()
         .map(|v| (v - viewer_avg).powi(2))
         .sum::<f64>()
-        / viewer_values.len() as f64;
+        / n as f64;
     let viewer_std_dev = viewer_variance.sqrt();
 
-    // Detect viewer anomalies
-    let viewer_anomalies: Vec<Anomaly> = viewer_data
-        .iter()
-        .filter_map(|(ts, v)| {
-            let z_score = (*v as f64 - viewer_avg) / viewer_std_dev;
-            if z_score.abs() >= z_threshold {
-                Some(Anomaly {
-                    timestamp: ts.clone(),
-                    value: *v as f64,
-                    z_score,
-                    is_positive: z_score > 0.0,
-                })
-            } else {
-                None
+    // Calculate stream duration and position for each point
+    // Group data by stream_id to calculate total stream duration
+    let mut stream_info: HashMap<i64, (i64, i64)> = HashMap::new(); // stream_id -> (start_ts, end_ts)
+
+    for (ts, _, stream_id_opt, started_at_opt) in &viewer_data {
+        if let (Some(stream_id), Some(started_at)) = (stream_id_opt, started_at_opt) {
+            let current_ts = parse_timestamp(ts);
+            let start_ts = parse_timestamp(started_at);
+
+            if current_ts > 0 && start_ts > 0 {
+                stream_info
+                    .entry(*stream_id)
+                    .and_modify(|(start, end)| {
+                        *start = (*start).min(start_ts);
+                        *end = (*end).max(current_ts);
+                    })
+                    .or_insert((start_ts, current_ts));
             }
+        }
+    }
+
+    // Calculate position in stream for each point
+    let stream_positions: Vec<Option<(i64, f64)>> = viewer_data
+        .iter()
+        .map(|(ts, _, stream_id_opt, started_at_opt)| {
+            if let (Some(stream_id), Some(started_at)) = (stream_id_opt, started_at_opt) {
+                let current_ts = parse_timestamp(ts);
+                let start_ts = parse_timestamp(started_at);
+
+                if current_ts > 0 && start_ts > 0 {
+                    if let Some((stream_start, stream_end)) = stream_info.get(stream_id) {
+                        let minutes_from_start = (current_ts - start_ts) / 60;
+                        let total_duration = (stream_end - stream_start) / 60;
+
+                        if total_duration > 0 {
+                            let position_ratio = (current_ts - stream_start) as f64
+                                / (stream_end - stream_start) as f64;
+                            return Some((minutes_from_start, position_ratio));
+                        }
+                    }
+                }
+            }
+            None
         })
         .collect();
 
-    // Simplified chat anomalies (would do similar for chat data)
+    // Detect anomalies using Modified Z-Score with time interval consideration
+    let mut viewer_anomalies: Vec<Anomaly> = Vec::new();
+
+    // Skip first and last point to avoid stream start/end effects
+    for i in 1..(n - 1) {
+        let current = viewer_values[i];
+        let previous = viewer_values[i - 1];
+
+        // Skip only the stream start period (first 10 minutes or 10%)
+        // Stream end periods are NOT skipped because:
+        // 1. viewer_count > 0 filter already excludes actual stream end (0 viewers)
+        // 2. Spikes/drops during late stream are valuable insights (e.g., surprise announcements, viewer retention)
+        if let Some((minutes_from_start, position_ratio)) = stream_positions[i] {
+            // Skip first 10 minutes (absolute) OR first 10% (relative)
+            // Using OR ensures we skip early period regardless of stream length
+            let is_early = minutes_from_start < 10 || position_ratio < 0.10;
+
+            if is_early {
+                eprintln!(
+                    "[Anomaly Debug] Skipping early stream point: {} ({}min, {:.1}%)",
+                    viewer_data[i].0,
+                    minutes_from_start,
+                    position_ratio * 100.0
+                );
+                continue; // Skip stream start period only
+            }
+        } else {
+            // If we can't determine stream position, skip this point to be safe
+            eprintln!(
+                "[Anomaly Debug] Skipping point with unknown stream position: {}",
+                viewer_data[i].0
+            );
+            continue;
+        }
+
+        // Parse timestamps to calculate time interval
+        let current_ts = parse_timestamp(&viewer_data[i].0);
+        let previous_ts = parse_timestamp(&viewer_data[i - 1].0);
+        let time_interval_minutes = ((current_ts - previous_ts) as f64 / 60.0).max(1.0);
+
+        // Calculate Modified Z-Score for current value
+        // Modified Z-Score = 0.6745 * (value - median) / MAD
+        // Values with |Modified Z-Score| > threshold are considered outliers
+        let modified_z = calculate_modified_z_score(current, viewer_median, viewer_mad);
+
+        // Detect anomaly if Modified Z-Score exceeds threshold
+        // Additional filter: for rapid changes (< 5 min interval), require higher Z-score
+        // This accounts for Twitch's delayed update behavior
+        let effective_threshold = if time_interval_minutes < 5.0 {
+            z_threshold * 1.5 // Stricter threshold for rapid changes
+        } else {
+            z_threshold
+        };
+
+        if modified_z.abs() >= effective_threshold {
+            let change_amount = current - previous;
+            let change_rate = if previous > 0.0 {
+                (change_amount / previous) * 100.0
+            } else {
+                0.0
+            };
+
+            // Determine stream phase based on relative position in stream
+            let (stream_phase, minutes_from_start) =
+                if let Some((mins, ratio)) = stream_positions[i] {
+                    let phase = if ratio < 0.33 {
+                        "early" // First 1/3 of stream
+                    } else if ratio < 0.67 {
+                        "mid" // Middle 1/3 of stream
+                    } else {
+                        "late" // Last 1/3 of stream
+                    };
+                    (phase.to_string(), Some(mins))
+                } else {
+                    ("unknown".to_string(), None)
+                };
+
+            viewer_anomalies.push(Anomaly {
+                timestamp: viewer_data[i].0.clone(),
+                value: current,
+                previous_value: previous,
+                change_amount,
+                change_rate,
+                modified_z_score: modified_z,
+                is_positive: current > previous, // Spike if current > previous, drop otherwise
+                minutes_from_stream_start: minutes_from_start,
+                stream_phase,
+            });
+        }
+    }
+
+    // Sort by absolute Modified Z-Score (most significant first)
+    viewer_anomalies.sort_by(|a, b| {
+        b.modified_z_score
+            .abs()
+            .partial_cmp(&a.modified_z_score.abs())
+            .unwrap()
+    });
+
+    // Limit to top 50 most significant anomalies
+    viewer_anomalies.truncate(50);
+
+    // Chat anomalies (not implemented)
     let chat_anomalies = vec![];
 
-    // Determine trend
-    let viewer_trend = if viewer_values.len() > 10 {
-        let first_half: f64 = viewer_values[..viewer_values.len() / 2].iter().sum::<f64>()
-            / (viewer_values.len() / 2) as f64;
-        let second_half: f64 = viewer_values[viewer_values.len() / 2..].iter().sum::<f64>()
-            / (viewer_values.len() - viewer_values.len() / 2) as f64;
-
-        if second_half > first_half * 1.1 {
-            "increasing"
-        } else if second_half < first_half * 0.9 {
-            "decreasing"
-        } else {
-            "stable"
-        }
-    } else {
-        "insufficient data"
-    }
-    .to_string();
+    // Determine trend using MAD-based approach
+    let viewer_trend = calculate_trend(&viewer_values, viewer_median, viewer_mad);
 
     Ok(AnomalyResult {
         viewer_anomalies,
         chat_anomalies,
         trend_stats: TrendStats {
             viewer_trend,
+            viewer_median,
+            viewer_mad,
             viewer_avg,
             viewer_std_dev,
             chat_trend: "N/A".to_string(),
+            chat_median: 0.0,
+            chat_mad: 0.0,
             chat_avg: 0.0,
             chat_std_dev: 0.0,
         },
     })
+}
+
+/// Calculate median and MAD (Median Absolute Deviation)
+fn calculate_median_and_mad(values: &[f64]) -> (f64, f64) {
+    let mut sorted = values.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    let n = sorted.len();
+    let median = if n % 2 == 0 {
+        (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0
+    } else {
+        sorted[n / 2]
+    };
+
+    // Calculate MAD: median of absolute deviations from median
+    let mut abs_deviations: Vec<f64> = values.iter().map(|&v| (v - median).abs()).collect();
+    abs_deviations.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    let mad = if n % 2 == 0 {
+        (abs_deviations[n / 2 - 1] + abs_deviations[n / 2]) / 2.0
+    } else {
+        abs_deviations[n / 2]
+    };
+
+    // MAD can be 0 if data is very stable, use a minimum value
+    let mad = mad.max(1.0);
+
+    (median, mad)
+}
+
+/// Calculate Modified Z-Score
+/// Modified Z-Score = 0.6745 * (value - median) / MAD
+/// The constant 0.6745 is the 75th percentile of the standard normal distribution
+fn calculate_modified_z_score(value: f64, median: f64, mad: f64) -> f64 {
+    0.6745 * (value - median) / mad
+}
+
+/// Calculate trend based on MAD-normalized change
+fn calculate_trend(values: &[f64], _median: f64, mad: f64) -> String {
+    let n = values.len();
+    if n < 10 {
+        return "insufficient data".to_string();
+    }
+
+    // Calculate medians of first and second half
+    let first_half = &values[..n / 2];
+    let second_half = &values[n / 2..];
+
+    let (first_median, _) = calculate_median_and_mad(first_half);
+    let (second_median, _) = calculate_median_and_mad(second_half);
+
+    // Calculate change in terms of MAD
+    let change_in_mad = (second_median - first_median) / mad;
+
+    // Trend detection thresholds (in terms of MAD)
+    // > 1.5 MAD = significant increase
+    // < -1.5 MAD = significant decrease
+    if change_in_mad > 1.5 {
+        "increasing".to_string()
+    } else if change_in_mad < -1.5 {
+        "decreasing".to_string()
+    } else {
+        "stable".to_string()
+    }
+}
+
+/// Remove consecutive duplicate values with metadata
+/// Twitch viewer count updates every few minutes, not in real-time
+/// This function keeps only the points where the value actually changed
+fn deduplicate_consecutive_values_with_metadata(
+    data: &[(String, i32, Option<i64>, Option<String>)],
+) -> Vec<(String, i32, Option<i64>, Option<String>)> {
+    if data.is_empty() {
+        return vec![];
+    }
+
+    let mut result = Vec::new();
+    result.push(data[0].clone());
+
+    for i in 1..data.len() {
+        // Only keep if value changed from previous
+        if data[i].1 != data[i - 1].1 {
+            result.push(data[i].clone());
+        }
+    }
+
+    result
+}
+
+/// Parse timestamp to get Unix timestamp in seconds
+fn parse_timestamp(ts: &str) -> i64 {
+    use chrono::prelude::*;
+    if let Ok(dt) = DateTime::parse_from_rfc3339(ts) {
+        dt.timestamp()
+    } else {
+        0
+    }
+}
+
+fn create_empty_anomaly_result() -> AnomalyResult {
+    AnomalyResult {
+        viewer_anomalies: vec![],
+        chat_anomalies: vec![],
+        trend_stats: TrendStats {
+            viewer_trend: "no data".to_string(),
+            chat_trend: "N/A".to_string(),
+            viewer_median: 0.0,
+            viewer_mad: 0.0,
+            viewer_avg: 0.0,
+            viewer_std_dev: 0.0,
+            chat_median: 0.0,
+            chat_mad: 0.0,
+            chat_avg: 0.0,
+            chat_std_dev: 0.0,
+        },
+    }
 }

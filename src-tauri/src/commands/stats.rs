@@ -1,8 +1,6 @@
 use crate::database::{
-    models::StreamStats,
-    repositories::chat_message_repository::ChatMessageRepository,
-    utils,
-    DatabaseManager
+    models::StreamStats, repositories::chat_message_repository::ChatMessageRepository, utils,
+    DatabaseManager,
 };
 use crate::error::ResultExt;
 use serde::{Deserialize, Serialize};
@@ -104,6 +102,5 @@ pub async fn get_realtime_chat_rate(
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
-    ChatMessageRepository::get_realtime_chat_rate(&conn)
-        .map_err(|e| e.to_string())
+    ChatMessageRepository::get_realtime_chat_rate(&conn).map_err(|e| e.to_string())
 }

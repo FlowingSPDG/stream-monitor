@@ -1,7 +1,6 @@
 /// ChatMessageRepository - chat_messagesテーブル専用レポジトリ
-/// 
+///
 /// DuckDBのLIST型（badges）とTIMESTAMP型（timestamp）を安全に扱います。
-
 use crate::database::query_helpers::chat_query;
 use crate::database::utils;
 use duckdb::Connection;
@@ -41,7 +40,7 @@ pub struct ChatMessageRepository;
 
 impl ChatMessageRepository {
     /// 時間バケット別でチャット数を集計
-    /// 
+    ///
     /// # Arguments
     /// * `conn` - データベース接続
     /// * `interval_minutes` - バケット間隔（分）
@@ -73,7 +72,10 @@ impl ChatMessageRepository {
         let mut params: Vec<String> = Vec::new();
 
         if let Some(ch_id) = channel_id {
-            sql.push_str(&format!(" AND (cm.channel_id = {} OR s.channel_id = {})", ch_id, ch_id));
+            sql.push_str(&format!(
+                " AND (cm.channel_id = {} OR s.channel_id = {})",
+                ch_id, ch_id
+            ));
         }
 
         if let Some(st_id) = stream_id {
@@ -105,7 +107,7 @@ impl ChatMessageRepository {
     }
 
     /// ユーザーセグメント別でメッセージ数を集計
-    /// 
+    ///
     /// バッジ情報を使用してユーザーをセグメント分けします。
     /// badges直接参照問題を解決するため、list_contains()を使用します。
     pub fn count_by_user_segment(
@@ -131,7 +133,10 @@ impl ChatMessageRepository {
         let mut params: Vec<String> = Vec::new();
 
         if let Some(ch_id) = channel_id {
-            sql.push_str(&format!(" AND (cm.channel_id = {} OR s.channel_id = {})", ch_id, ch_id));
+            sql.push_str(&format!(
+                " AND (cm.channel_id = {} OR s.channel_id = {})",
+                ch_id, ch_id
+            ));
         }
 
         if let Some(st_id) = stream_id {
@@ -189,7 +194,7 @@ impl ChatMessageRepository {
     }
 
     /// 上位チャッターを取得
-    /// 
+    ///
     /// N+1クエリを避けるため、CTEでバッジを事前取得します。
     pub fn get_top_chatters(
         conn: &Connection,
@@ -251,7 +256,10 @@ impl ChatMessageRepository {
 
         // メインクエリのWHERE句
         if let Some(ch_id) = channel_id {
-            sql.push_str(&format!(" AND (cm.channel_id = {} OR s.channel_id = {})", ch_id, ch_id));
+            sql.push_str(&format!(
+                " AND (cm.channel_id = {} OR s.channel_id = {})",
+                ch_id, ch_id
+            ));
         }
 
         if let Some(st_id) = stream_id {
@@ -317,7 +325,7 @@ impl ChatMessageRepository {
             chat_query::badges_select("cm")
         );
 
-        let mut params = vec![user_name.to_string()];
+        let params = vec![user_name.to_string()];
 
         if let Some(ch_id) = channel_id {
             sql.push_str(&format!(" AND cm.channel_id = {}", ch_id));
@@ -359,7 +367,10 @@ impl ChatMessageRepository {
         let mut params: Vec<String> = Vec::new();
 
         if let Some(ch_id) = channel_id {
-            sql.push_str(&format!(" AND (cm.channel_id = {} OR s.channel_id = {})", ch_id, ch_id));
+            sql.push_str(&format!(
+                " AND (cm.channel_id = {} OR s.channel_id = {})",
+                ch_id, ch_id
+            ));
         }
 
         if let Some(st_id) = stream_id {
@@ -377,7 +388,8 @@ impl ChatMessageRepository {
         }
 
         let mut stmt = conn.prepare(&sql)?;
-        let mut rows = utils::query_map_with_params(&mut stmt, &params, |row| row.get::<_, i64>(0))?;
+        let mut rows =
+            utils::query_map_with_params(&mut stmt, &params, |row| row.get::<_, i64>(0))?;
 
         rows.next().unwrap_or(Ok(0))
     }
@@ -415,7 +427,10 @@ impl ChatMessageRepository {
         let mut params: Vec<String> = Vec::new();
 
         if let Some(ch_id) = channel_id {
-            sql.push_str(&format!(" AND (cm.channel_id = {} OR s.channel_id = {})", ch_id, ch_id));
+            sql.push_str(&format!(
+                " AND (cm.channel_id = {} OR s.channel_id = {})",
+                ch_id, ch_id
+            ));
         }
 
         if let Some(start) = start_time {
@@ -563,7 +578,10 @@ impl ChatMessageRepository {
         let mut params: Vec<String> = Vec::new();
 
         if let Some(ch_id) = channel_id {
-            sql.push_str(&format!(" AND (cm.channel_id = {} OR s.channel_id = {})", ch_id, ch_id));
+            sql.push_str(&format!(
+                " AND (cm.channel_id = {} OR s.channel_id = {})",
+                ch_id, ch_id
+            ));
         }
 
         if let Some(start) = start_time {

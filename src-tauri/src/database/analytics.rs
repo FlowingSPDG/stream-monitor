@@ -59,7 +59,7 @@ pub struct DailyStats {
 }
 
 /// 配信者別統計を取得
-/// 
+///
 /// AggregationRepositoryを使用して統計を計算します。
 pub fn get_broadcaster_analytics(
     conn: &Connection,
@@ -312,7 +312,7 @@ fn get_broadcaster_analytics_old(
 }
 
 /// ゲームタイトル別統計を取得
-/// 
+///
 /// AggregationRepositoryを使用して統計を計算します。
 pub fn get_game_analytics(
     conn: &Connection,
@@ -453,7 +453,7 @@ fn get_game_analytics_old(
 }
 
 /// カテゴリ一覧を取得（MinutesWatched降順）
-/// 
+///
 /// AggregationRepositoryを使用してカテゴリを取得します。
 pub fn list_categories(
     conn: &Connection,
@@ -522,7 +522,7 @@ fn list_categories_old(
 }
 
 /// データ可用性情報を取得
-/// 
+///
 /// StreamStatsRepositoryを使用してデータ可用性を取得します。
 pub fn get_data_availability(conn: &Connection) -> Result<DataAvailability, duckdb::Error> {
     let (first_record, last_record, total_days_with_data, total_records) =
@@ -537,7 +537,7 @@ pub fn get_data_availability(conn: &Connection) -> Result<DataAvailability, duck
 }
 
 /// ゲーム別日次統計を取得
-/// 
+///
 /// StreamStatsRepositoryを使用して日次統計を取得します。
 pub fn get_game_daily_stats(
     conn: &Connection,
@@ -625,7 +625,7 @@ fn get_game_daily_stats_old(
 }
 
 /// チャンネル別日次統計を取得
-/// 
+///
 /// StreamStatsRepositoryを使用して日次統計を取得します。
 pub fn get_channel_daily_stats(
     conn: &Connection,

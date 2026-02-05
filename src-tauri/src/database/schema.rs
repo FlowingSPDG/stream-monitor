@@ -602,9 +602,8 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
     eprintln!("[Migration] game_categories table created");
 
     // stream_statsテーブルにgame_idフィールドを追加
-    let mut stream_stats_has_game_id = conn.prepare(
-        "SELECT COUNT(*) FROM pragma_table_info('stream_stats') WHERE name = 'game_id'",
-    )?;
+    let mut stream_stats_has_game_id = conn
+        .prepare("SELECT COUNT(*) FROM pragma_table_info('stream_stats') WHERE name = 'game_id'")?;
     let stream_stats_has_game_id_count: i64 =
         stream_stats_has_game_id.query_row([], |row| row.get(0))?;
 

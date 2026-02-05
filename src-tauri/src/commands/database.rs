@@ -14,7 +14,7 @@ pub async fn get_database_info(app_handle: AppHandle) -> Result<DatabaseInfo, St
     let path = db_manager.get_db_path();
 
     // Get main DB file size
-    let mut total_size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    let mut total_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
 
     // Add WAL file size if it exists
     let wal_path = path.with_extension("db.wal");

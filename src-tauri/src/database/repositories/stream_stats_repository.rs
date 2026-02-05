@@ -1,8 +1,7 @@
 /// StreamStatsRepository - stream_statsテーブル専用レポジトリ
-/// 
+///
 /// DuckDBのTIMESTAMP型（collected_at）を安全に扱い、
 /// インターバル計算などの複雑なクエリを生成します。
-
 use crate::database::analytics::DailyStats;
 use crate::database::query_helpers::stream_stats_query;
 use crate::database::utils;
@@ -32,7 +31,7 @@ pub struct StreamStatsRepository;
 
 impl StreamStatsRepository {
     /// インターバル計算付きで統計を取得
-    /// 
+    ///
     /// LEAD関数を使用して次のレコードとの時間差を計算します。
     /// これはMW（Minutes Watched）計算の基礎となります。
     pub fn get_stats_with_interval(
@@ -101,7 +100,7 @@ impl StreamStatsRepository {
     }
 
     /// 時間バケット別で視聴者数を集計
-    /// 
+    ///
     /// 指定された間隔で視聴者数を平均化します。
     pub fn get_time_bucketed_viewers(
         conn: &Connection,
@@ -158,7 +157,7 @@ impl StreamStatsRepository {
     }
 
     /// チャンネル別日次統計を取得
-    /// 
+    ///
     /// streamsテーブルと結合して配信時間も計算します。
     pub fn get_channel_daily_stats(
         conn: &Connection,
@@ -350,6 +349,11 @@ impl StreamStatsRepository {
             .query_row("SELECT COUNT(*) FROM stream_stats", [], |row| row.get(0))
             .unwrap_or(0);
 
-        Ok((first_record, last_record, total_days_with_data, total_records))
+        Ok((
+            first_record,
+            last_record,
+            total_days_with_data,
+            total_records,
+        ))
     }
 }

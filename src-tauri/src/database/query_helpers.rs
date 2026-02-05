@@ -1,11 +1,11 @@
 /// DuckDB特殊型を扱うためのSQLフラグメント生成
-/// 
+///
 /// DuckDBのLIST型やTIMESTAMP型を直接SELECTすると、Rustのduckdbクレートで
 /// 型変換エラーが発生します。このモジュールは、それらの型を安全に扱うための
 /// SQLフラグメントを生成します。
 pub mod chat_query {
     /// badgesカラムのSELECT句（常にVARCHARにキャスト）
-    /// 
+    ///
     /// # Examples
     /// ```
     /// let sql = format!("SELECT {}", chat_query::badges_select("cm"));
@@ -14,9 +14,9 @@ pub mod chat_query {
     pub fn badges_select(table_alias: &str) -> String {
         format!("CAST({}.badges AS VARCHAR) as badges", table_alias)
     }
-    
+
     /// timestampカラムのSELECT句（常にVARCHARにキャスト）
-    /// 
+    ///
     /// # Examples
     /// ```
     /// let sql = format!("SELECT {}", chat_query::timestamp_select("cm"));
@@ -25,14 +25,14 @@ pub mod chat_query {
     pub fn timestamp_select(table_alias: &str) -> String {
         format!("CAST({}.timestamp AS VARCHAR) as timestamp", table_alias)
     }
-    
+
     /// chat_messagesの基本SELECT句（よく使うカラムセット）
-    /// 
+    ///
     /// DuckDB特殊型（badges, timestamp）を含む標準的なカラムセットを生成します。
-    /// 
+    ///
     /// # Examples
     /// ```
-    /// let sql = format!("SELECT {} FROM chat_messages cm", 
+    /// let sql = format!("SELECT {} FROM chat_messages cm",
     ///                   chat_query::standard_columns("cm"));
     /// ```
     pub fn standard_columns(table_alias: &str) -> String {
@@ -55,31 +55,34 @@ pub mod chat_query {
 }
 
 /// stream_stats テーブル用のクエリヘルパー
-/// 
+///
 /// DuckDBのTIMESTAMP型を安全に扱うためのSQLフラグメントを生成します。
 pub mod stream_stats_query {
     /// collected_atカラムのSELECT句（常にVARCHARにキャスト）
-    /// 
+    ///
     /// # Examples
     /// ```
     /// let sql = format!("SELECT {}", stream_stats_query::collected_at_select("ss"));
     /// // 生成されるSQL: "SELECT CAST(ss.collected_at AS VARCHAR) as collected_at"
     /// ```
     pub fn collected_at_select(table_alias: &str) -> String {
-        format!("CAST({}.collected_at AS VARCHAR) as collected_at", table_alias)
+        format!(
+            "CAST({}.collected_at AS VARCHAR) as collected_at",
+            table_alias
+        )
     }
-    
+
     /// インターバル計算のSQLフラグメント（LEAD関数使用）
-    /// 
+    ///
     /// 次のレコードとの時間差を分単位で計算します。
-    /// 
+    ///
     /// # Arguments
     /// * `table_alias` - テーブルエイリアス（例: "ss"）
     /// * `partition_by` - PARTITION BY句の内容（例: "stream_id"）
-    /// 
+    ///
     /// # Examples
     /// ```
-    /// let sql = format!("SELECT {}", 
+    /// let sql = format!("SELECT {}",
     ///     stream_stats_query::interval_calculation("ss", "ss.stream_id"));
     /// ```
     pub fn interval_calculation(table_alias: &str, partition_by: &str) -> String {
@@ -91,9 +94,9 @@ pub mod stream_stats_query {
             table_alias, partition_by, table_alias, table_alias
         )
     }
-    
+
     /// 標準的なインターバル計算（stream_idでパーティション、NULL時の代替パーティション付き）
-    /// 
+    ///
     /// stream_idがNULLの場合、channel_name + dateでパーティション分割します。
     pub fn interval_with_fallback(table_alias: &str) -> String {
         format!(
@@ -134,13 +137,13 @@ mod tests {
         assert!(sql.contains("CAST(cm.badges AS VARCHAR) as badges"));
         assert!(sql.contains("CAST(cm.timestamp AS VARCHAR) as timestamp"));
     }
-    
+
     #[test]
     fn test_collected_at_select() {
         let sql = stream_stats_query::collected_at_select("ss");
         assert_eq!(sql, "CAST(ss.collected_at AS VARCHAR) as collected_at");
     }
-    
+
     #[test]
     fn test_interval_calculation() {
         let sql = stream_stats_query::interval_calculation("ss", "ss.stream_id");

@@ -45,7 +45,10 @@ fn get_stream_stats_internal(
         );
         match channel_check {
             Ok((ch_id, stream_count)) => {
-                eprintln!("[Export Debug] Channel found: platform_id={}, streams={}", ch_id, stream_count);
+                eprintln!(
+                    "[Export Debug] Channel found: platform_id={}, streams={}",
+                    ch_id, stream_count
+                );
             }
             Err(e) => {
                 eprintln!("[Export Debug] Channel not found or error: {:?}", e);
@@ -157,7 +160,10 @@ pub async fn export_to_delimited(
         let viewer_count = stat.viewer_count.unwrap_or(0).to_string();
         let category = stat.category.as_deref().unwrap_or("");
         let title = stat.title.as_deref().unwrap_or("");
-        let chat_rate = stat.chat_rate_1min.map(|c| c.to_string()).unwrap_or_else(|| "0".to_string());
+        let chat_rate = stat
+            .chat_rate_1min
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "0".to_string());
 
         output.push_str(&format!(
             "{}{}{}{}{}{}{}{}{}{}{}\n",
