@@ -242,7 +242,7 @@ export default function GameDetailAnalytics({
                       {formatNumber(channel.minutes_watched)}
                     </td>
                     <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
-                      {channel.hours_broadcasted.toFixed(1)}
+                      {(channel.hours_broadcasted || 0).toFixed(1)}
                     </td>
                     <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
                       {formatNumber(channel.average_ccu)}

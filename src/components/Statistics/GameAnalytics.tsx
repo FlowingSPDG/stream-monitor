@@ -87,11 +87,11 @@ export default function GameAnalytics({
   };
 
   const formatHours = (hours: number): string => {
-    return hours.toFixed(1);
+    return (hours || 0).toFixed(1);
   };
 
   const formatDecimal = (num: number): string => {
-    return num.toFixed(2);
+    return (num || 0).toFixed(2);
   };
 
   // MinutesWatched チャート用データ（上位10件）
@@ -115,7 +115,7 @@ export default function GameAnalytics({
     .slice(0, 10)
     .map((item) => ({
       name: item.category,
-      value: parseFloat(item.hours_broadcasted.toFixed(1)),
+      value: parseFloat((item.hours_broadcasted || 0).toFixed(1)),
     }));
 
   // Unique Broadcasters チャート用データ（上位10件）
@@ -131,7 +131,7 @@ export default function GameAnalytics({
     .slice(0, 10)
     .map((item) => ({
       name: item.category,
-      value: parseFloat(item.avg_chat_rate.toFixed(2)),
+      value: parseFloat((item.avg_chat_rate || 0).toFixed(2)),
     }));
 
   // Engagement Rate チャート用データ（上位10件）
@@ -139,7 +139,7 @@ export default function GameAnalytics({
     .slice(0, 10)
     .map((item) => ({
       name: item.category,
-      value: parseFloat(item.engagement_rate.toFixed(2)),
+      value: parseFloat((item.engagement_rate || 0).toFixed(2)),
     }));
 
   return (

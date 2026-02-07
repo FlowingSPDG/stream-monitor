@@ -73,11 +73,11 @@ export default function TopChannelsAnalytics({
   };
 
   const formatHours = (hours: number): string => {
-    return hours.toFixed(1);
+    return (hours || 0).toFixed(1);
   };
 
   const formatDecimal = (num: number): string => {
-    return num.toFixed(2);
+    return (num || 0).toFixed(2);
   };
 
   // ランキングチャート用データ (元のソート順を使用)

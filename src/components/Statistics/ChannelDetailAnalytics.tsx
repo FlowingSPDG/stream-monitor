@@ -267,7 +267,7 @@ export default function ChannelDetailAnalytics({
                       {formatNumber(game.minutes_watched)}
                     </td>
                     <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
-                      {game.hours_broadcasted.toFixed(1)}
+                      {(game.hours_broadcasted || 0).toFixed(1)}
                     </td>
                     <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
                       {formatNumber(game.average_ccu)}
@@ -292,7 +292,7 @@ export default function ChannelDetailAnalytics({
           <div>
             <p className="text-gray-500 dark:text-gray-400">Hours Broadcasted</p>
             <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {channelStats.hours_broadcasted.toFixed(1)}
+              {(channelStats.hours_broadcasted || 0).toFixed(1)}
             </p>
           </div>
           <div>
@@ -310,7 +310,7 @@ export default function ChannelDetailAnalytics({
           <div>
             <p className="text-gray-500 dark:text-gray-400">Engagement Rate</p>
             <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {channelStats.engagement_rate.toFixed(2)}
+              {(channelStats.engagement_rate || 0).toFixed(2)}
             </p>
           </div>
         </div>

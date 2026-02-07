@@ -138,16 +138,16 @@ export default function BroadcasterAnalytics({
   };
 
   const formatHours = (hours: number): string => {
-    return hours.toFixed(1);
+    return (hours || 0).toFixed(1);
   };
 
   const formatPercent = (percent: number | null): string => {
     if (percent === null) return 'N/A';
-    return `${percent.toFixed(1)}%`;
+    return `${(percent || 0).toFixed(1)}%`;
   };
 
   const formatDecimal = (num: number): string => {
-    return num.toFixed(2);
+    return (num || 0).toFixed(2);
   };
 
   // MinutesWatched チャート用データ
@@ -165,7 +165,7 @@ export default function BroadcasterAnalytics({
   // Hours Broadcasted チャート用データ
   const hoursChartData = sortedItems.map((item) => ({
     name: item.channel_name,
-    value: parseFloat(item.hours_broadcasted.toFixed(1)),
+    value: parseFloat((item.hours_broadcasted || 0).toFixed(1)),
   }));
 
   // Peak CCU チャート用データ
@@ -183,13 +183,13 @@ export default function BroadcasterAnalytics({
   // Engagement Rate チャート用データ
   const engagementChartData = sortedItems.map((item) => ({
     name: item.channel_name,
-    value: parseFloat(item.engagement_rate.toFixed(2)),
+    value: parseFloat((item.engagement_rate || 0).toFixed(2)),
   }));
 
   // Average Chat Rate チャート用データ
   const chatRateChartData = sortedItems.map((item) => ({
     name: item.channel_name,
-    value: parseFloat(item.avg_chat_rate.toFixed(2)),
+    value: parseFloat((item.avg_chat_rate || 0).toFixed(2)),
   }));
 
   return (
