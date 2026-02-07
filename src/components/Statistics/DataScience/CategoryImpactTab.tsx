@@ -10,6 +10,18 @@ interface CategoryImpactTabProps {
 }
 
 const CategoryImpactTab = ({ channelId, startTime, endTime }: CategoryImpactTabProps) => {
+  const { data, isLoading } = useQuery({
+    queryKey: ['categoryImpact', channelId, startTime, endTime],
+    queryFn: () => {
+      return getCategoryChangeImpact({
+        channelId: channelId!,
+        startTime,
+        endTime,
+      });
+    },
+    enabled: !!channelId,
+  });
+
   // チャンネル選択チェック
   if (channelId === null) {
     return (
@@ -32,17 +44,6 @@ const CategoryImpactTab = ({ channelId, startTime, endTime }: CategoryImpactTabP
       </div>
     );
   }
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['categoryImpact', channelId, startTime, endTime],
-    queryFn: () => {
-      return getCategoryChangeImpact({
-        channelId,
-        startTime,
-        endTime,
-      });
-    },
-  });
 
   if (isLoading) {
     return (

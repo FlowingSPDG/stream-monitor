@@ -10,6 +10,16 @@ interface UserSegmentTabProps {
 }
 
 const UserSegmentTab = ({ channelId, startTime, endTime }: UserSegmentTabProps) => {
+  const { data: segmentData, isLoading } = useQuery({
+    queryKey: ['userSegmentStats', channelId, startTime, endTime],
+    queryFn: () => getUserSegmentStats({
+      channelId: channelId ?? undefined,
+      startTime,
+      endTime,
+    }),
+    enabled: !!channelId,
+  });
+
   // チャンネル選択チェック
   if (channelId === null) {
     return (
@@ -32,16 +42,6 @@ const UserSegmentTab = ({ channelId, startTime, endTime }: UserSegmentTabProps) 
       </div>
     );
   }
-
-  const { data: segmentData, isLoading } = useQuery({
-    queryKey: ['userSegmentStats', channelId, startTime, endTime],
-    queryFn: () => getUserSegmentStats({
-      channelId: channelId ?? undefined,
-      startTime,
-      endTime,
-    }),
-    enabled: !!channelId,
-  });
 
   if (isLoading) {
     return (

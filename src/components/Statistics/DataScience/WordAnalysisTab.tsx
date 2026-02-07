@@ -11,6 +11,43 @@ interface WordAnalysisTabProps {
 }
 
 const WordAnalysisTab = ({ channelId, startTime, endTime }: WordAnalysisTabProps) => {
+  // Word Frequency Query
+  const { data: wordData, isLoading: wordLoading } = useQuery({
+    queryKey: ['wordFrequency', channelId, startTime, endTime],
+    queryFn: () => getWordFrequencyAnalysis({
+      channelId: channelId!,
+      streamId: null,
+      startTime,
+      endTime,
+      limit: 50,
+    }),
+    enabled: !!channelId,
+  });
+
+  // Emote Analysis Query
+  const { data: emoteData, isLoading: emoteLoading } = useQuery({
+    queryKey: ['emoteAnalysis', channelId, startTime, endTime],
+    queryFn: () => getEmoteAnalysis({
+      channelId: channelId!,
+      streamId: null,
+      startTime,
+      endTime,
+    }),
+    enabled: !!channelId,
+  });
+
+  // Message Length Stats Query
+  const { data: lengthData, isLoading: lengthLoading } = useQuery({
+    queryKey: ['messageLengthStats', channelId, startTime, endTime],
+    queryFn: () => getMessageLengthStats({
+      channelId: channelId!,
+      streamId: null,
+      startTime,
+      endTime,
+    }),
+    enabled: !!channelId,
+  });
+
   // チャンネル選択チェック
   if (channelId === null) {
     return (
@@ -33,43 +70,6 @@ const WordAnalysisTab = ({ channelId, startTime, endTime }: WordAnalysisTabProps
       </div>
     );
   }
-
-  // Word Frequency Query
-  const { data: wordData, isLoading: wordLoading } = useQuery({
-    queryKey: ['wordFrequency', channelId, startTime, endTime],
-    queryFn: () => getWordFrequencyAnalysis({
-      channelId,
-      streamId: null,
-      startTime,
-      endTime,
-      limit: 50,
-    }),
-    enabled: !!channelId,
-  });
-
-  // Emote Analysis Query
-  const { data: emoteData, isLoading: emoteLoading } = useQuery({
-    queryKey: ['emoteAnalysis', channelId, startTime, endTime],
-    queryFn: () => getEmoteAnalysis({
-      channelId,
-      streamId: null,
-      startTime,
-      endTime,
-    }),
-    enabled: !!channelId,
-  });
-
-  // Message Length Stats Query
-  const { data: lengthData, isLoading: lengthLoading } = useQuery({
-    queryKey: ['messageLengthStats', channelId, startTime, endTime],
-    queryFn: () => getMessageLengthStats({
-      channelId,
-      streamId: null,
-      startTime,
-      endTime,
-    }),
-    enabled: !!channelId,
-  });
 
   if (wordLoading || emoteLoading || lengthLoading) {
     return (

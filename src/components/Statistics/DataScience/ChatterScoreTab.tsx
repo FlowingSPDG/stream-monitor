@@ -10,6 +10,18 @@ interface ChatterScoreTabProps {
 }
 
 const ChatterScoreTab = ({ channelId, startTime, endTime }: ChatterScoreTabProps) => {
+  const { data, isLoading } = useQuery({
+    queryKey: ['chatterActivityScores', channelId, startTime, endTime],
+    queryFn: () => getChatterActivityScores({
+      channelId: channelId!,
+      streamId: null,
+      startTime,
+      endTime,
+      limit: 50,
+    }),
+    enabled: !!channelId,
+  });
+
   // チャンネル選択チェック
   if (channelId === null) {
     return (
@@ -32,18 +44,6 @@ const ChatterScoreTab = ({ channelId, startTime, endTime }: ChatterScoreTabProps
       </div>
     );
   }
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['chatterActivityScores', channelId, startTime, endTime],
-    queryFn: () => getChatterActivityScores({
-      channelId,
-      streamId: null,
-      startTime,
-      endTime,
-      limit: 50,
-    }),
-    enabled: !!channelId,
-  });
 
   if (isLoading) {
     return (

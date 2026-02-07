@@ -11,6 +11,19 @@ interface TimePatternTabProps {
 }
 
 const TimePatternTab = ({ channelId, startTime, endTime }: TimePatternTabProps) => {
+  const [groupByDay, setGroupByDay] = useState(false);
+
+  const { data: patternData, isLoading } = useQuery({
+    queryKey: ['timePatternStats', channelId, startTime, endTime, groupByDay],
+    queryFn: () => getTimePatternStats({
+      channelId: channelId ?? undefined,
+      startTime,
+      endTime,
+      groupByDay,
+    }),
+    enabled: !!channelId,
+  });
+
   // チャンネル選択チェック
   if (channelId === null) {
     return (
@@ -33,19 +46,6 @@ const TimePatternTab = ({ channelId, startTime, endTime }: TimePatternTabProps) 
       </div>
     );
   }
-
-  const [groupByDay, setGroupByDay] = useState(false);
-
-  const { data: patternData, isLoading } = useQuery({
-    queryKey: ['timePatternStats', channelId, startTime, endTime, groupByDay],
-    queryFn: () => getTimePatternStats({
-      channelId: channelId ?? undefined,
-      startTime,
-      endTime,
-      groupByDay,
-    }),
-    enabled: !!channelId,
-  });
 
   if (isLoading) {
     return (

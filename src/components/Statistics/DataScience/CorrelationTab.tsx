@@ -11,6 +11,17 @@ interface CorrelationTabProps {
 }
 
 const CorrelationTab = ({ channelId, startTime, endTime }: CorrelationTabProps) => {
+  const { data, isLoading } = useQuery({
+    queryKey: ['viewerChatCorrelation', channelId, startTime, endTime],
+    queryFn: () => getViewerChatCorrelation({
+      channelId: channelId!,
+      streamId: null,
+      startTime,
+      endTime,
+    }),
+    enabled: !!channelId,
+  });
+
   // チャンネル選択チェック
   if (channelId === null) {
     return (
@@ -33,17 +44,6 @@ const CorrelationTab = ({ channelId, startTime, endTime }: CorrelationTabProps) 
       </div>
     );
   }
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['viewerChatCorrelation', channelId, startTime, endTime],
-    queryFn: () => getViewerChatCorrelation({
-      channelId,
-      streamId: null,
-      startTime,
-      endTime,
-    }),
-    enabled: !!channelId,
-  });
 
   if (isLoading) {
     return (

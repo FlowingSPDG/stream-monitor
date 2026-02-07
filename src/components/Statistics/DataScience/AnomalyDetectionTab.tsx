@@ -81,6 +81,18 @@ const AnomalyDetectionTab = ({ channelId, startTime, endTime }: AnomalyDetection
     setSelectedAnomaly(null);
   };
 
+  const { data, isLoading } = useQuery({
+    queryKey: ['anomalyDetection', channelId, startTime, endTime],
+    queryFn: () => detectAnomalies({
+      channelId: channelId!,
+      streamId: null,
+      startTime,
+      endTime,
+      zThreshold: 3.0, // 検出感度: 3.0 = 厳格（IQR multiplier 2.0）
+    }),
+    enabled: !!channelId,
+  });
+
   // チャンネル選択チェック
   if (channelId === null) {
     return (
@@ -103,18 +115,6 @@ const AnomalyDetectionTab = ({ channelId, startTime, endTime }: AnomalyDetection
       </div>
     );
   }
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['anomalyDetection', channelId, startTime, endTime],
-    queryFn: () => detectAnomalies({
-      channelId,
-      streamId: null,
-      startTime,
-      endTime,
-      zThreshold: 3.0, // 検出感度: 3.0 = 厳格（IQR multiplier 2.0）
-    }),
-    enabled: !!channelId,
-  });
 
   if (isLoading) {
     return (
