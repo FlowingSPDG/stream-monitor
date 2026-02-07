@@ -15,11 +15,12 @@ pub struct UpsertGameCategoryRequest {
 
 /// 全ゲームカテゴリを取得
 #[tauri::command]
-pub fn get_game_categories(
+pub async fn get_game_categories(
     db_manager: State<'_, DatabaseManager>,
 ) -> Result<Vec<GameCategory>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
     GameCategoryRepository::get_all_categories(&conn)
@@ -28,12 +29,13 @@ pub fn get_game_categories(
 
 /// IDでゲームカテゴリを取得
 #[tauri::command]
-pub fn get_game_category(
+pub async fn get_game_category(
     db_manager: State<'_, DatabaseManager>,
     game_id: String,
 ) -> Result<Option<GameCategory>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
     GameCategoryRepository::get_category_by_id(&conn, &game_id)
@@ -42,12 +44,13 @@ pub fn get_game_category(
 
 /// ゲームカテゴリを挿入または更新
 #[tauri::command]
-pub fn upsert_game_category(
+pub async fn upsert_game_category(
     db_manager: State<'_, DatabaseManager>,
     request: UpsertGameCategoryRequest,
 ) -> Result<(), String> {
     let conn = db_manager
         .get_connection()
+        .await
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
     GameCategoryRepository::upsert_category(
@@ -61,12 +64,13 @@ pub fn upsert_game_category(
 
 /// ゲームカテゴリを削除
 #[tauri::command]
-pub fn delete_game_category(
+pub async fn delete_game_category(
     db_manager: State<'_, DatabaseManager>,
     game_id: String,
 ) -> Result<(), String> {
     let conn = db_manager
         .get_connection()
+        .await
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
     GameCategoryRepository::delete_category(&conn, &game_id)
@@ -75,12 +79,13 @@ pub fn delete_game_category(
 
 /// ゲームカテゴリを検索
 #[tauri::command]
-pub fn search_game_categories(
+pub async fn search_game_categories(
     db_manager: State<'_, DatabaseManager>,
     query: String,
 ) -> Result<Vec<GameCategory>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
     GameCategoryRepository::search_categories(&conn, &query)

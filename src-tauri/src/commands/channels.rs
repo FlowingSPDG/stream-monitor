@@ -26,7 +26,7 @@ pub async fn add_channel(
     request: AddChannelRequest,
 ) -> Result<Channel, String> {
     let conn = db_manager
-        .get_connection()
+        .get_connection().await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -83,7 +83,7 @@ pub async fn remove_channel(
     }
 
     let conn = db_manager
-        .get_connection()
+        .get_connection().await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -105,7 +105,7 @@ pub async fn update_channel(
     enabled: Option<bool>,
 ) -> Result<Channel, String> {
     let conn = db_manager
-        .get_connection()
+        .get_connection().await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -177,17 +177,27 @@ pub async fn list_channels(
     app_handle: AppHandle,
     db_manager: State<'_, DatabaseManager>,
 ) -> Result<Vec<ChannelWithStats>, String> {
+    eprintln!("[list_channels] Command called");
+
     // DB接続とクエリをスコープ内で完了させる
     let channels: Vec<Channel> = {
+        eprintln!("[list_channels] Getting database connection...");
         let conn = db_manager
-            .get_connection()
+            .get_connection().await
             .db_context("get database connection")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                eprintln!("[list_channels] ERROR: Failed to get database connection: {}", e);
+                e.to_string()
+            })?;
 
+        eprintln!("[list_channels] Preparing SQL statement...");
         let mut stmt = conn
             .prepare("SELECT id, platform, channel_id, channel_name, enabled, poll_interval, is_auto_discovered, CAST(discovered_at AS VARCHAR) as discovered_at, twitch_user_id, CAST(created_at AS VARCHAR) as created_at, CAST(updated_at AS VARCHAR) as updated_at FROM channels ORDER BY created_at DESC")
             .db_context("prepare statement")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                eprintln!("[list_channels] ERROR: Failed to prepare statement: {}", e);
+                e.to_string()
+            })?;
 
         let channels: Result<Vec<Channel>, _> = stmt
             .query_map([], |row| {
@@ -214,14 +224,22 @@ pub async fn list_channels(
             .map_err(|e| e.to_string())?
             .collect();
 
-        channels
+        let result = channels
             .db_context("collect channels")
-            .map_err(|e| e.to_string())?
+            .map_err(|e| {
+                eprintln!("[list_channels] ERROR: Failed to collect channels: {}", e);
+                e.to_string()
+            })?;
+
+        eprintln!("[list_channels] Successfully fetched {} channels from DB", result.len());
+        result
     };
 
     // Twitch API情報を取得して統合
+    eprintln!("[list_channels] Enriching channels with Twitch info...");
     let channels_with_stats = enrich_channels_with_twitch_info(channels, &app_handle).await;
 
+    eprintln!("[list_channels] Returning {} channels with stats", channels_with_stats.len());
     Ok(channels_with_stats)
 }
 
@@ -236,11 +254,20 @@ async fn enrich_channels_with_twitch_info(
         .filter(|c| c.platform == crate::constants::database::PLATFORM_TWITCH)
         .collect();
 
-    // Twitch API クライアントを取得
+    // Twitch API クライアントを取得（タイムアウト付き）
     let twitch_collector = if let Some(poller) = app_handle.try_state::<Arc<Mutex<ChannelPoller>>>()
     {
-        let poller = poller.lock().await;
-        poller.get_twitch_collector().cloned()
+        // タイムアウトを設定してロックを取得（2秒）
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            poller.lock()
+        ).await {
+            Ok(poller) => poller.get_twitch_collector().cloned(),
+            Err(_) => {
+                eprintln!("[list_channels] Failed to acquire poller lock within timeout, returning channels without Twitch info");
+                None
+            }
+        }
     } else {
         None
     };
@@ -442,7 +469,7 @@ pub async fn toggle_channel(
     id: i64,
 ) -> Result<Channel, String> {
     let conn = db_manager
-        .get_connection()
+        .get_connection().await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 

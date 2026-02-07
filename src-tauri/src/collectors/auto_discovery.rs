@@ -262,7 +262,7 @@ impl AutoDiscoveryPoller {
             discovered_streams_info.push(stream_info);
 
             // stream_statsテーブルに統計データを記録
-            let conn = db_manager.get_connection()?;
+            let conn = db_manager.get_connection().await?;
             conn.execute(
                 r#"
                 INSERT INTO stream_stats (
@@ -311,37 +311,41 @@ impl AutoDiscoveryPoller {
         db_manager: &Arc<DatabaseManager>,
         app_handle: &AppHandle,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let conn = db_manager.get_connection()?;
+        // Fetch channels in a separate scope to ensure connection is dropped before any await
+        let channels: Vec<(i64, String)> = {
+            let conn = db_manager.get_connection().await?;
 
-        // 自動発見されたチャンネルで、最新の配信が終了しているものを取得
-        let mut stmt = conn.prepare(
-            r#"
-            SELECT c.id, c.channel_name
-            FROM channels c
-            WHERE c.is_auto_discovered = true
-            AND NOT EXISTS (
-                SELECT 1 FROM streams s
-                WHERE s.channel_id = c.id
-                AND s.ended_at IS NULL
-            )
-            AND EXISTS (
-                SELECT 1 FROM streams s
-                WHERE s.channel_id = c.id
-            )
-            "#,
-        )?;
+            // 自動発見されたチャンネルで、最新の配信が終了しているものを取得
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT c.id, c.channel_name
+                FROM channels c
+                WHERE c.is_auto_discovered = true
+                AND NOT EXISTS (
+                    SELECT 1 FROM streams s
+                    WHERE s.channel_id = c.id
+                    AND s.ended_at IS NULL
+                )
+                AND EXISTS (
+                    SELECT 1 FROM streams s
+                    WHERE s.channel_id = c.id
+                )
+                "#,
+            )?;
 
-        let channels: Vec<(i64, String)> = stmt
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-            .collect::<Result<Vec<_>, _>>()?;
+            let result: Vec<(i64, String)> = stmt
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<Result<Vec<_>, _>>()?;
 
-        drop(stmt);
-        drop(conn);
+            drop(stmt);
+            drop(conn);
+            result
+        };
 
         // クリーンアップ処理
         for (channel_id, channel_name) in channels {
             // データベースから削除（ポーリングは自動的に停止される）
-            let conn = db_manager.get_connection()?;
+            let conn = db_manager.get_connection().await?;
             conn.execute("DELETE FROM channels WHERE id = ?", [channel_id])?;
             drop(conn);
 

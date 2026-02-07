@@ -33,6 +33,7 @@ pub async fn get_chat_messages(
 
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -104,6 +105,7 @@ pub async fn get_chat_messages_around_timestamp(
 ) -> Result<Vec<ChatMessage>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 

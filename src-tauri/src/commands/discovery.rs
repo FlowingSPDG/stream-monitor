@@ -147,6 +147,7 @@ pub async fn get_discovered_streams(
     let registered_user_ids: HashSet<i64> = {
         let conn = db_manager
             .get_connection()
+            .await
             .db_context("get connection")
             .map_err(|e| e.to_string())?;
 
@@ -314,6 +315,7 @@ pub async fn promote_discovered_channel(
     let already_exists = {
         let conn = db_manager
             .get_connection()
+            .await
             .db_context("get connection")
             .map_err(|e| e.to_string())?;
 
@@ -333,6 +335,7 @@ pub async fn promote_discovered_channel(
         // 既に登録されている場合はis_auto_discoveredフラグを更新
         let conn = db_manager
             .get_connection()
+            .await
             .db_context("get connection")
             .map_err(|e| e.to_string())?;
 

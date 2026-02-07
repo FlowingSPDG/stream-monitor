@@ -12,8 +12,9 @@ pub mod writer;
 use crate::error::ResultExt;
 use duckdb::Connection;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tauri::{AppHandle, Manager};
+use tokio::sync::Mutex;
 
 /// 起動前のリカバリ処理（一時ファイルのクリーンアップ）
 fn cleanup_stale_files(db_path: &Path) {
@@ -132,11 +133,8 @@ impl DatabaseManager {
     }
 
     /// データベース接続を取得
-    pub fn get_connection(&self) -> Result<Connection, Box<dyn std::error::Error + Send + Sync>> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| format!("Database connection lock failed: {}", e))?;
+    pub async fn get_connection(&self) -> Result<Connection, Box<dyn std::error::Error + Send + Sync>> {
+        let conn = self.conn.lock().await;
         conn.try_clone()
             .db_context("clone connection")
             .map_err(|e| e.to_string().into())
@@ -149,13 +147,13 @@ impl DatabaseManager {
     }
 
     /// グレースフルシャットダウン - WALをフラッシュ
-    pub fn shutdown(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn shutdown(&self) -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("[DB Shutdown] Starting graceful shutdown...");
 
         let conn = self
             .conn
             .lock()
-            .map_err(|e| format!("Lock failed: {}", e))?;
+            .await;
 
         // WALチェックポイントを強制実行（全データをメインDBにフラッシュ）
         match conn.execute("CHECKPOINT", []) {
@@ -169,19 +167,19 @@ impl DatabaseManager {
 
     /// 定期的なチェックポイント（データ安全性向上）
     #[allow(dead_code)]
-    pub fn checkpoint(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let conn = self.get_connection()?;
+    pub async fn checkpoint(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let conn = self.get_connection().await?;
         conn.execute("CHECKPOINT", [])?;
         Ok(())
     }
 }
 
 // 後方互換性のための関数
-pub fn get_connection(
+pub async fn get_connection(
     app_handle: &AppHandle,
 ) -> Result<Connection, Box<dyn std::error::Error + Send + Sync>> {
     let db_manager: tauri::State<'_, DatabaseManager> = app_handle.state();
-    db_manager.get_connection()
+    db_manager.get_connection().await
 }
 
 #[cfg(test)]

@@ -132,7 +132,10 @@ fn start_existing_channels_polling(
     poller: &mut ChannelPoller,
     app_handle: &tauri::AppHandle,
 ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
-    let conn = db_manager.get_connection()?;
+    // get_connection is now async, so we need to block_on it
+    let conn = tokio::runtime::Handle::current().block_on(async {
+        db_manager.get_connection().await
+    })?;
 
     // Get all enabled channels
     let mut stmt = conn.prepare(
@@ -231,7 +234,9 @@ pub fn run() {
                 if let Err(e) = ctrlc::set_handler(move || {
                     eprintln!("[Signal] Received termination signal, performing cleanup...");
                     logger_for_signal.info("Received termination signal, performing cleanup...");
-                    if let Err(e) = db_manager_for_signal.shutdown() {
+                    if let Err(e) = tokio::runtime::Handle::current().block_on(async {
+                        db_manager_for_signal.shutdown().await
+                    }) {
                         eprintln!("[Signal] Cleanup failed: {}", e);
                         logger_for_signal.error(&format!("Cleanup failed: {}", e));
                     }
@@ -269,7 +274,10 @@ pub fn run() {
                     let db_manager: tauri::State<'_, DatabaseManager> = app_handle_for_init.state();
 
                     // まずデータベース接続を取得
-                    let conn = match db_manager.get_connection() {
+                    // get_connection is now async, so we need to block_on it
+                    let conn = match tokio::runtime::Handle::current().block_on(async {
+                        db_manager.get_connection().await
+                    }) {
                         Ok(conn) => conn,
                         Err(e) => {
                             logger_for_init.error(&format!("Database connection failed: {}", e));
@@ -314,7 +322,7 @@ pub fn run() {
                         // Device Code Flow uses only client_id (no client_secret required)
                         if let Some(client_id) = &settings.twitch.client_id {
                             // Twitch Collector 用の DB 接続を取得
-                            match db_manager.get_connection() {
+                            match db_manager.get_connection().await {
                                 Ok(twitch_conn) => {
                                     let db_conn = Arc::new(Mutex::new(twitch_conn));
                                     let collector = Arc::new(TwitchCollector::new_with_app(
@@ -340,7 +348,7 @@ pub fn run() {
                         // Initialize YouTube collector if credentials are available
                         if let (Some(client_id), Some(client_secret)) = (&settings.youtube.client_id, &settings.youtube.client_secret) {
                             // YouTubeCollector用に新しい接続を作成
-                            match db_manager.get_connection() {
+                            match db_manager.get_connection().await {
                                 Ok(yt_conn) => {
                                     let db_conn = Arc::new(Mutex::new(yt_conn));
                                     match YouTubeCollector::new(client_id.clone(), client_secret.clone(), "http://localhost:8081/callback".to_string(), Arc::clone(&db_conn)).await {
@@ -457,7 +465,9 @@ pub fn run() {
                             // グレースフルシャットダウン
                             if let Some(db_manager) = _app.try_state::<DatabaseManager>() {
                                 eprintln!("[App Exit] Performing graceful shutdown...");
-                                let _ = db_manager.shutdown();
+                                let _ = tokio::runtime::Handle::current().block_on(async {
+                                    db_manager.shutdown().await
+                                });
                             }
                             _app.exit(0);
                         }

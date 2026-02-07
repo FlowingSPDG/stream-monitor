@@ -22,6 +22,7 @@ pub async fn get_stream_stats(
 ) -> Result<Vec<StreamStats>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -99,6 +100,7 @@ pub async fn get_realtime_chat_rate(
 ) -> Result<i64, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 

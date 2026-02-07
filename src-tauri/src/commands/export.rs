@@ -127,6 +127,7 @@ pub async fn export_to_delimited(
 ) -> Result<String, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -201,6 +202,7 @@ pub async fn preview_export_data(
 ) -> Result<String, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 

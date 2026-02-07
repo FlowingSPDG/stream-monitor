@@ -11,6 +11,7 @@ pub async fn get_broadcaster_analytics(
 ) -> Result<Vec<analytics::BroadcasterAnalytics>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -33,6 +34,7 @@ pub async fn get_game_analytics(
 ) -> Result<Vec<analytics::GameAnalytics>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -54,6 +56,7 @@ pub async fn list_game_categories(
 ) -> Result<Vec<String>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")?;
 
     analytics::list_categories(&conn, start_time.as_deref(), end_time.as_deref())
@@ -67,6 +70,7 @@ pub async fn get_data_availability(
 ) -> Result<analytics::DataAvailability, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -84,6 +88,7 @@ pub async fn get_game_daily_stats(
 ) -> Result<Vec<analytics::DailyStats>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")?;
 
     analytics::get_game_daily_stats(&conn, &game_id, &start_time, &end_time)
@@ -100,6 +105,7 @@ pub async fn get_channel_daily_stats(
 ) -> Result<Vec<analytics::DailyStats>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -121,6 +127,7 @@ pub async fn get_chat_engagement_timeline(
 ) -> Result<Vec<chat_analytics::ChatEngagementStats>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -147,6 +154,7 @@ pub async fn detect_chat_spikes(
 ) -> Result<Vec<chat_analytics::ChatSpike>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -172,6 +180,7 @@ pub async fn get_user_segment_stats(
 ) -> Result<Vec<chat_analytics::UserSegmentStats>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -197,6 +206,7 @@ pub async fn get_top_chatters(
 ) -> Result<Vec<chat_analytics::TopChatter>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -222,6 +232,7 @@ pub async fn get_time_pattern_stats(
 ) -> Result<Vec<chat_analytics::TimePatternStats>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 
@@ -245,6 +256,7 @@ pub async fn get_chatter_behavior_stats(
 ) -> Result<chat_analytics::ChatterBehaviorStats, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .db_context("get database connection")
         .map_err(|e| e.to_string())?;
 

@@ -65,6 +65,7 @@ pub async fn get_channel_streams(
 ) -> Result<Vec<StreamInfo>, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .map_err(|e| format!("Database connection error: {}", e))?;
 
     get_channel_streams_internal(&conn, channel_id, limit, offset)
@@ -216,6 +217,7 @@ pub async fn get_stream_timeline(
 ) -> Result<StreamTimelineData, String> {
     let conn = db_manager
         .get_connection()
+        .await
         .map_err(|e| format!("Database connection error: {}", e))?;
 
     get_stream_timeline_internal(&conn, stream_id)

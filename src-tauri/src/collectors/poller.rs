@@ -198,7 +198,7 @@ impl ChannelPoller {
                 }
 
                 // チャンネル情報を再取得（更新されている可能性があるため）
-                let conn = match db_manager.get_connection() {
+                let conn = match db_manager.get_connection().await {
                     Ok(conn) => conn,
                     Err(e) => {
                         logger.error(&format!("Failed to get database connection: {}", e));
