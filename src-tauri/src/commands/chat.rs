@@ -29,6 +29,8 @@ pub async fn get_chat_messages(
     db_manager: State<'_, DatabaseManager>,
     query: ChatMessagesQuery,
 ) -> Result<Vec<ChatMessage>, String> {
+    eprintln!("[get_chat_messages] Received query: {:?}", query);
+
     let conn = db_manager
         .get_connection()
         .db_context("get database connection")
@@ -37,10 +39,10 @@ pub async fn get_chat_messages(
     let mut sql = String::from(
         r#"
         SELECT
-            cm.id, cm.channel_id, cm.stream_id, 
-            CAST(cm.timestamp AS VARCHAR) as timestamp, 
+            cm.id, cm.channel_id, cm.stream_id,
+            CAST(cm.timestamp AS VARCHAR) as timestamp,
             cm.platform,
-            cm.user_id, cm.user_name, cm.message, cm.message_type,
+            cm.user_id, cm.user_name, cm.display_name, cm.message, cm.message_type,
             CAST(cm.badges AS VARCHAR) as badges, cm.badge_info
         FROM chat_messages cm
         INNER JOIN streams s ON cm.stream_id = s.id
@@ -82,9 +84,16 @@ pub async fn get_chat_messages(
         params.push(offset.to_string());
     }
 
-    utils::query_chat_messages(&conn, &sql, &params)
+    eprintln!("[get_chat_messages] SQL: {}", sql);
+    eprintln!("[get_chat_messages] Params: {:?}", params);
+
+    let messages = utils::query_chat_messages(&conn, &sql, &params)
         .db_context("query chat messages")
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    eprintln!("[get_chat_messages] Found {} messages", messages.len());
+
+    Ok(messages)
 }
 
 #[tauri::command]
@@ -126,7 +135,7 @@ pub async fn get_chat_messages_around_timestamp(
             cm.id, cm.channel_id, cm.stream_id,
             CAST(cm.timestamp AS VARCHAR) as timestamp,
             cm.platform,
-            cm.user_id, cm.user_name, cm.message, cm.message_type,
+            cm.user_id, cm.user_name, cm.display_name, cm.message, cm.message_type,
             CAST(cm.badges AS VARCHAR) as badges, cm.badge_info
         FROM chat_messages cm
         WHERE cm.stream_id = ?
