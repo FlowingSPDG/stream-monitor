@@ -44,9 +44,9 @@ export default function GameAnalytics({
   );
 
   // チャンネルページを開く
-  const handleOpenChannel = async (channelName: string) => {
+  const handleOpenChannel = async (loginName: string) => {
     try {
-      await openUrl(`https://www.twitch.tv/${channelName}`);
+      await openUrl(`https://www.twitch.tv/${loginName}`);
     } catch (err) {
       console.error('Failed to open channel:', err);
     }
@@ -453,9 +453,9 @@ export default function GameAnalytics({
                     {formatDecimal(item.engagement_rate)}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-300">
-                    {item.top_channel ? (
+                    {item.top_channel && item.top_channel_login ? (
                       <button
-                        onClick={() => handleOpenChannel(item.top_channel!)}
+                        onClick={() => handleOpenChannel(item.top_channel_login!)}
                         className="text-blue-400 hover:text-blue-300 hover:underline transition-colors text-left"
                       >
                         {item.top_channel}

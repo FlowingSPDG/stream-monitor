@@ -151,6 +151,7 @@ export interface TableInfo {
 export interface BroadcasterAnalytics {
   channel_id: number;
   channel_name: string;
+  login_name: string;
   minutes_watched: number;
   hours_broadcasted: number;
   average_ccu: number;
@@ -172,6 +173,7 @@ export interface GameAnalytics {
   average_ccu: number;
   unique_broadcasters: number;
   top_channel: string | null;
+  top_channel_login: string | null;
   total_chat_messages: number;
   avg_chat_rate: number;
   engagement_rate: number;

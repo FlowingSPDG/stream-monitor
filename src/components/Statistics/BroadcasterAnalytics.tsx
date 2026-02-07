@@ -40,9 +40,9 @@ export default function BroadcasterAnalytics({
   );
 
   // チャンネルページを開く
-  const handleOpenChannel = async (channelName: string) => {
+  const handleOpenChannel = async (loginName: string) => {
     try {
-      await openUrl(`https://www.twitch.tv/${channelName}`);
+      await openUrl(`https://www.twitch.tv/${loginName}`);
     } catch (err) {
       console.error('Failed to open channel:', err);
     }
@@ -502,7 +502,7 @@ export default function BroadcasterAnalytics({
                 <tr key={item.channel_id} className="hover:bg-gray-700/30">
                   <td className="px-4 py-3 text-sm text-white font-medium">
                     <button
-                      onClick={() => handleOpenChannel(item.channel_name)}
+                      onClick={() => handleOpenChannel(item.login_name)}
                       className="text-blue-400 hover:text-blue-300 hover:underline transition-colors text-left"
                     >
                       {item.channel_name}

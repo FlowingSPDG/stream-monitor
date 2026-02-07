@@ -114,9 +114,10 @@ impl AggregationRepository {
                 FROM category_mw
                 WHERE rn = 1
             )
-            SELECT 
+            SELECT
                 COALESCE(c.id, 0) as channel_id,
-                cs.channel_name,
+                COALESCE(c.channel_name, cs.channel_name) as channel_name,
+                cs.channel_name as login_name,
                 cs.minutes_watched,
                 cs.hours_broadcasted,
                 cs.average_ccu,
@@ -139,16 +140,17 @@ impl AggregationRepository {
             Ok((
                 row.get::<_, i64>(0)?,             // channel_id
                 row.get::<_, String>(1)?,          // channel_name
-                row.get::<_, i64>(2)?,             // minutes_watched
-                row.get::<_, f64>(3)?,             // hours_broadcasted
-                row.get::<_, f64>(4)?,             // average_ccu
-                row.get::<_, i32>(5)?,             // peak_ccu
-                row.get::<_, i32>(6)?,             // stream_count
-                row.get::<_, i64>(7)?,             // total_chat_messages
-                row.get::<_, f64>(8)?,             // avg_chat_rate
-                row.get::<_, i32>(9)?,             // category_count
-                row.get::<_, Option<String>>(10)?, // main_title
-                row.get::<_, Option<i64>>(11)?,    // main_mw
+                row.get::<_, String>(2)?,          // login_name
+                row.get::<_, i64>(3)?,             // minutes_watched
+                row.get::<_, f64>(4)?,             // hours_broadcasted
+                row.get::<_, f64>(5)?,             // average_ccu
+                row.get::<_, i32>(6)?,             // peak_ccu
+                row.get::<_, i32>(7)?,             // stream_count
+                row.get::<_, i64>(8)?,             // total_chat_messages
+                row.get::<_, f64>(9)?,             // avg_chat_rate
+                row.get::<_, i32>(10)?,            // category_count
+                row.get::<_, Option<String>>(11)?, // main_title
+                row.get::<_, Option<i64>>(12)?,    // main_mw
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -196,6 +198,7 @@ impl AggregationRepository {
         for (
             ch_id,
             ch_name,
+            login_name,
             mw,
             hours,
             avg_ccu,
@@ -229,6 +232,7 @@ impl AggregationRepository {
             results.push(BroadcasterAnalytics {
                 channel_id: ch_id,
                 channel_name: ch_name,
+                login_name,
                 minutes_watched: mw,
                 hours_broadcasted: hours,
                 average_ccu: avg_ccu,
@@ -329,7 +333,7 @@ impl AggregationRepository {
             top_channels AS (
                 SELECT
                     game_id,
-                    channel_name as top_channel
+                    channel_name as top_channel_login
                 FROM channel_by_category
                 WHERE rn = 1
             )
@@ -340,7 +344,8 @@ impl AggregationRepository {
                 gs.hours_broadcasted,
                 gs.average_ccu,
                 gs.unique_broadcasters,
-                tc.top_channel,
+                COALESCE(c.channel_name, tc.top_channel_login) as top_channel,
+                tc.top_channel_login,
                 gs.total_chat_messages,
                 gs.avg_chat_rate,
                 CASE
@@ -350,6 +355,7 @@ impl AggregationRepository {
                 END as engagement_rate
             FROM game_stats gs
             LEFT JOIN top_channels tc ON gs.game_id = tc.game_id
+            LEFT JOIN channels c ON (tc.top_channel_login = c.channel_id AND c.platform = 'twitch')
             LEFT JOIN game_categories gc ON gs.game_id = gc.game_id
             ORDER BY gs.minutes_watched DESC
             "#,
@@ -366,9 +372,10 @@ impl AggregationRepository {
                     average_ccu: row.get::<_, f64>(4)?,
                     unique_broadcasters: row.get::<_, i32>(5)?,
                     top_channel: row.get::<_, Option<String>>(6)?,
-                    total_chat_messages: row.get::<_, i64>(7)?,
-                    avg_chat_rate: row.get::<_, f64>(8)?,
-                    engagement_rate: row.get::<_, f64>(9)?,
+                    top_channel_login: row.get::<_, Option<String>>(7)?,
+                    total_chat_messages: row.get::<_, i64>(8)?,
+                    avg_chat_rate: row.get::<_, f64>(9)?,
+                    engagement_rate: row.get::<_, f64>(10)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;

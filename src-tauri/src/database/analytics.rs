@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 pub struct BroadcasterAnalytics {
     pub channel_id: i64,
     pub channel_name: String,
+    pub login_name: String, // Twitch login name (小文字、URL用)
     pub minutes_watched: i64,
     pub hours_broadcasted: f64,
     pub average_ccu: f64,
@@ -36,6 +37,7 @@ pub struct GameAnalytics {
     pub average_ccu: f64,
     pub unique_broadcasters: i32,
     pub top_channel: Option<String>,
+    pub top_channel_login: Option<String>, // Twitch login name of top channel (URL用)
     pub total_chat_messages: i64,
     pub avg_chat_rate: f64,
     pub engagement_rate: f64,
@@ -294,7 +296,8 @@ fn get_broadcaster_analytics_old(
 
         results.push(BroadcasterAnalytics {
             channel_id: ch_id,
-            channel_name: ch_name,
+            channel_name: ch_name.clone(),
+            login_name: ch_name,
             minutes_watched: mw,
             hours_broadcasted: hours,
             average_ccu: avg_ccu,
@@ -437,6 +440,7 @@ fn get_game_analytics_old(
 
     let mut stmt = conn.prepare(&sql)?;
     let results: Vec<GameAnalytics> = utils::query_map_with_params(&mut stmt, &params, |row| {
+        let top_channel_login = row.get::<_, Option<String>>(5)?;
         Ok(GameAnalytics {
             game_id: None, // Old implementation doesn't have game_id
             category: row.get::<_, String>(0)?,
@@ -444,7 +448,8 @@ fn get_game_analytics_old(
             hours_broadcasted: row.get::<_, f64>(2)?,
             average_ccu: row.get::<_, f64>(3)?,
             unique_broadcasters: row.get::<_, i32>(4)?,
-            top_channel: row.get::<_, Option<String>>(5)?,
+            top_channel: top_channel_login.clone(),
+            top_channel_login,
             total_chat_messages: row.get::<_, i64>(6)?,
             avg_chat_rate: row.get::<_, f64>(7)?,
             engagement_rate: row.get::<_, f64>(8)?,
