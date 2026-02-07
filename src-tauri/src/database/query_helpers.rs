@@ -22,6 +22,7 @@ pub mod chat_query {
     /// let sql = format!("SELECT {}", chat_query::timestamp_select("cm"));
     /// // 生成されるSQL: "SELECT CAST(cm.timestamp AS VARCHAR) as timestamp"
     /// ```
+    #[allow(dead_code)]
     pub fn timestamp_select(table_alias: &str) -> String {
         format!("CAST({}.timestamp AS VARCHAR) as timestamp", table_alias)
     }
@@ -35,6 +36,7 @@ pub mod chat_query {
     /// let sql = format!("SELECT {} FROM chat_messages cm",
     ///                   chat_query::standard_columns("cm"));
     /// ```
+    #[allow(dead_code)]
     pub fn standard_columns(table_alias: &str) -> String {
         format!(
             "{}.id, {}.channel_id, {}.stream_id, {}, {}.platform, \
@@ -65,6 +67,7 @@ pub mod stream_stats_query {
     /// let sql = format!("SELECT {}", stream_stats_query::collected_at_select("ss"));
     /// // 生成されるSQL: "SELECT CAST(ss.collected_at AS VARCHAR) as collected_at"
     /// ```
+    #[allow(dead_code)]
     pub fn collected_at_select(table_alias: &str) -> String {
         format!(
             "CAST({}.collected_at AS VARCHAR) as collected_at",
@@ -85,6 +88,7 @@ pub mod stream_stats_query {
     /// let sql = format!("SELECT {}",
     ///     stream_stats_query::interval_calculation("ss", "ss.stream_id"));
     /// ```
+    #[allow(dead_code)]
     pub fn interval_calculation(table_alias: &str, partition_by: &str) -> String {
         format!(
             "EXTRACT(EPOCH FROM (\

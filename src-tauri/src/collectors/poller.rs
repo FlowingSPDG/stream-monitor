@@ -487,8 +487,7 @@ impl ChannelPoller {
         // ゲームカテゴリをgame_categoriesテーブルに自動保存（ID->名前解決用）
         if let (Some(game_id), Some(game_name)) = (&stream_data.game_id, &stream_data.category) {
             use crate::database::repositories::GameCategoryRepository;
-            if let Err(e) =
-                GameCategoryRepository::upsert_category(conn, game_id, game_name, None)
+            if let Err(e) = GameCategoryRepository::upsert_category(conn, game_id, game_name, None)
             {
                 eprintln!(
                     "[Poller] Warning: Failed to upsert game_category {}: {}",

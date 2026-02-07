@@ -1,4 +1,6 @@
-use crate::database::{models::GameCategory, repositories::GameCategoryRepository, DatabaseManager};
+use crate::database::{
+    models::GameCategory, repositories::GameCategoryRepository, DatabaseManager,
+};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -13,7 +15,9 @@ pub struct UpsertGameCategoryRequest {
 
 /// 全ゲームカテゴリを取得
 #[tauri::command]
-pub fn get_game_categories(db_manager: State<'_, DatabaseManager>) -> Result<Vec<GameCategory>, String> {
+pub fn get_game_categories(
+    db_manager: State<'_, DatabaseManager>,
+) -> Result<Vec<GameCategory>, String> {
     let conn = db_manager
         .get_connection()
         .map_err(|e| format!("Failed to get database connection: {}", e))?;

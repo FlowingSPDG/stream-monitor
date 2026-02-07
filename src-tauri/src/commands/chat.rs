@@ -103,7 +103,9 @@ pub async fn get_chat_messages_around_timestamp(
         .map_err(|e| format!("Invalid timestamp format: {}", e))?;
 
     // Convert to local timezone
-    let anomaly_time = Local.from_local_datetime(&naive_time).single()
+    let anomaly_time = Local
+        .from_local_datetime(&naive_time)
+        .single()
         .ok_or_else(|| "Ambiguous local time".to_string())?;
 
     let window_minutes = query.window_minutes.unwrap_or(2);
@@ -134,11 +136,7 @@ pub async fn get_chat_messages_around_timestamp(
         "#,
     );
 
-    let params = vec![
-        query.stream_id.to_string(),
-        start_time,
-        end_time,
-    ];
+    let params = vec![query.stream_id.to_string(), start_time, end_time];
 
     let messages = utils::query_chat_messages(&conn, &sql, &params)
         .db_context("query chat messages around timestamp")

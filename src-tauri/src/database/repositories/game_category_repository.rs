@@ -130,6 +130,7 @@ impl GameCategoryRepository {
     }
 
     /// カテゴリが存在するか確認
+    #[allow(dead_code)]
     pub fn exists(conn: &Connection, game_id: &str) -> Result<bool, duckdb::Error> {
         let count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM game_categories WHERE game_id = ?",

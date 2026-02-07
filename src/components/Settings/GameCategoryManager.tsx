@@ -1,12 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as gameCategoriesApi from '../../api/gameCategories';
-import type { GameCategory, UpsertGameCategoryRequest } from '../../types';
 
 export function GameCategoryManager() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [editingCategory, setEditingCategory] = useState<GameCategory | null>(null);
-  const [isAdding, setIsAdding] = useState(false);
   const queryClient = useQueryClient();
 
   // 全カテゴリ取得

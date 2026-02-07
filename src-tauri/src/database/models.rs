@@ -98,9 +98,9 @@ pub struct ChatMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GameCategory {
-    pub game_id: String,           // Twitch game ID（プライマリキー）
-    pub game_name: String,         // カテゴリ名（表示用、言語ごとに異なる可能性あり）
-    pub box_art_url: Option<String>, // ボックスアート画像URL
+    pub game_id: String,              // Twitch game ID（プライマリキー）
+    pub game_name: String,            // カテゴリ名（表示用、言語ごとに異なる可能性あり）
+    pub box_art_url: Option<String>,  // ボックスアート画像URL
     pub last_updated: Option<String>, // 最終更新日時
 }
 

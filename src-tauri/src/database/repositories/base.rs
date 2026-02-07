@@ -18,6 +18,7 @@ pub struct ChannelFilter {
 }
 
 /// クエリフィルタートレイト
+#[allow(dead_code)]
 pub trait QueryFilter {
     /// WHERE句とパラメータを生成
     ///
@@ -72,12 +73,14 @@ impl QueryFilter for ChannelFilter {
 
 /// stream_stats用の時間範囲フィルター（collected_atを使用）
 #[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
 pub struct StreamStatsTimeFilter {
     pub start_time: Option<String>,
     pub end_time: Option<String>,
 }
 
 impl StreamStatsTimeFilter {
+    #[allow(dead_code)]
     pub fn to_where_clause(&self, table_alias: &str) -> (String, Vec<String>) {
         let mut clauses = Vec::new();
         let mut params = Vec::new();

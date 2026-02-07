@@ -34,6 +34,7 @@ impl StreamStatsRepository {
     ///
     /// LEAD関数を使用して次のレコードとの時間差を計算します。
     /// これはMW（Minutes Watched）計算の基礎となります。
+    #[allow(dead_code)]
     pub fn get_stats_with_interval(
         conn: &Connection,
         channel_name: Option<&str>,

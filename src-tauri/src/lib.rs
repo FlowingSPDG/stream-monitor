@@ -46,11 +46,11 @@ use commands::{
         promote_discovered_channel, save_auto_discovery_settings, search_twitch_games,
         toggle_auto_discovery, DiscoveredStreamInfo,
     },
+    export::{export_to_delimited, preview_export_data},
     game_categories::{
         delete_game_category, get_game_categories, get_game_category, search_game_categories,
         upsert_game_category,
     },
-    export::{export_to_delimited, preview_export_data},
     logs::get_logs,
     oauth::{poll_twitch_device_token, start_twitch_device_auth},
     sql::{

@@ -28,15 +28,18 @@ pub struct UserSegmentStats {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatterWithBadges {
-    pub user_id: Option<String>,       // Twitch user_id（プライマリ識別子）
-    pub user_name: String,             // Twitchログイン名
-    pub display_name: Option<String>,  // Twitch表示名
+    pub user_id: Option<String>,      // Twitch user_id（プライマリ識別子）
+    pub user_name: String,            // Twitchログイン名
+    pub display_name: Option<String>, // Twitch表示名
     pub message_count: i64,
     pub badges: Vec<String>,
     pub first_seen: String,
     pub last_seen: String,
     pub stream_count: i64,
 }
+
+/// 時間パターン統計の戻り値型（hour, day_of_week, avg_messages, stddev_messages, total_count）
+pub type TimePatternStats = (i32, Option<i32>, f64, f64, i64);
 
 pub struct ChatMessageRepository;
 
@@ -316,6 +319,7 @@ impl ChatMessageRepository {
     }
 
     /// 指定ユーザーのバッジ情報を取得（user_idで検索）
+    #[allow(dead_code)]
     pub fn get_user_badges(
         conn: &Connection,
         user_id: &str,
@@ -354,6 +358,7 @@ impl ChatMessageRepository {
     }
 
     /// チャットメッセージ数をカウント
+    #[allow(dead_code)]
     pub fn count_messages(
         conn: &Connection,
         channel_id: Option<i64>,
@@ -406,7 +411,7 @@ impl ChatMessageRepository {
         start_time: Option<&str>,
         end_time: Option<&str>,
         group_by_day: bool,
-    ) -> Result<Vec<(i32, Option<i32>, f64, f64, i64)>, duckdb::Error> {
+    ) -> Result<Vec<TimePatternStats>, duckdb::Error> {
         let mut sql = String::from(
             r#"
             WITH hourly_messages AS (
