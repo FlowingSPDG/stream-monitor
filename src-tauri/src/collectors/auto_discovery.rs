@@ -162,6 +162,16 @@ impl AutoDiscoveryPoller {
                     }
                 }
 
+                // 初回ポーリング完了マーク（成功・失敗・0件すべての場合で設定）
+                {
+                    let cache: tauri::State<'_, Arc<crate::DiscoveredStreamsCache>> =
+                        app_handle.state();
+                    if !cache.initialized.load(Ordering::SeqCst) {
+                        cache.initialized.store(true, Ordering::SeqCst);
+                        eprintln!("[AutoDiscovery] First poll cycle completed, cache initialized");
+                    }
+                }
+
                 // 配信終了したチャンネルをクリーンアップ
                 if let Err(e) = Self::cleanup_offline_channels(&db_manager, &app_handle).await {
                     eprintln!("[AutoDiscovery] Error cleaning up offline channels: {}", e);
@@ -331,12 +341,6 @@ impl AutoDiscoveryPoller {
         let mut streams_lock = cache.streams.lock().await;
         *streams_lock = discovered_streams_info;
         drop(streams_lock);
-
-        // 初回完了マーク
-        if !cache.initialized.load(Ordering::SeqCst) {
-            cache.initialized.store(true, Ordering::SeqCst);
-            eprintln!("[AutoDiscovery] First discovery cycle completed, cache initialized");
-        }
 
         // フロントエンドにイベントを発行（キャッシュ無効化のトリガー）
         let _ = app_handle.emit("discovered-streams-updated", ());
