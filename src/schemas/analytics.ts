@@ -10,8 +10,8 @@ export const BroadcasterAnalyticsSchema = z.object({
   minutes_watched: z.number(),
   hours_broadcasted: z.number(),
   average_ccu: z.number(),
-  main_played_title: z.string().nullable(),
-  main_title_mw_percent: z.number().nullable(),
+  main_played_title: z.string(),
+  main_title_mw_percent: z.number(),
   peak_ccu: z.number(),
   stream_count: z.number(),
   total_chat_messages: z.number(),
@@ -25,13 +25,14 @@ export const BroadcasterAnalyticsSchema = z.object({
  * Game analytics schema
  */
 export const GameAnalyticsSchema = z.object({
+  game_id: z.string(),
   category: z.string(),
   minutes_watched: z.number(),
   hours_broadcasted: z.number(),
   average_ccu: z.number(),
   unique_broadcasters: z.number(),
-  top_channel: z.string().nullable(),
-  top_channel_login: z.string().nullable(),
+  top_channel: z.string(),
+  top_channel_login: z.string(),
   total_chat_messages: z.number(),
   avg_chat_rate: z.number(),
   engagement_rate: z.number(),

@@ -14,21 +14,21 @@ export const SqlQueryResultSchema = z.object({
  * SQL template schema
  */
 export const SqlTemplateSchema = z.object({
-  id: z.number().optional(),
+  id: z.number(),
   name: z.string(),
-  description: z.string().optional(),
+  description: z.string(),
   query: z.string(),
-  created_at: z.string().optional(),
-  updated_at: z.string().optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
 });
 
 /**
  * Save template request schema
  */
 export const SaveTemplateRequestSchema = z.object({
-  id: z.number().optional(),
+  id: z.number(), // 0 = 新規作成
   name: z.string(),
-  description: z.string().optional(),
+  description: z.string(),
   query: z.string(),
 });
 

@@ -319,6 +319,7 @@ const ComparisonSelector: React.FC<ComparisonSelectorProps> = ({
                       title: stream.streamTitle,
                       category: '',
                       started_at: stream.startedAt,
+                      ended_at: '',
                       peak_viewers: 0,
                       avg_viewers: 0,
                       duration_minutes: 0,
@@ -326,6 +327,7 @@ const ComparisonSelector: React.FC<ComparisonSelectorProps> = ({
                       follower_gain: 0,
                       total_chat_messages: 0,
                       engagement_rate: 0,
+                      last_collected_at: '',
                     })
                   }
                   className="ml-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"

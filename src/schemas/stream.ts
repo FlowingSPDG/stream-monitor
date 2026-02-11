@@ -47,7 +47,7 @@ export const StreamInfoSchema = z.object({
   title: z.string(),
   category: z.string(),
   started_at: z.string(),
-  ended_at: z.string().optional(),
+  ended_at: z.string(),
   peak_viewers: z.number(),
   avg_viewers: z.number(),
   duration_minutes: z.number(),
@@ -55,7 +55,7 @@ export const StreamInfoSchema = z.object({
   follower_gain: z.number(),
   total_chat_messages: z.number(),
   engagement_rate: z.number(),
-  last_collected_at: z.string().optional(),
+  last_collected_at: z.string(),
 });
 
 /**
@@ -63,11 +63,11 @@ export const StreamInfoSchema = z.object({
  */
 export const TimelinePointSchema = z.object({
   collected_at: z.string(),
-  viewer_count: z.number().optional(),
+  viewer_count: z.number(),
   chat_rate_1min: z.number(),
-  category: z.string().optional(),
-  title: z.string().optional(),
-  follower_count: z.number().optional(),
+  category: z.string(),
+  title: z.string(),
+  follower_count: z.number(),
 });
 
 /**
@@ -75,7 +75,7 @@ export const TimelinePointSchema = z.object({
  */
 export const CategoryChangeSchema = z.object({
   timestamp: z.string(),
-  from_category: z.string().optional(),
+  from_category: z.string(),
   to_category: z.string(),
 });
 
@@ -84,7 +84,7 @@ export const CategoryChangeSchema = z.object({
  */
 export const TitleChangeSchema = z.object({
   timestamp: z.string(),
-  from_title: z.string().optional(),
+  from_title: z.string(),
   to_title: z.string(),
 });
 

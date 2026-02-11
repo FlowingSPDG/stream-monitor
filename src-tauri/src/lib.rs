@@ -447,7 +447,29 @@ pub fn run() {
                         *state = Some(discovery_poller);
 
                         // Emit backend-ready event to notify frontend that all collectors and pollers are initialized
-                        let _ = app_handle_for_init.emit("backend-ready", ());
+                        // #region agent log
+                        {
+                            use std::fs::OpenOptions;
+                            use std::io::Write;
+                            let log_path = r"c:\Users\Flowing\stream-monitor\.cursor\debug.log";
+                            let _ = OpenOptions::new().create(true).append(true).open(log_path).and_then(|mut f| {
+                                writeln!(f, r#"{{"location":"lib.rs:450","message":"Emitting backend-ready event","data":{{}},"timestamp":{},"hypothesisId":"A"}}"#, 
+                                    chrono::Local::now().timestamp_millis())
+                            });
+                        }
+                        // #endregion
+                        let _emit_result = app_handle_for_init.emit("backend-ready", ());
+                        // #region agent log
+                        {
+                            use std::fs::OpenOptions;
+                            use std::io::Write;
+                            let log_path = r"c:\Users\Flowing\stream-monitor\.cursor\debug.log";
+                            let _ = OpenOptions::new().create(true).append(true).open(log_path).and_then(|mut f| {
+                                writeln!(f, r#"{{"location":"lib.rs:464","message":"backend-ready event emit result","data":{{"success":{}}},"timestamp":{},"hypothesisId":"A"}}"#, 
+                                    _emit_result.is_ok(), chrono::Local::now().timestamp_millis())
+                            });
+                        }
+                        // #endregion
                         logger_for_init.info("Backend fully initialized, frontend queries are now safe");
                     });
 

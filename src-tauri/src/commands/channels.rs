@@ -278,8 +278,26 @@ pub async fn list_channels(
             .map_err(|e| e.to_string())?
     };
 
+    // #region agent log
+    let _ = OpenOptions::new().create(true).append(true).open(log_path).and_then(|mut f| {
+        let channel_info: Vec<_> = channels.iter().map(|c| {
+            format!(r#"{{"id":{},"channel_name":"{}","platform":"{}","enabled":{}}}"#, 
+                c.id.unwrap_or(-1), c.channel_name, c.platform, c.enabled)
+        }).collect();
+        writeln!(f, r#"{{"location":"channels.rs:286","message":"DB query returned channels","data":{{"count":{},"channels":[{}]}},"timestamp":{},"hypothesisId":"B"}}"#, 
+            channels.len(), channel_info.join(","), chrono::Local::now().timestamp_millis())
+    });
+    // #endregion
+
     // Twitch API情報を取得して統合
     let channels_with_stats = enrich_channels_with_twitch_info(channels, &app_handle).await;
+
+    // #region agent log
+    let _ = OpenOptions::new().create(true).append(true).open(log_path).and_then(|mut f| {
+        writeln!(f, r#"{{"location":"channels.rs:295","message":"enrich_channels_with_twitch_info completed","data":{{"count":{}}},"timestamp":{},"hypothesisId":"E"}}"#, 
+            channels_with_stats.len(), chrono::Local::now().timestamp_millis())
+    });
+    // #endregion
 
     Ok(channels_with_stats)
 }
@@ -300,8 +318,12 @@ async fn enrich_channels_with_twitch_info(
     {
         // 15秒のタイムアウトでロック取得を試みる（初期化完了まで待つ）
         match tokio::time::timeout(std::time::Duration::from_secs(15), poller.lock()).await {
-            Ok(poller) => poller.get_twitch_collector().cloned(),
-            Err(_) => None,
+            Ok(poller) => {
+                poller.get_twitch_collector().cloned()
+            },
+            Err(_) => {
+                None
+            }
         }
     } else {
         None

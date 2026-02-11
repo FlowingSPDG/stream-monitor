@@ -616,9 +616,6 @@ pub async fn execute_sql(
             execution_time
         );
 
-        // #region agent log
-        eprintln!("[AGENT_LOG] {{\"location\":\"sql.rs:619\",\"message\":\"SELECT query result construction\",\"data\":{{\"affected_rows\":0,\"columns_len\":{},\"rows_len\":{}}},\"timestamp\":{},\"hypothesisId\":\"NEW_A\"}}",columns.len(),row_data.len(),chrono::Local::now().timestamp_millis());
-        // #endregion
         SqlQueryResult {
             columns,
             rows: row_data,
@@ -637,9 +634,6 @@ pub async fn execute_sql(
 
         let execution_time = start_time.elapsed().as_millis();
 
-        // #region agent log
-        eprintln!("[AGENT_LOG] {{\"location\":\"sql.rs:637\",\"message\":\"INSERT/UPDATE/DELETE result construction\",\"data\":{{\"affected_rows\":{}}},\"timestamp\":{},\"hypothesisId\":\"NEW_A\"}}",affected,chrono::Local::now().timestamp_millis());
-        // #endregion
         SqlQueryResult {
             columns: vec![],
             rows: vec![],
@@ -648,10 +642,6 @@ pub async fn execute_sql(
         }
     };
 
-    // #region agent log
-    let result_json = serde_json::to_string(&result).unwrap_or_else(|_| "serialization_error".to_string());
-    eprintln!("[AGENT_LOG] {{\"location\":\"sql.rs:645\",\"message\":\"Final result before returning to frontend\",\"data\":{{\"result_json\":\"{}\"}},\"timestamp\":{},\"hypothesisId\":\"NEW_A\"}}",result_json.replace("\"","\\\""),chrono::Local::now().timestamp_millis());
-    // #endregion
     Ok(result)
 }
 

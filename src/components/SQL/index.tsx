@@ -99,9 +99,9 @@ export function SQLViewer() {
 
     try {
       const request: SaveTemplateRequest = {
-        id: selectedTemplate?.id,
+        id: selectedTemplate?.id || 0,
         name: templateName,
-        description: templateDescription || undefined,
+        description: templateDescription || '',
         query,
       };
       await sqlApi.saveSqlTemplate(request);

@@ -208,6 +208,12 @@ function DiscoveredStreamCard({ stream, onPromote, isAlreadyRegistered = false }
 export function Dashboard() {
   const queryClient = useQueryClient();
   const backendReady = useAppStateStore((state) => state.backendReady);
+  
+  // #region agent log
+  useEffect(() => {
+    fetch('http://127.0.0.1:7245/ingest/0d9d8352-eae8-4480-b5a0-b0206438daef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard/index.tsx:213',message:'Dashboard mounted or backendReady changed',data:{backendReady},timestamp:Date.now(),hypothesisId:'A,C'})}).catch(()=>{});
+  }, [backendReady]);
+  // #endregion
 
   // チャンネル情報を取得し、ライブチャンネルのみをフィルタリング
   const { 

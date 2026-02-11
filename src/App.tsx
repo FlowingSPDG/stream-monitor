@@ -72,9 +72,16 @@ function App() {
 
   // グローバルイベントリスナーを設定
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7245/ingest/0d9d8352-eae8-4480-b5a0-b0206438daef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:74',message:'App mounted, setting up event listeners',data:{},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    
     let cleanup: (() => void) | undefined;
 
     const setupEventListeners = async () => {
+      // #region agent log
+      fetch('http://127.0.0.1:7245/ingest/0d9d8352-eae8-4480-b5a0-b0206438daef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:81',message:'setupEventListeners called',data:{},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       // DB初期化成功イベント（ログのみ）
       const successUnlisten = await listen("database-init-success", () => {
         console.log("Database initialization successful");
