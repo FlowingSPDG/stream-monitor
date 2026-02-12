@@ -1,5 +1,6 @@
 use crate::database::{repositories::StreamStatsRepository, DatabaseManager};
 use crate::error::ResultExt;
+use chrono::{DateTime, FixedOffset, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
@@ -10,6 +11,23 @@ pub struct ExportQuery {
     pub end_time: Option<String>,
     pub aggregation: Option<String>, // "raw", "1min", "5min", "1hour"
     pub delimiter: Option<String>,   // Custom delimiter (default: comma)
+}
+
+fn normalize_timestamp(value: &str) -> String {
+    // 1) RFC3339 (元の文字列形式を想定)
+    if let Ok(dt) = DateTime::parse_from_rfc3339(value) {
+        return dt.to_rfc3339();
+    }
+    // 2) DuckDB の TIMESTAMP 表示形式を想定（秒以下あり/なし両対応）
+    if let Ok(naive) = NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S%.f")
+        .or_else(|_| NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S"))
+    {
+        if let Some(offset) = FixedOffset::east_opt(0) {
+            return DateTime::<FixedOffset>::from_naive_utc_and_offset(naive, offset).to_rfc3339();
+        }
+    }
+    // 3) どれにも当てはまらない場合は元の文字列を返す
+    value.to_string()
 }
 
 /// Helper function to escape field values for delimited output
@@ -93,7 +111,7 @@ pub async fn export_to_delimited(
 
     // Data rows
     for stat in &stats {
-        let collected_at = &stat.collected_at;
+        let collected_at = normalize_timestamp(&stat.collected_at);
         let channel_name = stat.channel_name.as_deref().unwrap_or("");
         let viewer_count = stat.viewer_count.unwrap_or(0).to_string();
         let category = stat.category.as_deref().unwrap_or("");
@@ -105,7 +123,7 @@ pub async fn export_to_delimited(
 
         output.push_str(&format!(
             "{}{}{}{}{}{}{}{}{}{}{}\n",
-            escape_field(collected_at, delimiter),
+            escape_field(&collected_at, delimiter),
             delimiter,
             escape_field(channel_name, delimiter),
             delimiter,
@@ -192,7 +210,7 @@ pub async fn preview_export_data(
 
     // Data rows (limited to max_rows)
     for stat in preview_stats {
-        let collected_at = &stat.collected_at;
+        let collected_at = normalize_timestamp(&stat.collected_at);
         let channel_name = stat.channel_name.as_deref().unwrap_or("");
         let viewer_count = stat.viewer_count.unwrap_or(0).to_string();
         let category = stat.category.as_deref().unwrap_or("");
@@ -204,7 +222,7 @@ pub async fn preview_export_data(
 
         output.push_str(&format!(
             "{}{}{}{}{}{}{}{}{}{}{}\n",
-            escape_field(collected_at, delimiter),
+            escape_field(&collected_at, delimiter),
             delimiter,
             escape_field(channel_name, delimiter),
             delimiter,
