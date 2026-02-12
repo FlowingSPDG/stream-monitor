@@ -197,9 +197,16 @@ pub fn run() {
             logger.info("Application starting...");
             app.manage(logger.clone());
 
-            // DatabaseManagerを初期化して管理
-            let db_manager = DatabaseManager::new(&app_handle)
-                .expect("Failed to create DatabaseManager");
+            // DatabaseManagerを初期化して管理（失敗時はパニックせずログして終了）
+            let db_manager = match DatabaseManager::new(&app_handle) {
+                Ok(m) => m,
+                Err(e) => {
+                    let msg = format!("Failed to create DatabaseManager: {}", e);
+                    logger.error(&msg);
+                    eprintln!("{}", msg);
+                    std::process::exit(1);
+                }
+            };
             app.manage(db_manager.clone());
 
             // Ctrl+C / SIGTERMシグナルハンドラを設定（ホットリロード対策）

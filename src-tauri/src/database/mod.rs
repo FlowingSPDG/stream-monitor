@@ -16,18 +16,27 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
 
+/// DuckDB の WAL ファイルパス（DB が stream_stats.db のとき stream_stats.db.wal）
+fn wal_path(db_path: &Path) -> PathBuf {
+    db_path.with_extension("db.wal")
+}
+
 /// 起動前のリカバリ処理（一時ファイルのクリーンアップ）
+/// WALが存在する場合は先に退避する。Connection::open が WAL ありでクラッシュ/パニックするため、
+/// 開く前に WAL を外してから開くことで起動クラッシュを防ぐ。
 fn cleanup_stale_files(db_path: &Path) {
-    // DuckDBの一時ファイルパス
-    let wal_path = db_path.with_extension("wal");
+    let wal_path = wal_path(db_path);
     let tmp_path = db_path.with_extension("tmp");
 
-    // .wal ファイルが存在する場合は警告ログ（DuckDBが自動リカバリ）
+    // .wal が残っている＝前回が異常終了。DuckDB の open が WAL ありでクラッシュするため、先に退避してから開く
     if wal_path.exists() {
         eprintln!(
-            "[DB Recovery] WAL file found at {}, DuckDB will auto-recover",
+            "[DB Recovery] WAL file found at {}, backing up before open to avoid crash",
             wal_path.display()
         );
+        if let Err(e) = recover_from_corrupted_wal(db_path) {
+            eprintln!("[DB Recovery] Failed to backup WAL: {}", e);
+        }
     }
 
     // .tmp ファイルは削除（不完全な操作の残骸）
@@ -46,19 +55,19 @@ fn cleanup_stale_files(db_path: &Path) {
 fn recover_from_corrupted_wal(db_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     use chrono::Local;
 
-    let wal_path = db_path.with_extension("wal");
+    let w_path = wal_path(db_path);
 
-    if wal_path.exists() {
-        // WALファイルをバックアップとしてリネーム
+    if w_path.exists() {
+        // WALファイルをバックアップとしてリネーム（stream_stats.db.wal → stream_stats.db.wal.backup.<ts>）
         let timestamp = Local::now().format("%Y%m%d_%H%M%S");
-        let backup_wal_path = db_path.with_extension(format!("wal.backup.{}", timestamp));
+        let backup_wal_path = db_path.with_extension(format!("db.wal.backup.{}", timestamp));
 
         eprintln!(
             "[DB Recovery] Moving corrupted WAL file to backup: {}",
             backup_wal_path.display()
         );
 
-        std::fs::rename(&wal_path, &backup_wal_path)?;
+        std::fs::rename(&w_path, &backup_wal_path)?;
         eprintln!("[DB Recovery] WAL file backed up successfully");
     }
 
@@ -90,29 +99,18 @@ impl DatabaseManager {
 
         // 開発環境と本番環境で統一してファイルベースDBを使用
         eprintln!("Opening DuckDB at: {}", db_path.display());
+        // 1プロセス内で2回 open すると、初回失敗時に DuckDB がファイルを握ったまま Err を返すため
+        // 2回目の open が「使用中」で必ず失敗する。よって open は1回だけ行い、失敗時は再起動を促す。
         let conn = match Connection::open(&db_path) {
             Ok(conn) => conn,
             Err(e) => {
                 let error_msg = format!("{:?}", e);
-
-                // WAL再生エラーの場合は自動リカバリを試みる
                 if error_msg.contains("WAL file") || error_msg.contains("replaying WAL") {
-                    eprintln!("[DB Recovery] WAL replay error detected, attempting recovery...");
-
-                    // 破損したWALファイルをバックアップ
-                    if let Err(recovery_err) = recover_from_corrupted_wal(&db_path) {
-                        eprintln!("[DB Recovery] Failed to backup WAL file: {}", recovery_err);
-                    }
-
-                    // WALファイル削除後、再度データベースを開く
-                    eprintln!("[DB Recovery] Retrying database open after WAL cleanup...");
-                    Connection::open(&db_path)
-                        .db_context("open database after WAL recovery")
-                        .map_err(|e| e.to_string())?
-                } else {
-                    // その他のエラーは通常通り返す
-                    return Err(format!("Database error: {}", error_msg).into());
+                    eprintln!(
+                        "[DB Recovery] Database open failed (WAL). WAL was already backed up before open. Please restart the application once."
+                    );
                 }
+                return Err(format!("Database error: {}", error_msg).into());
             }
         };
 
