@@ -97,7 +97,7 @@ export const TopChatterSchema = z.object({
  */
 export const TimePatternStatsSchema = z.object({
   hour: z.number(),
-  dayOfWeek: z.number().optional(),
+  dayOfWeek: z.number().nullish(), // null when groupByDay=false
   avgChatRate: z.number(),
   avgEngagement: z.number(),
   totalMessages: z.number(),

@@ -1,7 +1,8 @@
+use crate::database::repositories::SqlTemplateRepository;
 use crate::database::DatabaseManager;
 use crate::error::ResultExt;
 use chrono::{Local, TimeZone};
-use duckdb::{params, types::TimeUnit, types::ValueRef, Connection, Row};
+use duckdb::{types::TimeUnit, types::ValueRef, Connection, Row};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tauri::State;
@@ -264,15 +265,7 @@ pub struct SqlQueryResult {
     pub execution_time_ms: u128,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SqlTemplate {
-    pub id: i64,
-    pub name: String,
-    pub description: String,
-    pub query: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
+pub use crate::database::repositories::SqlTemplate;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SaveTemplateRequest {
@@ -290,61 +283,57 @@ pub async fn execute_sql(
 ) -> Result<SqlQueryResult, String> {
     let start_time = Instant::now();
 
-    let conn = db_manager
-        .get_connection()
-        .await
-        .db_context("get database connection")
-        .map_err(|e| e.to_string())?;
-
-    eprintln!(
-        "[SQL] Database path: {}",
-        db_manager.get_db_path().display()
-    );
-
-    // クエリをトリムして、空の場合はエラーを返す
-    let query = query.trim();
-    if query.is_empty() {
-        return Err("クエリが空です".to_string());
-    }
-
-    eprintln!("[SQL] Executing query: {}", query);
-
-    // 基本的なクエリ検証：セミコロンで複数のステートメントに分割されている場合、
-    // 最初のステートメントのみを実行（セキュリティとエラー防止のため）
-    let query_parts: Vec<&str> = query.split(';').collect();
-    let query_to_execute = if query_parts.len() > 1 {
-        let first_stmt = query_parts[0].trim();
-        // 2番目以降のステートメントが空でない場合は警告
-        if query_parts.iter().skip(1).any(|s| !s.trim().is_empty()) {
+    db_manager
+        .with_connection(|conn| {
             eprintln!(
-                "[SQL WARN] Multiple statements detected. Only executing the first statement."
+                "[SQL] Database path: {}",
+                db_manager.get_db_path().display()
             );
-            eprintln!("[SQL WARN] Original query: {}", query);
-            eprintln!("[SQL WARN] Executing: {}", first_stmt);
-        }
-        first_stmt
-    } else {
-        query
-    };
 
-    // SQLクエリの基本的な妥当性チェック（DuckDBに渡す前に検証）
-    if let Err(e) = validate_sql_query(query_to_execute) {
-        eprintln!("[SQL ERROR] Query validation failed: {}", e);
-        return Err(e);
-    }
+            // クエリをトリムして、空の場合はエラーを返す
+            let query = query.trim();
+            if query.is_empty() {
+                return Err("クエリが空です".to_string());
+            }
 
-    // クエリの種類を判定（SELECT系かそれ以外か）
-    // コメント（-- や /* */）をスキップして最初のSQLキーワードを取得
-    let query_type = query_to_execute
-        .lines()
-        .map(|line| line.trim())
-        .filter(|line| !line.is_empty() && !line.starts_with("--"))
-        .flat_map(|line| line.split_whitespace())
-        .find(|word| !word.is_empty())
-        .unwrap_or("")
-        .to_uppercase();
+            eprintln!("[SQL] Executing query: {}", query);
 
-    let result = if query_type == "SELECT"
+            // 基本的なクエリ検証：セミコロンで複数のステートメントに分割されている場合、
+            // 最初のステートメントのみを実行（セキュリティとエラー防止のため）
+            let query_parts: Vec<&str> = query.split(';').collect();
+            let query_to_execute = if query_parts.len() > 1 {
+                let first_stmt = query_parts[0].trim();
+                // 2番目以降のステートメントが空でない場合は警告
+                if query_parts.iter().skip(1).any(|s| !s.trim().is_empty()) {
+                    eprintln!(
+                        "[SQL WARN] Multiple statements detected. Only executing the first statement."
+                    );
+                    eprintln!("[SQL WARN] Original query: {}", query);
+                    eprintln!("[SQL WARN] Executing: {}", first_stmt);
+                }
+                first_stmt
+            } else {
+                query
+            };
+
+            // SQLクエリの基本的な妥当性チェック（DuckDBに渡す前に検証）
+            if let Err(e) = validate_sql_query(query_to_execute) {
+                eprintln!("[SQL ERROR] Query validation failed: {}", e);
+                return Err(e);
+            }
+
+            // クエリの種類を判定（SELECT系かそれ以外か）
+            // コメント（-- や /* */）をスキップして最初のSQLキーワードを取得
+            let query_type = query_to_execute
+                .lines()
+                .map(|line| line.trim())
+                .filter(|line| !line.is_empty() && !line.starts_with("--"))
+                .flat_map(|line| line.split_whitespace())
+                .find(|word| !word.is_empty())
+                .unwrap_or("")
+                .to_uppercase();
+
+            let result = if query_type == "SELECT"
         || query_type == "WITH"
         || query_type == "SHOW"
         || query_type == "DESCRIBE"
@@ -352,7 +341,7 @@ pub async fn execute_sql(
     {
         // SELECT系クエリの処理
         // LIST型カラムを自動変換するための前処理
-        let processed_query = match preprocess_query_for_list_columns(&conn, query_to_execute) {
+        let processed_query = match preprocess_query_for_list_columns(conn, query_to_execute) {
             Ok(q) => q,
             Err(e) => {
                 eprintln!(
@@ -642,7 +631,9 @@ pub async fn execute_sql(
         }
     };
 
-    Ok(result)
+            Ok(result)
+        })
+        .await
 }
 
 /// 全てのSQLテンプレートを取得
@@ -650,41 +641,9 @@ pub async fn execute_sql(
 pub async fn list_sql_templates(
     db_manager: State<'_, DatabaseManager>,
 ) -> Result<Vec<SqlTemplate>, String> {
-    let conn = db_manager
-        .get_connection()
+    db_manager
+        .with_connection(|conn| SqlTemplateRepository::list_all(conn).map_err(|e| e.to_string()))
         .await
-        .db_context("get database connection")
-        .map_err(|e| e.to_string())?;
-
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, name, description, query, 
-             CAST(created_at AS VARCHAR) as created_at, 
-             CAST(updated_at AS VARCHAR) as updated_at 
-             FROM sql_templates 
-             ORDER BY updated_at DESC",
-        )
-        .db_context("prepare query")
-        .map_err(|e| e.to_string())?;
-
-    let templates = stmt
-        .query_map([], |row| {
-            Ok(SqlTemplate {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                description: row.get(2).unwrap_or_else(|_| String::new()),
-                query: row.get(3)?,
-                created_at: row.get(4).unwrap_or_else(|_| String::new()),
-                updated_at: row.get(5).unwrap_or_else(|_| String::new()),
-            })
-        })
-        .db_context("query templates")
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .db_context("fetch templates")
-        .map_err(|e| e.to_string())?;
-
-    Ok(templates)
 }
 
 /// SQLテンプレートを保存（新規作成または更新）
@@ -693,76 +652,18 @@ pub async fn save_sql_template(
     db_manager: State<'_, DatabaseManager>,
     request: SaveTemplateRequest,
 ) -> Result<SqlTemplate, String> {
-    let conn = db_manager
-        .get_connection()
-        .await
-        .db_context("get database connection")
-        .map_err(|e| e.to_string())?;
-
-    let id = if request.id > 0 {
-        // 更新
-        conn.execute(
-            "UPDATE sql_templates 
-             SET name = ?, description = ?, query = ?, updated_at = CURRENT_TIMESTAMP 
-             WHERE id = ?",
-            params![
+    db_manager
+        .with_connection(|conn| {
+            SqlTemplateRepository::save(
+                conn,
+                request.id,
                 &request.name,
                 &request.description,
                 &request.query,
-                request.id
-            ],
-        )
-        .db_context("update template")
-        .map_err(|e| e.to_string())?;
-
-        request.id
-    } else {
-        // 新規作成
-        conn.execute(
-            "INSERT INTO sql_templates (name, description, query) 
-             VALUES (?, ?, ?)",
-            params![&request.name, &request.description, &request.query],
-        )
-        .db_context("insert template")
-        .map_err(|e| e.to_string())?;
-
-        // 最後に挿入されたIDを取得
-        let mut stmt = conn
-            .prepare("SELECT currval('sql_templates_id_seq')")
-            .db_context("get last insert id")
-            .map_err(|e| e.to_string())?;
-
-        stmt.query_row([], |row| row.get(0))
-            .db_context("fetch last insert id")
-            .map_err(|e| e.to_string())?
-    };
-
-    // 保存したテンプレートを取得して返す
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, name, description, query, 
-             CAST(created_at AS VARCHAR) as created_at, 
-             CAST(updated_at AS VARCHAR) as updated_at 
-             FROM sql_templates 
-             WHERE id = ?",
-        )
-        .db_context("prepare query")
-        .map_err(|e| e.to_string())?;
-
-    let template = stmt
-        .query_row(params![id], |row| {
-            Ok(SqlTemplate {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                description: row.get(2).unwrap_or_else(|_| String::new()),
-                query: row.get(3)?,
-                created_at: row.get(4).unwrap_or_else(|_| String::new()),
-                updated_at: row.get(5).unwrap_or_else(|_| String::new()),
-            })
+            )
+            .map_err(|e| e.to_string())
         })
-        .map_err(|e| format!("Failed to retrieve saved template: {}", e))?;
-
-    Ok(template)
+        .await
 }
 
 /// SQLテンプレートを削除
@@ -771,22 +672,15 @@ pub async fn delete_sql_template(
     db_manager: State<'_, DatabaseManager>,
     id: i64,
 ) -> Result<(), String> {
-    let conn = db_manager
-        .get_connection()
+    db_manager
+        .with_connection(|conn| {
+            let affected = SqlTemplateRepository::delete(conn, id).map_err(|e| e.to_string())?;
+            if affected == 0 {
+                return Err("Template not found".to_string());
+            }
+            Ok(())
+        })
         .await
-        .db_context("get database connection")
-        .map_err(|e| e.to_string())?;
-
-    let affected = conn
-        .execute("DELETE FROM sql_templates WHERE id = ?", params![id])
-        .db_context("delete template")
-        .map_err(|e| e.to_string())?;
-
-    if affected == 0 {
-        return Err("Template not found".to_string());
-    }
-
-    Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -800,70 +694,68 @@ pub struct TableInfo {
 pub async fn list_database_tables(
     db_manager: State<'_, DatabaseManager>,
 ) -> Result<Vec<TableInfo>, String> {
-    let conn = db_manager
-        .get_connection()
+    db_manager
+        .with_connection(|conn| {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT table_name 
+                     FROM information_schema.tables 
+                     WHERE table_schema = 'main' 
+                     ORDER BY table_name",
+                )
+                .db_context("prepare query")
+                .map_err(|e| e.to_string())?;
+
+            let table_names: Vec<String> = stmt
+                .query_map([], |row| row.get(0))
+                .db_context("query tables")
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .db_context("fetch tables")
+                .map_err(|e| e.to_string())?;
+
+            eprintln!("[SQL] Found {} tables in database", table_names.len());
+
+            // 各テーブルのカラム数と行数を取得
+            let mut tables = Vec::new();
+            for table_name in table_names {
+                // カラム数を取得
+                let column_count_query =
+                    format!("SELECT COUNT(*) FROM pragma_table_info('{}')", table_name);
+                let mut stmt = conn
+                    .prepare(&column_count_query)
+                    .db_context("prepare column count query")
+                    .map_err(|e| e.to_string())?;
+
+                let column_count: i64 = stmt
+                    .query_row([], |row| row.get(0))
+                    .db_context("get column count")
+                    .map_err(|e| e.to_string())?;
+
+                // 行数を取得
+                let row_count_query = format!("SELECT COUNT(*) FROM {}", table_name);
+                let mut stmt = conn
+                    .prepare(&row_count_query)
+                    .db_context("prepare row count query")
+                    .map_err(|e| e.to_string())?;
+
+                let row_count: i64 = stmt
+                    .query_row([], |row| row.get(0))
+                    .db_context("get row count")
+                    .map_err(|e| e.to_string())?;
+
+                eprintln!(
+                    "[SQL] Table '{}': {} columns, {} rows",
+                    table_name, column_count, row_count
+                );
+
+                tables.push(TableInfo {
+                    table_name,
+                    column_count: column_count as usize,
+                });
+            }
+
+            Ok(tables)
+        })
         .await
-        .db_context("get database connection")
-        .map_err(|e| e.to_string())?;
-
-    let mut stmt = conn
-        .prepare(
-            "SELECT table_name 
-             FROM information_schema.tables 
-             WHERE table_schema = 'main' 
-             ORDER BY table_name",
-        )
-        .db_context("prepare query")
-        .map_err(|e| e.to_string())?;
-
-    let table_names: Vec<String> = stmt
-        .query_map([], |row| row.get(0))
-        .db_context("query tables")
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .db_context("fetch tables")
-        .map_err(|e| e.to_string())?;
-
-    eprintln!("[SQL] Found {} tables in database", table_names.len());
-
-    // 各テーブルのカラム数と行数を取得
-    let mut tables = Vec::new();
-    for table_name in table_names {
-        // カラム数を取得
-        let column_count_query =
-            format!("SELECT COUNT(*) FROM pragma_table_info('{}')", table_name);
-        let mut stmt = conn
-            .prepare(&column_count_query)
-            .db_context("prepare column count query")
-            .map_err(|e| e.to_string())?;
-
-        let column_count: i64 = stmt
-            .query_row([], |row| row.get(0))
-            .db_context("get column count")
-            .map_err(|e| e.to_string())?;
-
-        // 行数を取得
-        let row_count_query = format!("SELECT COUNT(*) FROM {}", table_name);
-        let mut stmt = conn
-            .prepare(&row_count_query)
-            .db_context("prepare row count query")
-            .map_err(|e| e.to_string())?;
-
-        let row_count: i64 = stmt
-            .query_row([], |row| row.get(0))
-            .db_context("get row count")
-            .map_err(|e| e.to_string())?;
-
-        eprintln!(
-            "[SQL] Table '{}': {} columns, {} rows",
-            table_name, column_count, row_count
-        );
-
-        tables.push(TableInfo {
-            table_name,
-            column_count: column_count as usize,
-        });
-    }
-
-    Ok(tables)
 }

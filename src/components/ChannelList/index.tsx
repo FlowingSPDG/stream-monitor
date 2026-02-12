@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { ChannelWithStats } from "../../types";
 import { ChannelForm } from "./ChannelForm";
@@ -22,33 +21,32 @@ export function ChannelList() {
   // チャンネル取得
   const { data: channels = [], isLoading, error } = useQuery({
     queryKey: ["channels"],
-    queryFn: async () => {
-      const result = await invoke<ChannelWithStats[]>("list_channels");
-      return result;
-    },
+    queryFn: channelsApi.listChannels,
     enabled: backendReady, // バックエンド初期化完了まで実行しない
     refetchInterval: 30000, // 30秒ごとに更新
     staleTime: 25000, // 25秒間はキャッシュを使用
     retry: 1, // リトライは1回まで
   });
 
-  // チャンネル削除ミューテーション
+  // チャンネル削除ミューテーション（削除後に一覧を再取得してUIを1回で更新）
   const deleteMutation = useMutation({
     mutationFn: async (channelId: number) => {
       await channelsApi.removeChannel(channelId);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["channels"] });
+      await queryClient.refetchQueries({ queryKey: ["channels"] });
     },
   });
 
-  // チャンネル有効/無効切り替えミューテーション
+  // チャンネル有効/無効切り替えミューテーション（切り替え後に一覧を再取得してUIを1回で更新）
   const toggleMutation = useMutation({
     mutationFn: async (channelId: number) => {
       await channelsApi.toggleChannel(channelId);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["channels"] });
+      await queryClient.refetchQueries({ queryKey: ["channels"] });
     },
   });
 

@@ -1,6 +1,7 @@
 use crate::api::twitch_api::TwitchApiClient;
 use crate::commands::discovery::DiscoveredStreamInfo;
 use crate::config::settings::{AutoDiscoverySettings, SettingsManager};
+use crate::database::repositories::base;
 use crate::database::repositories::game_category_repository::GameCategoryRepository;
 use crate::database::repositories::stream_stats_repository::StreamStatsRepository;
 use crate::database::repositories::ChannelRepository;
@@ -277,8 +278,9 @@ impl AutoDiscoveryPoller {
 
         // メモリキャッシュに保存するための配信情報を構築
         let mut discovered_streams_info = Vec::new();
+        // game_id -> game_name
         let mut categories_to_upsert: HashMap<String, String> = HashMap::new();
-        let mut stats_to_insert: Vec<(String, i32, String, String, String)> = Vec::new();
+        let mut stats_to_insert: Vec<(String, i32, String, String, String, String)> = Vec::new();
         let now = Local::now().to_rfc3339();
 
         for stream in filtered_streams {
@@ -324,13 +326,14 @@ impl AutoDiscoveryPoller {
             };
             discovered_streams_info.push(stream_info);
 
-            // stream_statsデータを収集（後でバッチINSERT）
+            // stream_statsデータを収集（後でバッチINSERT）。game_id を保存してゲーム分析に含める。
             stats_to_insert.push((
                 now.clone(),
                 stream.viewer_count as i32,
                 user_id.clone(),
                 user_login.clone(),
                 stream.game_name.to_string(),
+                stream.game_id.to_string(),
             ));
 
             // カテゴリ情報を収集（ループ後にバッチ処理）
@@ -348,68 +351,61 @@ impl AutoDiscoveryPoller {
 
         let discovered_count = discovered_streams_info.len();
 
-        // 単一の接続とトランザクションで全てのDB操作を実行（デッドロック防止）
-        match db_manager.get_connection().await {
-            Ok(conn) => {
-                // トランザクション開始
-                if let Err(e) = conn.execute("BEGIN TRANSACTION", []) {
-                    eprintln!("[AutoDiscovery] Failed to begin transaction: {}", e);
-                } else {
-                    let mut transaction_successful = true;
+        // Twitch API からカテゴリ情報（特に box_art_url）を取得してキャッシュ
+        let mut category_box_art: HashMap<String, String> = HashMap::new();
+        if !categories_to_upsert.is_empty() {
+            let game_ids: Vec<String> = categories_to_upsert.keys().cloned().collect();
+            let game_id_refs: Vec<&str> = game_ids.iter().map(|s| s.as_str()).collect();
 
-                    // stream_statsをバッチINSERT（Repositoryメソッド使用）
-                    for (collected_at, viewer_count, user_id, user_login, game_name) in
+            match twitch_client.get_games_by_ids(&game_id_refs).await {
+                Ok(categories) => {
+                    for cat in categories {
+                        // Twitch API から返される box_art_url をそのまま保存
+                        category_box_art.insert(cat.id.to_string(), cat.box_art_url.to_string());
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[AutoDiscovery] Failed to fetch game categories for box_art_url: {}",
+                        e
+                    );
+                    // 失敗しても致命的ではないので、そのまま続行（box_art_url は NULL のまま）
+                }
+            }
+        }
+
+        // 単一の接続とトランザクションで全てのDB操作を実行（デッドロック防止）
+        if let Err(e) = db_manager
+            .with_connection(|conn| {
+                base::with_transaction(conn, |conn| {
+                    for (collected_at, viewer_count, user_id, user_login, game_name, game_id) in
                         &stats_to_insert
                     {
-                        if let Err(e) = StreamStatsRepository::insert_auto_discovery_stats(
-                            &conn,
+                        StreamStatsRepository::insert_auto_discovery_stats(
+                            conn,
                             collected_at,
                             *viewer_count,
                             user_id,
                             user_login,
                             game_name,
-                        ) {
-                            eprintln!(
-                                "[AutoDiscovery] Failed to insert stream stats for {}: {}",
-                                user_login, e
-                            );
-                            transaction_successful = false;
-                            break;
-                        }
+                            game_id,
+                        )?;
                     }
-
-                    // game_categoriesをバッチUPSERT（Repositoryメソッド使用）
-                    if transaction_successful {
-                        for (game_id, game_name) in &categories_to_upsert {
-                            if let Err(e) = GameCategoryRepository::upsert_category(
-                                &conn, game_id, game_name, None,
-                            ) {
-                                eprintln!(
-                                    "[AutoDiscovery] Failed to upsert category {}: {}",
-                                    game_id, e
-                                );
-                                transaction_successful = false;
-                                break;
-                            }
-                        }
+                    for (game_id, game_name) in &categories_to_upsert {
+                        let box_art_url = category_box_art.get(game_id).map(String::as_str);
+                        GameCategoryRepository::upsert_category(
+                            conn,
+                            game_id,
+                            game_name,
+                            box_art_url,
+                        )?;
                     }
-
-                    // トランザクションをコミットまたはロールバック
-                    if transaction_successful {
-                        if let Err(e) = conn.execute("COMMIT", []) {
-                            eprintln!("[AutoDiscovery] Failed to commit transaction: {}", e);
-                        }
-                    } else if let Err(e) = conn.execute("ROLLBACK", []) {
-                        eprintln!("[AutoDiscovery] Failed to rollback transaction: {}", e);
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!(
-                    "[AutoDiscovery] Failed to get connection for database operations: {}",
-                    e
-                );
-            }
+                    Ok::<(), duckdb::Error>(())
+                })
+            })
+            .await
+        {
+            eprintln!("[AutoDiscovery] Transaction failed: {}", e);
         }
 
         // メモリキャッシュに保存
@@ -442,83 +438,40 @@ impl AutoDiscoveryPoller {
         app_handle: &AppHandle,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // トランザクションで処理して競合状態を防ぐ
-        let conn = db_manager.get_connection().await?;
+        let channels_to_notify = db_manager
+            .with_connection(|conn| {
+                base::with_transaction::<Vec<(i64, String)>, duckdb::Error, _>(conn, |conn| {
+                    let channels =
+                        ChannelRepository::get_offline_auto_discovered_channels(conn)?;
 
-        // トランザクション開始
-        conn.execute("BEGIN TRANSACTION", [])?;
+                    for (channel_id, channel_name) in &channels {
+                        let is_live = ChannelRepository::is_channel_live(conn, *channel_id)?;
+                        if is_live {
+                            eprintln!(
+                                "[AutoDiscovery] Skip cleanup for {} (id: {}) - channel went live again",
+                                channel_name, channel_id
+                            );
+                            continue;
+                        }
 
-        let cleanup_result: Result<Vec<(i64, String)>, Box<dyn std::error::Error + Send + Sync>> =
-            (|| {
-                // 自動発見されたチャンネルで、最新の配信が終了しているものを取得
-                let mut stmt = conn.prepare(
-                    r#"
-                SELECT c.id, c.channel_name
-                FROM channels c
-                WHERE c.is_auto_discovered = true
-                AND NOT EXISTS (
-                    SELECT 1 FROM streams s
-                    WHERE s.channel_id = c.id
-                    AND s.ended_at IS NULL
-                )
-                AND EXISTS (
-                    SELECT 1 FROM streams s
-                    WHERE s.channel_id = c.id
-                )
-                "#,
-                )?;
-
-                let channels: Vec<(i64, String)> = stmt
-                    .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                drop(stmt);
-
-                // データベースから削除（ポーリングは自動的に停止される）
-                for (channel_id, channel_name) in &channels {
-                    // 削除前に再度ライブ状態をチェック（競合回避）
-                    let mut check_stmt = conn.prepare(
-                    "SELECT EXISTS(SELECT 1 FROM streams WHERE channel_id = ? AND ended_at IS NULL)"
-                )?;
-                    let is_live: bool = check_stmt.query_row([channel_id], |row| row.get(0))?;
-                    drop(check_stmt);
-
-                    if is_live {
+                        ChannelRepository::delete(conn, *channel_id)?;
                         eprintln!(
-                        "[AutoDiscovery] Skip cleanup for {} (id: {}) - channel went live again",
-                        channel_name, channel_id
-                    );
-                        continue;
+                            "[AutoDiscovery] Cleaned up offline channel: {} (id: {})",
+                            channel_name, channel_id
+                        );
                     }
 
-                    ChannelRepository::delete(&conn, *channel_id)?;
-                    eprintln!(
-                        "[AutoDiscovery] Cleaned up offline channel: {} (id: {})",
-                        channel_name, channel_id
-                    );
-                }
+                    Ok(channels)
+                })
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+            })
+            .await?;
 
-                Ok(channels)
-            })();
-
-        match cleanup_result {
-            Ok(channels) => {
-                // コミット
-                conn.execute("COMMIT", [])?;
-                drop(conn);
-
-                // イベント発行
-                for (channel_id, _) in channels {
-                    let _ = app_handle.emit("channel-removed", channel_id);
-                }
-
-                Ok(())
-            }
-            Err(e) => {
-                // ロールバック
-                let _ = conn.execute("ROLLBACK", []);
-                drop(conn);
-                Err(e)
-            }
+        // イベント発行
+        for (channel_id, _) in channels_to_notify {
+            let _ = app_handle.emit("channel-removed", channel_id);
         }
+
+        Ok(())
     }
 }

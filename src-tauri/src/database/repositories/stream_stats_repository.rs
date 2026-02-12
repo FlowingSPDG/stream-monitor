@@ -3,6 +3,7 @@
 /// DuckDBのTIMESTAMP型（collected_at）を安全に扱い、
 /// インターバル計算などの複雑なクエリを生成します。
 use crate::database::analytics::DailyStats;
+use crate::database::models::StreamStats;
 use crate::database::query_helpers::stream_stats_query;
 use crate::database::utils;
 use duckdb::Connection;
@@ -30,9 +31,80 @@ pub struct TimeBucketViewerStats {
 pub struct StreamStatsRepository;
 
 impl StreamStatsRepository {
+    /// フィルタ付きで stream_stats を取得（get_stream_stats / export 共用）
+    ///
+    /// ORDER BY collected_at は order_asc で制御（true = ASC, false = DESC）
+    pub fn get_stream_stats_filtered(
+        conn: &Connection,
+        stream_id: Option<i64>,
+        channel_id: Option<i64>,
+        start_time: Option<&str>,
+        end_time: Option<&str>,
+        order_asc: bool,
+    ) -> Result<Vec<StreamStats>, duckdb::Error> {
+        let mut sql = String::from(
+            "SELECT ss.id, ss.stream_id, CAST(ss.collected_at AS VARCHAR) as collected_at, ss.viewer_count,
+             COALESCE((
+                 SELECT COUNT(*)
+                 FROM chat_messages cm
+                 WHERE cm.stream_id = ss.stream_id
+                   AND cm.timestamp >= ss.collected_at - INTERVAL '1 minute'
+                   AND cm.timestamp < ss.collected_at
+             ), 0) AS chat_rate_1min,
+             ss.category, ss.title, ss.follower_count, ss.twitch_user_id, ss.channel_name
+             FROM stream_stats ss
+             INNER JOIN streams s ON ss.stream_id = s.id
+             WHERE 1=1",
+        );
+
+        let mut params: Vec<String> = Vec::new();
+
+        if let Some(sid) = stream_id {
+            sql.push_str(" AND ss.stream_id = ?");
+            params.push(sid.to_string());
+        }
+        if let Some(cid) = channel_id {
+            sql.push_str(" AND s.channel_id = ?");
+            params.push(cid.to_string());
+        }
+        if let Some(st) = start_time {
+            sql.push_str(" AND ss.collected_at >= ?");
+            params.push(st.to_string());
+        }
+        if let Some(et) = end_time {
+            sql.push_str(" AND ss.collected_at <= ?");
+            params.push(et.to_string());
+        }
+
+        if order_asc {
+            sql.push_str(" ORDER BY ss.collected_at ASC");
+        } else {
+            sql.push_str(" ORDER BY ss.collected_at DESC");
+        }
+
+        let mut stmt = conn.prepare(&sql)?;
+        let results = utils::query_map_with_params(&mut stmt, &params, |row| {
+            Ok(StreamStats {
+                id: Some(row.get(0)?),
+                stream_id: row.get(1)?,
+                collected_at: row.get(2)?,
+                viewer_count: row.get(3)?,
+                chat_rate_1min: Some(row.get(4)?),
+                category: row.get(5)?,
+                game_id: None,
+                title: row.get(6)?,
+                follower_count: row.get(7)?,
+                twitch_user_id: row.get(8)?,
+                channel_name: row.get(9)?,
+            })
+        })?;
+        results.collect::<Result<Vec<_>, _>>()
+    }
+
     /// 自動発見された配信の統計データを挿入
     ///
     /// stream_idがNULLの状態で、自動発見時の統計データを記録します。
+    /// game_id を保存することで、ゲーム分析・トップゲーム集計に自動発見チャンネルも含まれる。
     pub fn insert_auto_discovery_stats(
         conn: &Connection,
         collected_at: &str,
@@ -40,13 +112,14 @@ impl StreamStatsRepository {
         twitch_user_id: &str,
         channel_name: &str,
         category: &str,
+        game_id: &str,
     ) -> Result<(), duckdb::Error> {
         conn.execute(
             r#"
             INSERT INTO stream_stats (
                 stream_id, collected_at, viewer_count,
-                twitch_user_id, channel_name, category
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                twitch_user_id, channel_name, category, game_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             "#,
             duckdb::params![
                 None::<i64>, // stream_id = NULL
@@ -55,6 +128,7 @@ impl StreamStatsRepository {
                 twitch_user_id,
                 channel_name,
                 category,
+                game_id,
             ],
         )?;
         Ok(())

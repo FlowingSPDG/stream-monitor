@@ -247,6 +247,77 @@ impl ChannelRepository {
         Ok(())
     }
 
+    /// チャンネルと関連データを削除。DuckDB は同一トランザクション内で FK 参照先の削除を認識しないため、参照元削除と streams/channels 削除を別トランザクションで実行する。
+    pub fn delete_channel_and_related(conn: &Connection, id: i64) -> Result<(), duckdb::Error> {
+        let stream_ids: Vec<i64> = conn
+            .prepare("SELECT id FROM streams WHERE channel_id = ?")?
+            .query_map(duckdb::params![id], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // 第1トランザクション: 参照元のみ削除して COMMIT する（DuckDB の FK は同一トランザクション内の削除を参照しないため）
+        conn.execute("BEGIN TRANSACTION", [])?;
+        let r1 = (|| {
+            let mut del_cm = conn.prepare("DELETE FROM chat_messages WHERE stream_id = ?")?;
+            let mut del_ss = conn.prepare("DELETE FROM stream_stats WHERE stream_id = ?")?;
+            for stream_id in stream_ids.iter() {
+                del_cm.execute(duckdb::params![*stream_id])?;
+                del_ss.execute(duckdb::params![*stream_id])?;
+            }
+            drop(del_cm);
+            drop(del_ss);
+            conn.execute(
+                "DELETE FROM chat_messages WHERE channel_id = ?",
+                duckdb::params![id],
+            )?;
+            Ok(())
+        })();
+        match r1 {
+            Ok(()) => {
+                conn.execute("COMMIT", [])?;
+            }
+            Err(e) => {
+                let _ = conn.execute("ROLLBACK", []);
+                return Err(e);
+            }
+        }
+
+        // 第2トランザクション: streams のみ削除して COMMIT（channels を参照しているため同一 Tx では FK が通らない）
+        conn.execute("BEGIN TRANSACTION", [])?;
+        let r2: Result<(), duckdb::Error> = (|| {
+            conn.execute(
+                "DELETE FROM streams WHERE channel_id = ?",
+                duckdb::params![id],
+            )?;
+            Ok(())
+        })();
+        match r2 {
+            Ok(()) => {
+                conn.execute("COMMIT", [])?;
+            }
+            Err(e) => {
+                let _ = conn.execute("ROLLBACK", []);
+                return Err(e);
+            }
+        }
+
+        // 第3トランザクション: channels を削除（streams は既にコミット済み）
+        conn.execute("BEGIN TRANSACTION", [])?;
+        let r3: Result<(), duckdb::Error> = (|| {
+            Self::delete(conn, id)?;
+            Ok(())
+        })();
+        match r3 {
+            Ok(()) => {
+                conn.execute("COMMIT", [])?;
+                Ok(())
+            }
+            Err(e) => {
+                let _ = conn.execute("ROLLBACK", []);
+                Err(e)
+            }
+        }
+    }
+
     /// チャンネルの有効状態を更新
     pub fn update_enabled(conn: &Connection, id: i64, enabled: bool) -> Result<(), duckdb::Error> {
         let enabled_str = enabled.to_string();
@@ -255,6 +326,42 @@ impl ChannelRepository {
             "UPDATE channels SET enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             [enabled_str.as_str(), id_str.as_str()],
         )?;
+        Ok(())
+    }
+
+    /// チャンネル情報を更新（指定したフィールドのみ）
+    pub fn update(
+        conn: &Connection,
+        id: i64,
+        channel_name: Option<String>,
+        poll_interval: Option<i32>,
+        enabled: Option<bool>,
+    ) -> Result<(), duckdb::Error> {
+        use crate::database::utils;
+        let mut updates = Vec::new();
+        let mut params: Vec<String> = Vec::new();
+
+        if let Some(name) = channel_name {
+            updates.push("channel_name = ?");
+            params.push(name);
+        }
+        if let Some(interval) = poll_interval {
+            updates.push("poll_interval = ?");
+            params.push(interval.to_string());
+        }
+        if let Some(en) = enabled {
+            updates.push("enabled = ?");
+            params.push(en.to_string());
+        }
+        if updates.is_empty() {
+            return Ok(());
+        }
+
+        updates.push("updated_at = CURRENT_TIMESTAMP");
+        params.push(id.to_string());
+
+        let query = format!("UPDATE channels SET {} WHERE id = ?", updates.join(", "));
+        utils::execute_with_params(conn, &query, &params)?;
         Ok(())
     }
 
@@ -314,5 +421,40 @@ impl ChannelRepository {
             [id.to_string()],
             |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
         )
+    }
+
+    /// 自動発見されたチャンネルのうち、最新の配信が終了しているものを取得（クリーンアップ対象）
+    pub fn get_offline_auto_discovered_channels(
+        conn: &Connection,
+    ) -> Result<Vec<(i64, String)>, duckdb::Error> {
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT c.id, c.channel_name
+            FROM channels c
+            WHERE c.is_auto_discovered = true
+            AND NOT EXISTS (
+                SELECT 1 FROM streams s
+                WHERE s.channel_id = c.id
+                AND s.ended_at IS NULL
+            )
+            AND EXISTS (
+                SELECT 1 FROM streams s
+                WHERE s.channel_id = c.id
+            )
+            "#,
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()
+    }
+
+    /// チャンネルが現在ライブ配信中かどうか（ended_at IS NULL の配信が存在するか）
+    pub fn is_channel_live(conn: &Connection, channel_id: i64) -> Result<bool, duckdb::Error> {
+        let mut stmt = conn.prepare(
+            "SELECT EXISTS(SELECT 1 FROM streams WHERE channel_id = ? AND ended_at IS NULL)",
+        )?;
+        let exists: bool = stmt.query_row([channel_id], |row| row.get(0))?;
+        Ok(exists)
     }
 }

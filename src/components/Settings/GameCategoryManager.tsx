@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listen } from '@tauri-apps/api/event';
 import * as gameCategoriesApi from '../../api/gameCategories';
+import { useAppStateStore } from '../../stores/appStateStore';
 
 export function GameCategoryManager() {
   const [searchQuery, setSearchQuery] = useState('');
   const queryClient = useQueryClient();
+  const backendReady = useAppStateStore((state) => state.backendReady);
 
   // 自動発見イベントでカテゴリリストを更新
   useEffect(() => {
@@ -17,10 +19,12 @@ export function GameCategoryManager() {
     };
   }, [queryClient]);
 
-  // 全カテゴリ取得
+  // 全カテゴリ取得（バックエンド準備完了後に実行し、表示時に最新を反映）
   const { data: categories, isLoading } = useQuery({
     queryKey: ['game-categories'],
     queryFn: gameCategoriesApi.getGameCategories,
+    enabled: backendReady,
+    refetchOnMount: 'always',
   });
 
   // 削除ミューテーション
@@ -40,10 +44,8 @@ export function GameCategoryManager() {
     );
   }) || [];
 
-  const handleDelete = async (gameId: string) => {
-    if (confirm('このカテゴリを削除しますか？')) {
-      await deleteMutation.mutateAsync(gameId);
-    }
+  const handleDelete = (gameId: string) => {
+    deleteMutation.mutate(gameId);
   };
 
   return (
@@ -112,7 +114,18 @@ export function GameCategoryManager() {
                     {category.gameId}
                   </td>
                   <td className="px-3 py-2 text-gray-900 dark:text-gray-100">
-                    {category.gameName}
+                    <div className="flex items-center gap-2">
+                      {category.boxArtUrl && (
+                        <img
+                          src={category.boxArtUrl
+                            .replace('{width}', '52')
+                            .replace('{height}', '72')}
+                          alt={category.gameName}
+                          className="w-6 h-8 object-cover rounded border border-gray-200 dark:border-gray-700"
+                        />
+                      )}
+                      <span>{category.gameName}</span>
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
                     {category.lastUpdated

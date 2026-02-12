@@ -1,8 +1,5 @@
-use crate::database::{
-    models::StreamStats, repositories::ChannelRepository, utils, DatabaseManager,
-};
+use crate::database::{repositories::StreamStatsRepository, DatabaseManager};
 use crate::error::ResultExt;
-use duckdb::Connection;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
@@ -13,91 +10,6 @@ pub struct ExportQuery {
     pub end_time: Option<String>,
     pub aggregation: Option<String>, // "raw", "1min", "5min", "1hour"
     pub delimiter: Option<String>,   // Custom delimiter (default: comma)
-}
-
-fn get_stream_stats_internal(
-    conn: &Connection,
-    query: &ExportQuery,
-) -> Result<Vec<StreamStats>, duckdb::Error> {
-    let mut sql = String::from(
-        "SELECT ss.id, ss.stream_id, CAST(ss.collected_at AS VARCHAR) as collected_at, ss.viewer_count,
-         COALESCE((
-             SELECT COUNT(*)
-             FROM chat_messages cm
-             WHERE cm.stream_id = ss.stream_id
-               AND cm.timestamp >= ss.collected_at - INTERVAL '1 minute'
-               AND cm.timestamp < ss.collected_at
-         ), 0) AS chat_rate_1min,
-         ss.category, ss.title, ss.follower_count, ss.twitch_user_id, ss.channel_name
-         FROM stream_stats ss
-         INNER JOIN streams s ON ss.stream_id = s.id
-         WHERE 1=1",
-    );
-
-    let mut params: Vec<String> = Vec::new();
-
-    if let Some(channel_id) = query.channel_id {
-        eprintln!("[Export Debug] Filtering by channel_id: {}", channel_id);
-
-        // Debug: Check if channel exists and has streams
-        let channel_check = ChannelRepository::get_channel_info(conn, channel_id);
-        match channel_check {
-            Ok((ch_id, stream_count)) => {
-                eprintln!(
-                    "[Export Debug] Channel found: platform_id={}, streams={}",
-                    ch_id, stream_count
-                );
-            }
-            Err(e) => {
-                eprintln!("[Export Debug] Channel not found or error: {:?}", e);
-            }
-        }
-
-        sql.push_str(" AND s.channel_id = ?");
-        params.push(channel_id.to_string());
-    }
-
-    if let Some(start_time) = &query.start_time {
-        sql.push_str(" AND ss.collected_at >= ?");
-        params.push(start_time.clone());
-    }
-
-    if let Some(end_time) = &query.end_time {
-        sql.push_str(" AND ss.collected_at <= ?");
-        params.push(end_time.clone());
-    }
-
-    sql.push_str(" ORDER BY ss.collected_at ASC");
-
-    eprintln!("[Export Debug] SQL: {}", sql);
-    eprintln!("[Export Debug] Params: {:?}", params);
-
-    let mut stmt = conn.prepare(&sql)?;
-
-    let stats: Result<Vec<StreamStats>, _> =
-        utils::query_map_with_params(&mut stmt, &params, |row| {
-            Ok(StreamStats {
-                id: Some(row.get(0)?),
-                stream_id: row.get(1)?,
-                collected_at: row.get(2)?,
-                viewer_count: row.get(3)?,
-                chat_rate_1min: Some(row.get(4)?), // Now properly mapped from query
-                category: row.get(5)?,
-                game_id: None,
-                title: row.get(6)?,
-                follower_count: row.get(7)?,
-                twitch_user_id: row.get(8)?,
-                channel_name: row.get(9)?,
-            })
-        })?
-        .collect();
-
-    match &stats {
-        Ok(data) => eprintln!("[Export Debug] Query returned {} records", data.len()),
-        Err(e) => eprintln!("[Export Debug] Query error: {:?}", e),
-    }
-
-    stats
 }
 
 /// Helper function to escape field values for delimited output
@@ -123,15 +35,20 @@ pub async fn export_to_delimited(
     file_path: String,
     include_bom: Option<bool>,
 ) -> Result<String, String> {
-    let conn = db_manager
-        .get_connection()
-        .await
-        .db_context("get database connection")
-        .map_err(|e| e.to_string())?;
-
-    let stats = get_stream_stats_internal(&conn, &query)
-        .db_context("query stats")
-        .map_err(|e| e.to_string())?;
+    let stats = db_manager
+        .with_connection(|conn| {
+            StreamStatsRepository::get_stream_stats_filtered(
+                conn,
+                None,
+                query.channel_id,
+                query.start_time.as_deref(),
+                query.end_time.as_deref(),
+                true, // ORDER BY collected_at ASC for export
+            )
+            .db_context("query stats")
+            .map_err(|e| e.to_string())
+        })
+        .await?;
 
     let stats_len = stats.len();
 
@@ -198,15 +115,20 @@ pub async fn preview_export_data(
     query: ExportQuery,
     max_rows: Option<usize>,
 ) -> Result<String, String> {
-    let conn = db_manager
-        .get_connection()
-        .await
-        .db_context("get database connection")
-        .map_err(|e| e.to_string())?;
-
-    let stats = get_stream_stats_internal(&conn, &query)
-        .db_context("query stats")
-        .map_err(|e| e.to_string())?;
+    let stats = db_manager
+        .with_connection(|conn| {
+            StreamStatsRepository::get_stream_stats_filtered(
+                conn,
+                None,
+                query.channel_id,
+                query.start_time.as_deref(),
+                query.end_time.as_deref(),
+                true, // ORDER BY collected_at ASC
+            )
+            .db_context("query stats")
+            .map_err(|e| e.to_string())
+        })
+        .await?;
 
     // Limit to max_rows (default 10)
     let max_rows = max_rows.unwrap_or(10);
