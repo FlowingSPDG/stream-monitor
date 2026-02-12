@@ -3,6 +3,7 @@ use crate::collectors::twitch::TwitchCollector;
 use crate::constants::database as db_constants;
 use crate::database::{
     models::{Channel, ChannelStatsEvent, Stream, StreamData, StreamStats},
+    repositories::ChannelRepository,
     writer::DatabaseWriter,
     DatabaseManager,
 };
@@ -118,9 +119,7 @@ impl ChannelPoller {
 
         let task = tokio::spawn(async move {
             // 手動登録チャンネルかつTwitchの場合、IRC接続を開始
-            if channel.platform == db_constants::PLATFORM_TWITCH
-                && !channel.is_auto_discovered.unwrap_or(false)
-            {
+            if channel.platform == db_constants::PLATFORM_TWITCH && !channel.is_auto_discovered {
                 if let Some(ref twitch_collector) = &twitch_collector_for_task {
                     // IRC接続にはlogin name (channel_id)を使用、display name (channel_name)ではない
                     if let Err(e) = twitch_collector
@@ -259,7 +258,7 @@ impl ChannelPoller {
 
                                 // Twitch手動登録チャンネルの場合、IRC Managerにstream_idを通知
                                 if updated_channel.platform == db_constants::PLATFORM_TWITCH
-                                    && !updated_channel.is_auto_discovered.unwrap_or(false)
+                                    && !updated_channel.is_auto_discovered
                                 {
                                     if let Some(ref twitch_collector) = twitch_collector_for_task {
                                         twitch_collector
@@ -306,7 +305,7 @@ impl ChannelPoller {
 
                         // Twitch手動登録チャンネルの場合、IRC Managerにオフライン通知
                         if updated_channel.platform == db_constants::PLATFORM_TWITCH
-                            && !updated_channel.is_auto_discovered.unwrap_or(false)
+                            && !updated_channel.is_auto_discovered
                         {
                             if let Some(ref twitch_collector) = twitch_collector_for_task {
                                 twitch_collector.update_stream_id(channel_id, None).await;
@@ -403,36 +402,7 @@ impl ChannelPoller {
     }
 
     fn get_channel(conn: &Connection, channel_id: i64) -> Result<Option<Channel>, duckdb::Error> {
-        let mut stmt = conn.prepare("SELECT id, platform, channel_id, channel_name, enabled, poll_interval, is_auto_discovered, CAST(discovered_at AS VARCHAR) as discovered_at, twitch_user_id, CAST(created_at AS VARCHAR) as created_at, CAST(updated_at AS VARCHAR) as updated_at FROM channels WHERE id = ?")?;
-
-        let channel_id_str = channel_id.to_string();
-        let rows: Result<Vec<_>, _> = stmt
-            .query_map([channel_id_str.as_str()], |row| {
-                Ok(Channel {
-                    id: Some(row.get(0)?),
-                    platform: row.get(1)?,
-                    channel_id: row.get(2)?,
-                    channel_name: row.get(3)?,
-                    display_name: None,
-                    profile_image_url: None,
-                    enabled: row.get(4)?,
-                    poll_interval: row.get(5)?,
-                    follower_count: None,
-                    broadcaster_type: None,
-                    view_count: None,
-                    is_auto_discovered: row.get(6).ok(),
-                    discovered_at: row.get(7).ok(),
-                    twitch_user_id: row.get(8).ok(),
-                    created_at: Some(row.get(9)?),
-                    updated_at: Some(row.get(10)?),
-                })
-            })?
-            .collect();
-
-        match rows {
-            Ok(mut channels) => Ok(channels.pop()),
-            Err(e) => Err(e),
-        }
+        ChannelRepository::get_by_id(conn, channel_id)
     }
 
     /// ストリーム統計情報をデータベースに保存する

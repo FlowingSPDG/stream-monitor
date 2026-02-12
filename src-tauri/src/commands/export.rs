@@ -1,4 +1,6 @@
-use crate::database::{models::StreamStats, utils, DatabaseManager};
+use crate::database::{
+    models::StreamStats, repositories::ChannelRepository, utils, DatabaseManager,
+};
 use crate::error::ResultExt;
 use duckdb::Connection;
 use serde::{Deserialize, Serialize};
@@ -38,11 +40,7 @@ fn get_stream_stats_internal(
         eprintln!("[Export Debug] Filtering by channel_id: {}", channel_id);
 
         // Debug: Check if channel exists and has streams
-        let channel_check: Result<(String, i64), _> = conn.query_row(
-            "SELECT channel_id, (SELECT COUNT(*) FROM streams WHERE channel_id = c.id) as stream_count FROM channels c WHERE id = ?",
-            [channel_id.to_string()],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-        );
+        let channel_check = ChannelRepository::get_channel_info(conn, channel_id);
         match channel_check {
             Ok((ch_id, stream_count)) => {
                 eprintln!(

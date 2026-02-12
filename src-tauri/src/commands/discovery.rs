@@ -1,7 +1,7 @@
 use crate::collectors::auto_discovery::AutoDiscoveryPoller;
 use crate::config::settings::{AutoDiscoverySettings, SettingsManager};
 use crate::constants::database as db_constants;
-use crate::database::DatabaseManager;
+use crate::database::{repositories::ChannelRepository, DatabaseManager};
 use crate::error::ResultExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -271,21 +271,11 @@ pub async fn get_discovered_streams(
             .db_context("get connection")
             .map_err(|e| e.to_string())?;
 
-        let mut stmt = conn
-            .prepare(
-                "SELECT twitch_user_id FROM channels WHERE platform = 'twitch' AND twitch_user_id IS NOT NULL",
-            )
-            .db_context("prepare query")
-            .map_err(|e| e.to_string())?;
-
-        let ids: Vec<i64> = stmt
-            .query_map([], |row| row.get(0))
-            .db_context("query")
+        ChannelRepository::get_all_twitch_user_ids(&conn)
+            .db_context("get twitch user ids")
             .map_err(|e| e.to_string())?
-            .filter_map(|r| r.ok())
-            .collect();
-
-        ids.into_iter().collect()
+            .into_iter()
+            .collect()
     };
 
     // 2. メモリキャッシュから配信を取得（既に取得済みのcache変数を再利用）
@@ -441,16 +431,9 @@ pub async fn promote_discovered_channel(
             .db_context("get connection")
             .map_err(|e| e.to_string())?;
 
-        let mut stmt = conn
-            .prepare("SELECT COUNT(*) FROM channels WHERE platform = 'twitch' AND channel_id = ?")
-            .db_context("prepare query")
-            .map_err(|e| e.to_string())?;
-        let count: i64 = stmt
-            .query_row([&login_name], |row| row.get(0))
-            .db_context("query")
-            .map_err(|e| e.to_string())?;
-
-        count > 0
+        ChannelRepository::exists(&conn, "twitch", &login_name)
+            .db_context("check channel exists")
+            .map_err(|e| e.to_string())?
     }; // conn と stmt はここでスコープを抜けてdropされる
 
     if already_exists {
@@ -461,9 +444,12 @@ pub async fn promote_discovered_channel(
             .db_context("get connection")
             .map_err(|e| e.to_string())?;
 
-        conn.execute(
-            "UPDATE channels SET is_auto_discovered = false, discovered_at = NULL, twitch_user_id = ? WHERE platform = 'twitch' AND channel_id = ?",
-            duckdb::params![stream_info.twitch_user_id, &login_name],
+        ChannelRepository::update_auto_discovered(
+            &conn,
+            "twitch",
+            &login_name,
+            false,
+            Some(stream_info.twitch_user_id),
         )
         .db_context("update channel")
         .map_err(|e| e.to_string())?;

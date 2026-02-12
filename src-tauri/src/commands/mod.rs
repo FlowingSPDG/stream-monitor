@@ -11,6 +11,7 @@ pub mod logs;
 pub mod oauth;
 pub mod sql;
 pub mod stats;
+pub mod system;
 pub mod timeline;
 pub mod twitch;
 pub mod window;

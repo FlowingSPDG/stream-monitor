@@ -36,6 +36,28 @@ export const getOAuthConfig = async (platform: string): Promise<OAuthConfig> => 
 };
 
 /**
+ * Twitch Device Code認証を開始
+ */
+export const startTwitchDeviceAuth = async (): Promise<any> => {
+  return await invoke('start_twitch_device_auth');
+};
+
+/**
+ * Twitch Device Codeトークンをポーリング
+ */
+export const pollTwitchDeviceToken = async (
+  deviceCode: string,
+  interval: number,
+  clientId: string
+): Promise<string> => {
+  return await invoke('poll_twitch_device_token', {
+    deviceCode,
+    interval,
+    clientId,
+  });
+};
+
+/**
  * OAuth設定を保存
  */
 export const saveOAuthConfig = async (

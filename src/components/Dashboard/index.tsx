@@ -208,12 +208,6 @@ function DiscoveredStreamCard({ stream, onPromote, isAlreadyRegistered = false }
 export function Dashboard() {
   const queryClient = useQueryClient();
   const backendReady = useAppStateStore((state) => state.backendReady);
-  
-  // #region agent log
-  useEffect(() => {
-    fetch('http://127.0.0.1:7245/ingest/0d9d8352-eae8-4480-b5a0-b0206438daef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard/index.tsx:213',message:'Dashboard mounted or backendReady changed',data:{backendReady},timestamp:Date.now(),hypothesisId:'A,C'})}).catch(()=>{});
-  }, [backendReady]);
-  // #endregion
 
   // チャンネル情報を取得し、ライブチャンネルのみをフィルタリング
   const { 
@@ -318,16 +312,21 @@ export function Dashboard() {
           platform: "twitch",
           channel_id: promotingStream.channel_name,
           channel_name: promotingStream.display_name || promotingStream.channel_name,
+          display_name: promotingStream.display_name || promotingStream.channel_name,
+          profile_image_url: promotingStream.profile_image_url || "",
           enabled: true,
           created_at: now,
           updated_at: now,
           poll_interval: 60,
+          follower_count: promotingStream.follower_count,
+          broadcaster_type: promotingStream.broadcaster_type || "",
+          view_count: 0,
           is_auto_discovered: false,
+          discovered_at: "",
+          twitch_user_id: promotingStream.twitch_user_id,
           is_live: true,
           current_viewers: promotingStream.viewer_count ?? 0,
-          current_title: promotingStream.title ?? undefined,
-          twitch_user_id: promotingStream.twitch_user_id,
-          profile_image_url: promotingStream.profile_image_url ?? undefined,
+          current_title: promotingStream.title || undefined,
         };
         queryClient.setQueryData<ChannelWithStats[]>(
           ["channels"],

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import type { DeviceAuthStatus } from '../../types';
 import { useConfigStore } from '../../stores/configStore';
+import * as systemApi from '../../api/system';
+import * as configApi from '../../api/config';
 
 interface TwitchAuthPanelProps {
   onClose?: () => void;
@@ -55,7 +56,7 @@ export function TwitchAuthPanel({ onClose, onSuccess }: TwitchAuthPanelProps) {
         // Twitchコレクターを再初期化
         try {
           console.log('[TwitchAuthPanel] Reinitializing Twitch collector...');
-          await invoke('reinitialize_twitch_collector');
+          await systemApi.reinitializeTwitchCollector();
           console.log('[TwitchAuthPanel] Twitch collector reinitialized successfully');
         } catch (error) {
           console.error('[TwitchAuthPanel] Failed to reinitialize Twitch collector:', error);
@@ -115,7 +116,7 @@ export function TwitchAuthPanel({ onClose, onSuccess }: TwitchAuthPanelProps) {
 
     try {
       // Device Code Flow を開始
-      const authStatus = await invoke<DeviceAuthStatus>('start_twitch_device_auth');
+      const authStatus = await configApi.startTwitchDeviceAuth() as DeviceAuthStatus;
       
       setDeviceAuth(authStatus);
       setTimeRemaining(authStatus.expires_in);
@@ -136,11 +137,11 @@ export function TwitchAuthPanel({ onClose, onSuccess }: TwitchAuthPanelProps) {
       // ポーリングを開始（バックエンドで処理）
       // トークン取得成功後、バックエンドが 'twitch-auth-success' イベントをemitする
       // イベントリスナーが状態更新を処理するため、ここでは何もしない
-      await invoke<string>('poll_twitch_device_token', {
-        deviceCode: authStatus.device_code,
-        interval: authStatus.interval,
-        clientId: await getClientId(),
-      });
+      await configApi.pollTwitchDeviceToken(
+        authStatus.device_code,
+        authStatus.interval,
+        await getClientId()
+      );
       
       console.log('[TwitchAuthPanel] Token polling completed, waiting for event...');
     } catch (err) {
@@ -153,9 +154,7 @@ export function TwitchAuthPanel({ onClose, onSuccess }: TwitchAuthPanelProps) {
 
   const getClientId = async (): Promise<string> => {
     // 設定からClient IDを取得
-    const config = await invoke<{ client_id?: string }>('get_oauth_config', {
-      platform: 'twitch',
-    });
+    const config = await configApi.getOAuthConfig('twitch');
     return config.client_id || '';
   };
 

@@ -29,8 +29,8 @@ pub struct BroadcasterAnalytics {
 /// ゲームタイトル別統計
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameAnalytics {
-    pub game_id: String, // Twitch game ID（プライマリキー）
-    pub category: String,        // カテゴリ名（表示用、game_categoriesから取得）
+    pub game_id: String,  // Twitch game ID（プライマリキー）
+    pub category: String, // カテゴリ名（表示用、game_categoriesから取得）
     pub minutes_watched: i64,
     pub hours_broadcasted: f64,
     pub average_ccu: f64,

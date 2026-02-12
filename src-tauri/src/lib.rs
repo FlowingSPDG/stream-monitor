@@ -59,6 +59,7 @@ use commands::{
         save_sql_template,
     },
     stats::{get_realtime_chat_rate, get_stream_stats},
+    system::is_backend_ready,
     timeline::{get_channel_streams, get_stream_timeline},
     twitch::{get_twitch_rate_limit_status, validate_twitch_channel},
     window::show_main_window,
@@ -151,15 +152,15 @@ async fn start_existing_channels_polling(
                 platform: row.get(1)?,
                 channel_id: row.get(2)?,
                 channel_name: row.get(3)?,
-                display_name: None,
-                profile_image_url: None,
+                display_name: row.get::<_, String>(3)?, // channel_nameと同じ値
+                profile_image_url: "".to_string(),
                 enabled: row.get(4)?,
                 poll_interval: row.get(5)?,
-                follower_count: None,
-                broadcaster_type: None,
-                view_count: None,
-                is_auto_discovered: row.get(6).ok(),
-                discovered_at: row.get(7).ok(),
+                follower_count: 0,
+                broadcaster_type: "".to_string(),
+                view_count: 0,
+                is_auto_discovered: row.get::<_, Option<bool>>(6)?.unwrap_or(false),
+                discovered_at: row.get::<_, Option<String>>(7)?.unwrap_or_default(),
                 twitch_user_id: row.get(8).ok(),
                 created_at: Some(row.get(9)?),
                 updated_at: Some(row.get(10)?),
@@ -447,29 +448,7 @@ pub fn run() {
                         *state = Some(discovery_poller);
 
                         // Emit backend-ready event to notify frontend that all collectors and pollers are initialized
-                        // #region agent log
-                        {
-                            use std::fs::OpenOptions;
-                            use std::io::Write;
-                            let log_path = r"c:\Users\Flowing\stream-monitor\.cursor\debug.log";
-                            let _ = OpenOptions::new().create(true).append(true).open(log_path).and_then(|mut f| {
-                                writeln!(f, r#"{{"location":"lib.rs:450","message":"Emitting backend-ready event","data":{{}},"timestamp":{},"hypothesisId":"A"}}"#, 
-                                    chrono::Local::now().timestamp_millis())
-                            });
-                        }
-                        // #endregion
-                        let _emit_result = app_handle_for_init.emit("backend-ready", ());
-                        // #region agent log
-                        {
-                            use std::fs::OpenOptions;
-                            use std::io::Write;
-                            let log_path = r"c:\Users\Flowing\stream-monitor\.cursor\debug.log";
-                            let _ = OpenOptions::new().create(true).append(true).open(log_path).and_then(|mut f| {
-                                writeln!(f, r#"{{"location":"lib.rs:464","message":"backend-ready event emit result","data":{{"success":{}}},"timestamp":{},"hypothesisId":"A"}}"#, 
-                                    _emit_result.is_ok(), chrono::Local::now().timestamp_millis())
-                            });
-                        }
-                        // #endregion
+                        let _ = app_handle_for_init.emit("backend-ready", ());
                         logger_for_init.info("Backend fully initialized, frontend queries are now safe");
                     });
 
@@ -574,6 +553,8 @@ pub fn run() {
             update_channel,
             list_channels,
             toggle_channel,
+            // System commands
+            is_backend_ready,
             // Chat commands
             get_chat_messages,
             get_chat_messages_around_timestamp,

@@ -3,6 +3,7 @@ use crate::commands::discovery::DiscoveredStreamInfo;
 use crate::config::settings::{AutoDiscoverySettings, SettingsManager};
 use crate::database::repositories::game_category_repository::GameCategoryRepository;
 use crate::database::repositories::stream_stats_repository::StreamStatsRepository;
+use crate::database::repositories::ChannelRepository;
 use crate::database::DatabaseManager;
 use crate::error::ResultExt;
 use crate::DiscoveredStreamsCache;
@@ -489,7 +490,7 @@ impl AutoDiscoveryPoller {
                         continue;
                     }
 
-                    conn.execute("DELETE FROM channels WHERE id = ?", [channel_id])?;
+                    ChannelRepository::delete(&conn, *channel_id)?;
                     eprintln!(
                         "[AutoDiscovery] Cleaned up offline channel: {} (id: {})",
                         channel_name, channel_id

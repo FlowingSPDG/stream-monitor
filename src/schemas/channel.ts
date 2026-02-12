@@ -7,25 +7,24 @@ export const PlatformSchema = z.enum(['twitch', 'youtube']);
 
 /**
  * Channel schema (database model)
- * Note: id, created_at, updated_at are optional when creating but required when reading from DB
  */
 export const ChannelSchema = z.object({
-  id: z.number().optional(),
+  id: z.number(),
   platform: PlatformSchema,
   channel_id: z.string(),
   channel_name: z.string(),
-  display_name: z.string().optional(),
-  profile_image_url: z.string().optional(),
+  display_name: z.string(),
+  profile_image_url: z.string(),
   enabled: z.boolean(),
   poll_interval: z.number(),
-  follower_count: z.number().optional(),
-  broadcaster_type: z.string().optional(),
-  view_count: z.number().optional(),
-  is_auto_discovered: z.boolean().optional(),
-  discovered_at: z.string().optional(),
+  follower_count: z.number(),
+  broadcaster_type: z.string(),
+  view_count: z.number(),
+  is_auto_discovered: z.boolean(),
+  discovered_at: z.string(),
   twitch_user_id: z.number().optional(),
-  created_at: z.string().optional(),
-  updated_at: z.string().optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
 });
 
 /**

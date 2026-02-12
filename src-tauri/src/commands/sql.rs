@@ -705,7 +705,12 @@ pub async fn save_sql_template(
             "UPDATE sql_templates 
              SET name = ?, description = ?, query = ?, updated_at = CURRENT_TIMESTAMP 
              WHERE id = ?",
-            params![&request.name, &request.description, &request.query, request.id],
+            params![
+                &request.name,
+                &request.description,
+                &request.query,
+                request.id
+            ],
         )
         .db_context("update template")
         .map_err(|e| e.to_string())?;

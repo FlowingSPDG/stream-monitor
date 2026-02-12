@@ -112,6 +112,7 @@ let count = ChatMessageRepository::count_messages(&conn, None, None, None, None)
 **配置場所**: `src-tauri/src/database/repositories/`
 
 **既存Repository**:
+- `ChannelRepository` - チャンネル関連クエリ（作成、取得、更新、削除、存在確認等）
 - `ChatMessageRepository` - チャットメッセージ関連クエリ（カウント、集計、検索等）
 - `StreamStatsRepository` - 配信統計関連クエリ（タイムライン、集計等）
 - `AggregationRepository` - 複雑な集計クエリ（MW計算、エンゲージメント等）
@@ -143,10 +144,11 @@ const data = await statisticsApi.getRealtimeChatRate();
 
 **既存APIファイル**:
 - `channels.ts` - チャンネル管理（追加、削除、更新、一覧取得）
-- `config.ts` - 設定管理（トークン、OAuth設定）
+- `config.ts` - 設定管理（トークン、OAuth設定、Twitch Device Code認証）
 - `discovery.ts` - 自動発見（設定、検索、昇格）
 - `sql.ts` - SQLクエリ（実行、テンプレート管理）
 - `statistics.ts` - 統計・分析（分析結果、チャット統計、リアルタイム統計）
+- `system.ts` - システム操作（Twitchコレクター再初期化、DB再作成、バックエンド状態確認、ウィンドウ表示）
 
 #### 3. ドキュメント作成ルール
 
@@ -446,6 +448,8 @@ bun run build
 | Twitch認証失敗 | Client ID未設定/期限切れ | Device Code Flowで再認証 |
 | チャット未記録 | IRC未統合 | 現在はチャットレートのみ |
 | DuckDB型変換エラー | LIST/TIMESTAMP型を直接取得 | SQLで`CAST(column AS VARCHAR)` |
+| Zodバリデーションエラー | バックエンドから`null`が返されるのに、フロントエンドで`nullable()`がない | バックエンドで`Option<>`を削除し、デフォルト値を設定 |
+| マイグレーションでスタックオーバーフロー | `NOT NULL DEFAULT`を既存テーブルに追加 | `NOT NULL`を削除し、`DEFAULT`のみで追加、SELECT時に`COALESCE()`でデフォルト値を保証 |
 | Tauriコマンド引数エラー | 構造体引数のラッピング不足 | フロントエンド: `{query: {...}}`でラップ |
 | serdeデシリアライズ失敗 | 命名規則の不一致(camelCase/snake_case) | `#[serde(rename_all = "camelCase")]`追加 |
 | タイムスタンプ比較で常に0 | `CURRENT_TIMESTAMP`(UTC)とLocal時刻の時差 | `chrono::Local::now()`で計算してパラメータ渡し |

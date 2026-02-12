@@ -269,6 +269,85 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
         conn.execute("ALTER TABLE stream_stats ADD COLUMN category TEXT", [])?;
     }
 
+    // channelsテーブルにdisplay_nameフィールドを追加
+    let mut channels_has_display_name = conn.prepare(
+        "SELECT COUNT(*) FROM pragma_table_info('channels') WHERE name = 'display_name'",
+    )?;
+    let channels_has_display_name_count: i64 =
+        channels_has_display_name.query_row([], |row| row.get(0))?;
+
+    if channels_has_display_name_count == 0 {
+        eprintln!("[Migration] Adding display_name column to channels table");
+        conn.execute(
+            "ALTER TABLE channels ADD COLUMN display_name TEXT DEFAULT ''",
+            [],
+        )?;
+        // 既存データのdisplay_nameをchannel_nameで初期化
+        conn.execute(
+            "UPDATE channels SET display_name = channel_name WHERE display_name = '' OR display_name IS NULL",
+            [],
+        )?;
+    }
+
+    // channelsテーブルにprofile_image_urlフィールドを追加
+    let mut channels_has_profile_image_url = conn.prepare(
+        "SELECT COUNT(*) FROM pragma_table_info('channels') WHERE name = 'profile_image_url'",
+    )?;
+    let channels_has_profile_image_url_count: i64 =
+        channels_has_profile_image_url.query_row([], |row| row.get(0))?;
+
+    if channels_has_profile_image_url_count == 0 {
+        eprintln!("[Migration] Adding profile_image_url column to channels table");
+        conn.execute(
+            "ALTER TABLE channels ADD COLUMN profile_image_url TEXT DEFAULT ''",
+            [],
+        )?;
+    }
+
+    // channelsテーブルにfollower_countフィールドを追加
+    let mut channels_has_follower_count = conn.prepare(
+        "SELECT COUNT(*) FROM pragma_table_info('channels') WHERE name = 'follower_count'",
+    )?;
+    let channels_has_follower_count_count: i64 =
+        channels_has_follower_count.query_row([], |row| row.get(0))?;
+
+    if channels_has_follower_count_count == 0 {
+        eprintln!("[Migration] Adding follower_count column to channels table");
+        conn.execute(
+            "ALTER TABLE channels ADD COLUMN follower_count INTEGER DEFAULT 0",
+            [],
+        )?;
+    }
+
+    // channelsテーブルにbroadcaster_typeフィールドを追加
+    let mut channels_has_broadcaster_type = conn.prepare(
+        "SELECT COUNT(*) FROM pragma_table_info('channels') WHERE name = 'broadcaster_type'",
+    )?;
+    let channels_has_broadcaster_type_count: i64 =
+        channels_has_broadcaster_type.query_row([], |row| row.get(0))?;
+
+    if channels_has_broadcaster_type_count == 0 {
+        eprintln!("[Migration] Adding broadcaster_type column to channels table");
+        conn.execute(
+            "ALTER TABLE channels ADD COLUMN broadcaster_type TEXT DEFAULT ''",
+            [],
+        )?;
+    }
+
+    // channelsテーブルにview_countフィールドを追加
+    let mut channels_has_view_count = conn
+        .prepare("SELECT COUNT(*) FROM pragma_table_info('channels') WHERE name = 'view_count'")?;
+    let channels_has_view_count_count: i64 =
+        channels_has_view_count.query_row([], |row| row.get(0))?;
+
+    if channels_has_view_count_count == 0 {
+        eprintln!("[Migration] Adding view_count column to channels table");
+        conn.execute(
+            "ALTER TABLE channels ADD COLUMN view_count INTEGER DEFAULT 0",
+            [],
+        )?;
+    }
+
     // channelsテーブルにis_auto_discoveredフィールドを追加
     let mut channels_has_is_auto_discovered = conn.prepare(
         "SELECT COUNT(*) FROM pragma_table_info('channels') WHERE name = 'is_auto_discovered'",
@@ -294,10 +373,32 @@ fn migrate_database_schema(conn: &Connection) -> Result<(), duckdb::Error> {
     if channels_has_discovered_at_count == 0 {
         eprintln!("[Migration] Adding discovered_at column to channels table");
         conn.execute(
-            "ALTER TABLE channels ADD COLUMN discovered_at TIMESTAMP",
+            "ALTER TABLE channels ADD COLUMN discovered_at TEXT DEFAULT ''",
             [],
         )?;
     }
+
+    // 既存のNULL値を空文字列に更新
+    eprintln!("[Migration] Updating NULL values in channels table to default values");
+    conn.execute(
+        "UPDATE channels SET 
+            display_name = COALESCE(display_name, channel_name),
+            profile_image_url = COALESCE(profile_image_url, ''),
+            follower_count = COALESCE(follower_count, 0),
+            broadcaster_type = COALESCE(broadcaster_type, ''),
+            view_count = COALESCE(view_count, 0),
+            is_auto_discovered = COALESCE(is_auto_discovered, false),
+            discovered_at = COALESCE(discovered_at, '')
+        WHERE display_name IS NULL 
+            OR profile_image_url IS NULL 
+            OR follower_count IS NULL 
+            OR broadcaster_type IS NULL 
+            OR view_count IS NULL 
+            OR is_auto_discovered IS NULL 
+            OR discovered_at IS NULL",
+        [],
+    )?;
+    eprintln!("[Migration] NULL values updated successfully");
 
     // channelsテーブルにcurrent_viewer_countフィールドを追加
     let mut channels_has_current_viewer_count = conn.prepare(

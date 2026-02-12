@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { ChannelWithStats } from "../../types";
 import { ChannelForm } from "./ChannelForm";
 import { ChannelEditForm } from "./ChannelEditForm";
@@ -18,12 +18,6 @@ export function ChannelList() {
 
   const queryClient = useQueryClient();
   const backendReady = useAppStateStore((state) => state.backendReady);
-  
-  // #region agent log
-  useEffect(() => {
-    fetch('http://127.0.0.1:7245/ingest/0d9d8352-eae8-4480-b5a0-b0206438daef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ChannelList/index.tsx:23',message:'ChannelList mounted or backendReady changed',data:{backendReady},timestamp:Date.now(),hypothesisId:'A,C'})}).catch(()=>{});
-  }, [backendReady]);
-  // #endregion
 
   // チャンネル取得
   const { data: channels = [], isLoading, error } = useQuery({

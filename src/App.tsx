@@ -13,13 +13,13 @@ import { ConfirmDialog } from "./components/common/ConfirmDialog";
 import { DonationModal, useDonationModal } from "./components/common/DonationModal";
 import { DatabaseErrorDialog } from "./components/common/DatabaseErrorDialog";
 import { useThemeStore } from "./stores/themeStore";
+import * as systemApi from "./api/system";
 import { useToastStore } from "./stores/toastStore";
 import { useAppStateStore } from "./stores/appStateStore";
 import "./App.css";
 import { SQLViewer } from "./components/SQL";
 import Timeline from "./components/Timeline";
 import { listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
 import { NavigationProvider } from "./contexts/NavigationContext";
 
 const queryClient = new QueryClient({
@@ -61,7 +61,7 @@ function App() {
     const showMainWindow = async () => {
       console.log("Main window rendered, closing splash and showing main window");
       try {
-        await invoke("show_main_window");
+        await systemApi.showMainWindow();
       } catch (error) {
         console.error("Failed to show main window:", error);
       }
@@ -72,16 +72,9 @@ function App() {
 
   // グローバルイベントリスナーを設定
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7245/ingest/0d9d8352-eae8-4480-b5a0-b0206438daef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:74',message:'App mounted, setting up event listeners',data:{},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-    
     let cleanup: (() => void) | undefined;
 
     const setupEventListeners = async () => {
-      // #region agent log
-      fetch('http://127.0.0.1:7245/ingest/0d9d8352-eae8-4480-b5a0-b0206438daef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:81',message:'setupEventListeners called',data:{},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       // DB初期化成功イベント（ログのみ）
       const successUnlisten = await listen("database-init-success", () => {
         console.log("Database initialization successful");
@@ -104,11 +97,23 @@ function App() {
         );
       });
 
+      // 起動時にバックエンドの準備状態を確認
+      try {
+        const isReady = await systemApi.isBackendReady();
+        console.log("[App] Backend ready status on mount:", isReady);
+        if (isReady) {
+          setBackendReady(true);
+          queryClient.invalidateQueries();
+          console.log("[App] Backend was already ready, queries enabled");
+        }
+      } catch (error) {
+        console.error("[App] Failed to check backend ready status:", error);
+      }
+
       // バックエンド完全初期化イベント（コレクター、ポーリング、自動発見がすべて準備完了）
       const backendReadyUnlisten = await listen("backend-ready", () => {
-        console.log("[App] ✅ Backend fully initialized, enabling queries");
+        console.log("[App] ✅ Backend fully initialized via event, enabling queries");
         setBackendReady(true);
-        console.log("[App] backendReady state set to true");
         // すべてのクエリを無効化して最新データを取得
         queryClient.invalidateQueries();
         console.log("[App] All queries invalidated");
