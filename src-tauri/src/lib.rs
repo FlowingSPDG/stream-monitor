@@ -60,7 +60,10 @@ use commands::{
     },
     stats::{get_realtime_chat_rate, get_stream_stats},
     system::is_backend_ready,
-    timeline::{get_channel_streams, get_stream_timeline},
+    timeline::{
+        get_channel_streams, get_stream_timeline, get_streams_by_date_range,
+        get_suggested_streams_for_comparison,
+    },
     twitch::{get_twitch_rate_limit_status, validate_twitch_channel},
     window::show_main_window,
 };
@@ -601,6 +604,8 @@ pub fn run() {
             // Timeline commands
             get_channel_streams,
             get_stream_timeline,
+            get_streams_by_date_range,
+            get_suggested_streams_for_comparison,
             // Export commands
             export_to_delimited,
             preview_export_data,

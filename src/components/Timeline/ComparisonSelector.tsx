@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { Channel, StreamInfo, StreamTimelineData, SelectedStream } from '../../types';
+import * as channelsApi from '../../api/channels';
+import * as streamsApi from '../../api/streams';
+import type { Channel, StreamInfo, StreamTimelineData, SelectedStream } from '../../types';
 import { Skeleton } from '../common/Skeleton';
 import { getStreamColor, truncateText } from './utils';
+
+/** 1本目の選択方法 */
+type FirstStreamSelectMode = 'date' | 'channel';
 
 interface ComparisonSelectorProps {
   onTimelinesSelect: (timelines: StreamTimelineData[]) => void;
@@ -80,15 +84,6 @@ const calculateSimilarity = (baseStream: StreamInfo, targetStream: StreamInfo): 
   };
 };
 
-const getSuggestedStreams = (baseStream: StreamInfo, allStreams: StreamInfo[], selectedStreamIds: number[]): SimilarityScore[] => {
-  return allStreams
-    .filter(stream => stream.id !== baseStream.id && !selectedStreamIds.includes(stream.id))
-    .map(stream => calculateSimilarity(baseStream, stream))
-    .filter(result => result.score >= 60)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 10);
-};
-
 const ComparisonSelector: React.FC<ComparisonSelectorProps> = ({
   onTimelinesSelect,
   selectedStreams,
@@ -103,12 +98,26 @@ const ComparisonSelector: React.FC<ComparisonSelectorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [suggestedStreams, setSuggestedStreams] = useState<SimilarityScore[]>([]);
 
+  // 1本目の選択方法（日付 or チャンネル）
+  const [firstStreamMode, setFirstStreamMode] = useState<FirstStreamSelectMode>('channel');
+  // 日付から選ぶ用
+  const [dateFrom, setDateFrom] = useState<string>(() => {
+    const d = new Date();
+    return d.toISOString().slice(0, 10);
+  });
+  const [dateTo, setDateTo] = useState<string>(() => {
+    const d = new Date();
+    return d.toISOString().slice(0, 10);
+  });
+  const [streamsByDate, setStreamsByDate] = useState<StreamInfo[]>([]);
+  const [loadingStreamsByDate, setLoadingStreamsByDate] = useState(false);
+
   // チャンネル一覧を取得
   useEffect(() => {
     const fetchChannels = async () => {
       try {
         setLoadingChannels(true);
-        const result = await invoke<Channel[]>('list_channels');
+        const result = await channelsApi.listChannels();
         setChannels(result);
       } catch (err) {
         setError(`チャンネル一覧の取得に失敗しました: ${err}`);
@@ -120,7 +129,7 @@ const ComparisonSelector: React.FC<ComparisonSelectorProps> = ({
     fetchChannels();
   }, []);
 
-  // 選択したチャンネルの配信一覧を取得
+  // 選択したチャンネルの配信一覧を取得（チャンネルから選ぶ用）
   useEffect(() => {
     if (selectedChannelId === null) {
       setStreams([]);
@@ -131,8 +140,8 @@ const ComparisonSelector: React.FC<ComparisonSelectorProps> = ({
       try {
         setLoadingStreams(true);
         setError(null);
-        const result = await invoke<StreamInfo[]>('get_channel_streams', {
-          channelId: selectedChannelId,
+        const result = await streamsApi.getChannelStreams({
+          channel_id: selectedChannelId,
           limit: 50,
           offset: 0,
         });
@@ -181,11 +190,24 @@ const ComparisonSelector: React.FC<ComparisonSelectorProps> = ({
       onSelectedStreamsChange(newSelected);
       await loadTimelines(newSelected);
 
-      // 最初の配信を選択した場合、類似配信をサジェスト
+      // 最初の配信を選択した場合、APIで類似配信を取得してサジェスト表示
       if (selectedStreams.length === 0) {
-        const selectedStreamIds = newSelected.map(s => s.streamId);
-        const suggestions = getSuggestedStreams(stream, streams, selectedStreamIds);
-        setSuggestedStreams(suggestions);
+        try {
+          const apiSuggestions = await streamsApi.getSuggestedStreamsForComparison({
+            base_stream_id: stream.id,
+            limit: 50,
+          });
+          const selectedStreamIds = newSelected.map((s) => s.streamId);
+          const withScores = apiSuggestions
+            .filter((s) => !selectedStreamIds.includes(s.id))
+            .map((s) => calculateSimilarity(stream, s))
+            .filter((r) => r.score >= 40)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 10);
+          setSuggestedStreams(withScores);
+        } catch {
+          setSuggestedStreams([]);
+        }
       }
     }
   };
@@ -203,11 +225,7 @@ const ComparisonSelector: React.FC<ComparisonSelectorProps> = ({
 
       // 各配信のタイムラインを個別に取得（エラーが発生しても他の配信は取得できるようにする）
       const timelineResults = await Promise.allSettled(
-        selected.map((s) =>
-          invoke<StreamTimelineData>('get_stream_timeline', {
-            streamId: s.streamId,
-          })
-        )
+        selected.map((s) => streamsApi.getStreamTimeline(s.streamId))
       );
 
       // 成功した結果のみを抽出
@@ -237,6 +255,27 @@ const ComparisonSelector: React.FC<ComparisonSelectorProps> = ({
   const handleClearSelection = () => {
     onSelectedStreamsChange([]);
     onTimelinesSelect([]);
+    setSuggestedStreams([]);
+  };
+
+  // 日付範囲で配信一覧を取得
+  const handleLoadStreamsByDate = async () => {
+    try {
+      setLoadingStreamsByDate(true);
+      setError(null);
+      const result = await streamsApi.getStreamsByDateRange({
+        date_from: dateFrom,
+        date_to: dateTo,
+        limit: 100,
+        offset: 0,
+      });
+      setStreamsByDate(result);
+    } catch (err) {
+      setError(`配信一覧の取得に失敗しました: ${err}`);
+      setStreamsByDate([]);
+    } finally {
+      setLoadingStreamsByDate(false);
+    }
   };
 
   const formatDate = (dateStr: string): string => {
@@ -276,6 +315,168 @@ const ComparisonSelector: React.FC<ComparisonSelectorProps> = ({
       {error && (
         <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-400">
           {error}
+        </div>
+      )}
+
+      {/* 1本目を選ぶ（未選択時のみ強調表示） */}
+      {selectedStreams.length === 0 && (
+        <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+            1本目を選ぶ
+          </h3>
+          <div className="flex gap-2 mb-4">
+            <button
+              type="button"
+              onClick={() => setFirstStreamMode('date')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                firstStreamMode === 'date'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              日付から選ぶ
+            </button>
+            <button
+              type="button"
+              onClick={() => setFirstStreamMode('channel')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                firstStreamMode === 'channel'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              チャンネルから選ぶ
+            </button>
+          </div>
+
+          {firstStreamMode === 'date' && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-sm text-gray-600 dark:text-gray-400">
+                  開始日
+                </label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                />
+                <label className="text-sm text-gray-600 dark:text-gray-400">
+                  終了日
+                </label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={handleLoadStreamsByDate}
+                  disabled={loadingStreamsByDate}
+                  className="px-3 py-1.5 bg-blue-500 text-white rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
+                >
+                  {loadingStreamsByDate ? '取得中…' : 'この期間の配信を表示'}
+                </button>
+              </div>
+              {loadingStreamsByDate ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} variant="rectangular" height={56} className="rounded-lg" />
+                  ))}
+                </div>
+              ) : streamsByDate.length > 0 ? (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {streamsByDate.map((stream) => (
+                    <button
+                      key={stream.id}
+                      type="button"
+                      onClick={() => handleStreamToggle(stream)}
+                      disabled={loadingTimelines}
+                      className="w-full text-left p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-gray-900 dark:text-white truncate">
+                            {stream.channel_name} — {truncateText(stream.title || '(タイトルなし)', 40)}
+                          </p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {stream.category || '(カテゴリなし)'} · {formatDate(stream.started_at)}
+                          </p>
+                        </div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                          👁 ピーク: {stream.peak_viewers.toLocaleString()}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  日付を選んで「この期間の配信を表示」を押すと、その期間の配信一覧が表示されます。
+                </p>
+              )}
+            </div>
+          )}
+
+          {firstStreamMode === 'channel' && (
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                配信者
+              </label>
+              <select
+                value={selectedChannelId ?? ''}
+                onChange={(e) => setSelectedChannelId(e.target.value ? Number(e.target.value) : null)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              >
+                <option value="">配信者を選択してください</option>
+                {channels.map((ch) => (
+                  <option key={ch.id} value={ch.id}>
+                    {ch.channel_name} ({ch.platform ?? 'twitch'})
+                  </option>
+                ))}
+              </select>
+              {selectedChannelId && (
+                <>
+                  {loadingStreams ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} variant="rectangular" height={56} className="rounded-lg" />
+                      ))}
+                    </div>
+                  ) : streams.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">配信データがありません</p>
+                  ) : (
+                    <div className="space-y-2 max-h-80 overflow-y-auto">
+                      {streams.map((stream) => (
+                        <button
+                          key={stream.id}
+                          type="button"
+                          onClick={() => handleStreamToggle(stream)}
+                          disabled={loadingTimelines}
+                          className="w-full text-left p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-gray-900 dark:text-white truncate">
+                                {stream.title || '(タイトルなし)'}
+                              </p>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {stream.category || '(カテゴリなし)'} · {formatDate(stream.started_at)}
+                              </p>
+                            </div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                              👁 ピーク: {stream.peak_viewers.toLocaleString()}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -392,27 +593,29 @@ const ComparisonSelector: React.FC<ComparisonSelectorProps> = ({
         </div>
       )}
 
-      {/* チャンネル選択 */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          配信者
-        </label>
-        <select
-          value={selectedChannelId ?? ''}
-          onChange={(e) => setSelectedChannelId(e.target.value ? Number(e.target.value) : null)}
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-        >
-          <option value="">配信者を選択してください</option>
-          {channels.map((channel) => (
-            <option key={channel.id} value={channel.id}>
-              {channel.channel_name} ({channel.platform})
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* 2本目以降を追加するときのチャンネル選択（1本目選択後のみ表示） */}
+      {selectedStreams.length >= 1 && (
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            配信者を選んで追加
+          </label>
+          <select
+            value={selectedChannelId ?? ''}
+            onChange={(e) => setSelectedChannelId(e.target.value ? Number(e.target.value) : null)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          >
+            <option value="">配信者を選択してください</option>
+            {channels.map((channel) => (
+              <option key={channel.id} value={channel.id}>
+                {channel.channel_name} ({channel.platform})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
-      {/* 配信一覧 */}
-      {selectedChannelId && (
+      {/* 配信一覧（チャンネル選択時、2本目以降の追加用） */}
+      {selectedStreams.length >= 1 && selectedChannelId && (
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             配信一覧（クリックで選択/解除）
