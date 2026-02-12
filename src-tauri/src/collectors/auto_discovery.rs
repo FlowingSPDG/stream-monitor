@@ -280,7 +280,7 @@ impl AutoDiscoveryPoller {
         let mut discovered_streams_info = Vec::new();
         // game_id -> game_name
         let mut categories_to_upsert: HashMap<String, String> = HashMap::new();
-        let mut stats_to_insert: Vec<(String, i32, String, String, String)> = Vec::new();
+        let mut stats_to_insert: Vec<(String, i32, String, String, String, String)> = Vec::new();
         let now = Local::now().to_rfc3339();
 
         for stream in filtered_streams {
@@ -326,13 +326,14 @@ impl AutoDiscoveryPoller {
             };
             discovered_streams_info.push(stream_info);
 
-            // stream_statsデータを収集（後でバッチINSERT）
+            // stream_statsデータを収集（後でバッチINSERT）。game_id を保存してゲーム分析に含める。
             stats_to_insert.push((
                 now.clone(),
                 stream.viewer_count as i32,
                 user_id.clone(),
                 user_login.clone(),
                 stream.game_name.to_string(),
+                stream.game_id.to_string(),
             ));
 
             // カテゴリ情報を収集（ループ後にバッチ処理）
@@ -377,7 +378,7 @@ impl AutoDiscoveryPoller {
         if let Err(e) = db_manager
             .with_connection(|conn| {
                 base::with_transaction(conn, |conn| {
-                    for (collected_at, viewer_count, user_id, user_login, game_name) in
+                    for (collected_at, viewer_count, user_id, user_login, game_name, game_id) in
                         &stats_to_insert
                     {
                         StreamStatsRepository::insert_auto_discovery_stats(
@@ -387,6 +388,7 @@ impl AutoDiscoveryPoller {
                             user_id,
                             user_login,
                             game_name,
+                            game_id,
                         )?;
                     }
                     for (game_id, game_name) in &categories_to_upsert {

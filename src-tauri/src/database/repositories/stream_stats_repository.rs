@@ -104,6 +104,7 @@ impl StreamStatsRepository {
     /// 自動発見された配信の統計データを挿入
     ///
     /// stream_idがNULLの状態で、自動発見時の統計データを記録します。
+    /// game_id を保存することで、ゲーム分析・トップゲーム集計に自動発見チャンネルも含まれる。
     pub fn insert_auto_discovery_stats(
         conn: &Connection,
         collected_at: &str,
@@ -111,13 +112,14 @@ impl StreamStatsRepository {
         twitch_user_id: &str,
         channel_name: &str,
         category: &str,
+        game_id: &str,
     ) -> Result<(), duckdb::Error> {
         conn.execute(
             r#"
             INSERT INTO stream_stats (
                 stream_id, collected_at, viewer_count,
-                twitch_user_id, channel_name, category
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                twitch_user_id, channel_name, category, game_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             "#,
             duckdb::params![
                 None::<i64>, // stream_id = NULL
@@ -126,6 +128,7 @@ impl StreamStatsRepository {
                 twitch_user_id,
                 channel_name,
                 category,
+                game_id,
             ],
         )?;
         Ok(())

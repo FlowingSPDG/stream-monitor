@@ -28,23 +28,25 @@ export function ChannelList() {
     retry: 1, // リトライは1回まで
   });
 
-  // チャンネル削除ミューテーション
+  // チャンネル削除ミューテーション（削除後に一覧を再取得してUIを1回で更新）
   const deleteMutation = useMutation({
     mutationFn: async (channelId: number) => {
       await channelsApi.removeChannel(channelId);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["channels"] });
+      await queryClient.refetchQueries({ queryKey: ["channels"] });
     },
   });
 
-  // チャンネル有効/無効切り替えミューテーション
+  // チャンネル有効/無効切り替えミューテーション（切り替え後に一覧を再取得してUIを1回で更新）
   const toggleMutation = useMutation({
     mutationFn: async (channelId: number) => {
       await channelsApi.toggleChannel(channelId);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["channels"] });
+      await queryClient.refetchQueries({ queryKey: ["channels"] });
     },
   });
 
