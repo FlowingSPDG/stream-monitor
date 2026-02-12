@@ -152,10 +152,7 @@ impl StreamRepository {
         )
         {} ORDER BY sm.started_at DESC LIMIT {} OFFSET {}
         "#,
-            STREAM_METRICS_CTE,
-            STREAM_SELECT_TAIL,
-            limit_clause,
-            offset_clause
+            STREAM_METRICS_CTE, STREAM_SELECT_TAIL, limit_clause, offset_clause
         );
         let mut stmt = conn.prepare(&query)?;
         let channel_id_str = channel_id.to_string();
@@ -204,10 +201,7 @@ impl StreamRepository {
         )
         {} ORDER BY sm.started_at DESC LIMIT {} OFFSET {}
         "#,
-            STREAM_METRICS_CTE,
-            STREAM_SELECT_TAIL,
-            limit_clause,
-            offset_clause
+            STREAM_METRICS_CTE, STREAM_SELECT_TAIL, limit_clause, offset_clause
         );
         let mut stmt = conn.prepare(&query)?;
         let rows = stmt.query_map([date_from, date_to], row_to_stream_info)?;
@@ -245,13 +239,17 @@ impl StreamRepository {
         )
         {}
         "#,
-            STREAM_METRICS_CTE,
-            STREAM_SELECT_TAIL
+            STREAM_METRICS_CTE, STREAM_SELECT_TAIL
         );
         let stream_id_str = stream_id.to_string();
         conn.query_row(
             &query,
-            [&stream_id_str, &stream_id_str, &stream_id_str, &stream_id_str],
+            [
+                &stream_id_str,
+                &stream_id_str,
+                &stream_id_str,
+                &stream_id_str,
+            ],
             row_to_stream_info,
         )
     }
@@ -310,8 +308,7 @@ impl StreamRepository {
         )
         {} ORDER BY CASE WHEN sm.category = (SELECT category FROM base_stream) THEN 0 ELSE 1 END, sm.started_at ASC LIMIT {}
         "#,
-            STREAM_SELECT_TAIL,
-            limit_clause
+            STREAM_SELECT_TAIL, limit_clause
         );
         let base_id_str = base_stream_id.to_string();
         let mut stmt = conn.prepare(&query)?;

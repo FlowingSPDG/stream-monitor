@@ -278,6 +278,7 @@ impl AutoDiscoveryPoller {
 
         // メモリキャッシュに保存するための配信情報を構築
         let mut discovered_streams_info = Vec::new();
+        // game_id -> game_name
         let mut categories_to_upsert: HashMap<String, String> = HashMap::new();
         let mut stats_to_insert: Vec<(String, i32, String, String, String)> = Vec::new();
         let now = Local::now().to_rfc3339();
@@ -349,6 +350,29 @@ impl AutoDiscoveryPoller {
 
         let discovered_count = discovered_streams_info.len();
 
+        // Twitch API からカテゴリ情報（特に box_art_url）を取得してキャッシュ
+        let mut category_box_art: HashMap<String, String> = HashMap::new();
+        if !categories_to_upsert.is_empty() {
+            let game_ids: Vec<String> = categories_to_upsert.keys().cloned().collect();
+            let game_id_refs: Vec<&str> = game_ids.iter().map(|s| s.as_str()).collect();
+
+            match twitch_client.get_games_by_ids(&game_id_refs).await {
+                Ok(categories) => {
+                    for cat in categories {
+                        // Twitch API から返される box_art_url をそのまま保存
+                        category_box_art.insert(cat.id.to_string(), cat.box_art_url.to_string());
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[AutoDiscovery] Failed to fetch game categories for box_art_url: {}",
+                        e
+                    );
+                    // 失敗しても致命的ではないので、そのまま続行（box_art_url は NULL のまま）
+                }
+            }
+        }
+
         // 単一の接続とトランザクションで全てのDB操作を実行（デッドロック防止）
         if let Err(e) = db_manager
             .with_connection(|conn| {
@@ -366,7 +390,13 @@ impl AutoDiscoveryPoller {
                         )?;
                     }
                     for (game_id, game_name) in &categories_to_upsert {
-                        GameCategoryRepository::upsert_category(conn, game_id, game_name, None)?;
+                        let box_art_url = category_box_art.get(game_id).map(String::as_str);
+                        GameCategoryRepository::upsert_category(
+                            conn,
+                            game_id,
+                            game_name,
+                            box_art_url,
+                        )?;
                     }
                     Ok::<(), duckdb::Error>(())
                 })

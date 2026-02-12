@@ -456,6 +456,8 @@ impl ChannelPoller {
         // ゲームカテゴリをgame_categoriesテーブルに自動保存（ID->名前解決用）
         if let (Some(game_id), Some(game_name)) = (&stream_data.game_id, &stream_data.category) {
             use crate::database::repositories::GameCategoryRepository;
+            // 現時点では配信データからゲームの box_art_url を取得できないため、NULL のまま保存
+            // （AutoDiscovery/Twitch Games API 経由で後から上書きされる）
             if let Err(e) = GameCategoryRepository::upsert_category(conn, game_id, game_name, None)
             {
                 eprintln!(

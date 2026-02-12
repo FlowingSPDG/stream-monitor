@@ -44,10 +44,8 @@ export function GameCategoryManager() {
     );
   }) || [];
 
-  const handleDelete = async (gameId: string) => {
-    if (confirm('このカテゴリを削除しますか？')) {
-      await deleteMutation.mutateAsync(gameId);
-    }
+  const handleDelete = (gameId: string) => {
+    deleteMutation.mutate(gameId);
   };
 
   return (
@@ -116,7 +114,18 @@ export function GameCategoryManager() {
                     {category.gameId}
                   </td>
                   <td className="px-3 py-2 text-gray-900 dark:text-gray-100">
-                    {category.gameName}
+                    <div className="flex items-center gap-2">
+                      {category.boxArtUrl && (
+                        <img
+                          src={category.boxArtUrl
+                            .replace('{width}', '52')
+                            .replace('{height}', '72')}
+                          alt={category.gameName}
+                          className="w-6 h-8 object-cover rounded border border-gray-200 dark:border-gray-700"
+                        />
+                      )}
+                      <span>{category.gameName}</span>
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
                     {category.lastUpdated
