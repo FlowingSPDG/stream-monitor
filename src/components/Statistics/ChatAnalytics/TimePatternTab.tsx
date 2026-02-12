@@ -200,7 +200,7 @@ const TimePatternTab = ({ channelId, startTime, endTime }: TimePatternTabProps) 
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {patternData.map((pattern, index) => (
                   <tr key={index}>
-                    {groupByDay && pattern.dayOfWeek !== undefined && (
+                    {groupByDay && typeof pattern.dayOfWeek === 'number' && (
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         {dayLabels[pattern.dayOfWeek]}
                       </td>

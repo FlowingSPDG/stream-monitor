@@ -126,7 +126,7 @@ impl ChatMessageRepository {
             r#"
             WITH all_messages AS (
                 SELECT 
-                    cm.user_name,
+                    cm.user_id,
                     cm.badges,
                     COUNT(*) as message_count
                 FROM chat_messages cm
