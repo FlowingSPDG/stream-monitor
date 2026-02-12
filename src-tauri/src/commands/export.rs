@@ -6,7 +6,7 @@ use tauri::{AppHandle, State};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExportQuery {
-    pub channel_id: Option<i64>,
+    pub channel_id: i64,
     pub start_time: Option<String>,
     pub end_time: Option<String>,
     pub aggregation: Option<String>, // "raw", "1min", "5min", "1hour"
@@ -75,13 +75,13 @@ pub async fn export_to_delimited(
 
             if let (Some(st), Some(et), Some(interval)) = (start_opt, end_opt, interval_minutes) {
                 StreamStatsRepository::get_interpolated_stream_stats_for_export(
-                    conn, None, channel_id, st, et, interval,
+                    conn, None, Some(channel_id), st, et, interval,
                 )
                 .db_context("query interpolated stats for export")
                 .map_err(|e| e.to_string())
             } else {
                 StreamStatsRepository::get_stream_stats_filtered(
-                    conn, None, channel_id, start_opt, end_opt,
+                    conn, None, Some(channel_id), start_opt, end_opt,
                     true, // ORDER BY collected_at ASC for export
                 )
                 .db_context("query stats")
@@ -177,13 +177,13 @@ pub async fn preview_export_data(
 
             if let (Some(st), Some(et), Some(interval)) = (start_opt, end_opt, interval_minutes) {
                 StreamStatsRepository::get_interpolated_stream_stats_for_export(
-                    conn, None, channel_id, st, et, interval,
+                    conn, None, Some(channel_id), st, et, interval,
                 )
                 .db_context("query interpolated stats for preview")
                 .map_err(|e| e.to_string())
             } else {
                 StreamStatsRepository::get_stream_stats_filtered(
-                    conn, None, channel_id, start_opt, end_opt,
+                    conn, None, Some(channel_id), start_opt, end_opt,
                     true, // ORDER BY collected_at ASC
                 )
                 .db_context("query stats")

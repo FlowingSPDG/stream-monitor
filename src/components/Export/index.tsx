@@ -16,7 +16,7 @@ export function Export() {
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   const [config, setConfig] = useState({
-    channelIds: [] as number[],
+    channelId: null as number | null,
     startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
     format: 'tsv' as 'csv' | 'tsv' | 'custom',
@@ -64,7 +64,7 @@ export function Export() {
   // Fetch preview when config changes
   useEffect(() => {
     const fetchPreview = async () => {
-      if (config.channelIds.length === 0) {
+      if (config.channelId == null) {
         setPreviewData('');
         return;
       }
@@ -93,7 +93,7 @@ export function Export() {
         }
 
         // Use first selected channel for preview, with exactly same query shape as export
-        const query: ExportQuery = buildExportQuery(config.channelIds[0], delimiter);
+        const query: ExportQuery = buildExportQuery(config.channelId!, delimiter);
 
         const preview = await exportApi.previewExportData(query, 10);
 
@@ -109,11 +109,11 @@ export function Export() {
     // Debounce preview fetch
     const timer = setTimeout(fetchPreview, 500);
     return () => clearTimeout(timer);
-  }, [config.channelIds, config.startDate, config.endDate, config.format, config.aggregation, config.customDelimiter]);
+  }, [config.channelId, config.startDate, config.endDate, config.format, config.aggregation, config.customDelimiter]);
 
   const handleExport = async () => {
     // Validation
-    if (config.channelIds.length === 0) {
+    if (config.channelId == null) {
       setMessage({ type: 'error', text: 'エクスポート対象のチャンネルを選択してください' });
       return;
     }
@@ -166,23 +166,17 @@ export function Export() {
       }
 
       // Export for each selected channel
-      const results: string[] = [];
-      for (const channelId of config.channelIds) {
-        const query: ExportQuery = buildExportQuery(channelId, delimiter);
+      const query: ExportQuery = buildExportQuery(config.channelId!, delimiter);
 
-        const result = await exportApi.exportToDelimited(
-          query,
-          config.channelIds.length === 1 ? filePath : `${filePath.replace(/\.[^.]+$/, '')}_ch${channelId}.${fileExtension}`,
-          true
-        );
-        results.push(result);
-      }
+      await exportApi.exportToDelimited(
+        query,
+        filePath,
+        true
+      );
 
       setMessage({
         type: 'success',
-        text: config.channelIds.length === 1
-          ? 'エクスポートが完了しました'
-          : `${config.channelIds.length}個のファイルをエクスポートしました`
+        text: 'エクスポートが完了しました'
       });
     } catch (error) {
       console.error('Export error:', error);
@@ -284,7 +278,7 @@ export function Export() {
         <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-600">
           <button
             onClick={handleExport}
-            disabled={isExporting || config.channelIds.length === 0}
+            disabled={isExporting || config.channelId == null}
             className="btn-primary w-full md:w-auto px-8 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isExporting ? (
