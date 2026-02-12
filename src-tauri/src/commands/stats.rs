@@ -1,8 +1,11 @@
 use crate::database::{
-    models::StreamStats, repositories::chat_message_repository::ChatMessageRepository, utils,
+    models::StreamStats,
+    repositories::{
+        chat_message_repository::ChatMessageRepository,
+        stream_stats_repository::StreamStatsRepository,
+    },
     DatabaseManager,
 };
-use crate::error::ResultExt;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
@@ -22,71 +25,15 @@ pub async fn get_stream_stats(
 ) -> Result<Vec<StreamStats>, String> {
     db_manager
         .with_connection(|conn| {
-            let mut sql = String::from(
-                "SELECT ss.id, ss.stream_id, ss.collected_at, ss.viewer_count, 
-                 COALESCE((
-                     SELECT COUNT(*)
-                     FROM chat_messages cm
-                     WHERE cm.stream_id = ss.stream_id
-                       AND cm.timestamp >= ss.collected_at - INTERVAL '1 minute'
-                       AND cm.timestamp < ss.collected_at
-                 ), 0) AS chat_rate_1min,
-                 ss.category, ss.title, ss.follower_count, ss.twitch_user_id, ss.channel_name 
-                 FROM stream_stats ss
-                 INNER JOIN streams s ON ss.stream_id = s.id
-                 WHERE 1=1",
-            );
-
-            let mut params: Vec<String> = Vec::new();
-
-            if let Some(stream_id) = query.stream_id {
-                sql.push_str(" AND ss.stream_id = ?");
-                params.push(stream_id.to_string());
-            }
-
-            if let Some(channel_id) = query.channel_id {
-                sql.push_str(" AND s.channel_id = ?");
-                params.push(channel_id.to_string());
-            }
-
-            if let Some(start_time) = query.start_time {
-                sql.push_str(" AND ss.collected_at >= ?");
-                params.push(start_time);
-            }
-
-            if let Some(end_time) = query.end_time {
-                sql.push_str(" AND ss.collected_at <= ?");
-                params.push(end_time);
-            }
-
-            sql.push_str(" ORDER BY ss.collected_at DESC");
-
-            let mut stmt = conn
-                .prepare(&sql)
-                .db_context("prepare statement")
-                .map_err(|e| e.to_string())?;
-
-            let stats: Result<Vec<StreamStats>, _> =
-                utils::query_map_with_params(&mut stmt, &params, |row| {
-                    Ok(StreamStats {
-                        id: Some(row.get(0)?),
-                        stream_id: row.get(1)?,
-                        collected_at: row.get(2)?,
-                        viewer_count: row.get(3)?,
-                        chat_rate_1min: row.get(4)?,
-                        category: row.get(5)?,
-                        game_id: None,
-                        title: row.get(6)?,
-                        follower_count: row.get(7)?,
-                        twitch_user_id: row.get(8)?,
-                        channel_name: row.get(9)?,
-                    })
-                })
-                .db_context("query stats")
-                .map_err(|e| e.to_string())?
-                .collect();
-
-            stats.db_context("collect stats").map_err(|e| e.to_string())
+            StreamStatsRepository::get_stream_stats_filtered(
+                conn,
+                query.stream_id,
+                query.channel_id,
+                query.start_time.as_deref(),
+                query.end_time.as_deref(),
+                false, // ORDER BY collected_at DESC
+            )
+            .map_err(|e| e.to_string())
         })
         .await
 }

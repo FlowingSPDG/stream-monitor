@@ -1,6 +1,7 @@
 use crate::api::twitch_api::TwitchApiClient;
 use crate::commands::discovery::DiscoveredStreamInfo;
 use crate::config::settings::{AutoDiscoverySettings, SettingsManager};
+use crate::database::repositories::base;
 use crate::database::repositories::game_category_repository::GameCategoryRepository;
 use crate::database::repositories::stream_stats_repository::StreamStatsRepository;
 use crate::database::repositories::ChannelRepository;
@@ -349,62 +350,31 @@ impl AutoDiscoveryPoller {
         let discovered_count = discovered_streams_info.len();
 
         // 単一の接続とトランザクションで全てのDB操作を実行（デッドロック防止）
-        db_manager
+        if let Err(e) = db_manager
             .with_connection(|conn| {
-                // トランザクション開始
-                if let Err(e) = conn.execute("BEGIN TRANSACTION", []) {
-                    eprintln!("[AutoDiscovery] Failed to begin transaction: {}", e);
-                    return;
-                }
-
-                let mut transaction_successful = true;
-
-                // stream_statsをバッチINSERT（Repositoryメソッド使用）
-                for (collected_at, viewer_count, user_id, user_login, game_name) in &stats_to_insert
-                {
-                    if let Err(e) = StreamStatsRepository::insert_auto_discovery_stats(
-                        conn,
-                        collected_at,
-                        *viewer_count,
-                        user_id,
-                        user_login,
-                        game_name,
-                    ) {
-                        eprintln!(
-                            "[AutoDiscovery] Failed to insert stream stats for {}: {}",
-                            user_login, e
-                        );
-                        transaction_successful = false;
-                        break;
+                base::with_transaction(conn, |conn| {
+                    for (collected_at, viewer_count, user_id, user_login, game_name) in
+                        &stats_to_insert
+                    {
+                        StreamStatsRepository::insert_auto_discovery_stats(
+                            conn,
+                            collected_at,
+                            *viewer_count,
+                            user_id,
+                            user_login,
+                            game_name,
+                        )?;
                     }
-                }
-
-                // game_categoriesをバッチUPSERT（Repositoryメソッド使用）
-                if transaction_successful {
                     for (game_id, game_name) in &categories_to_upsert {
-                        if let Err(e) =
-                            GameCategoryRepository::upsert_category(conn, game_id, game_name, None)
-                        {
-                            eprintln!(
-                                "[AutoDiscovery] Failed to upsert category {}: {}",
-                                game_id, e
-                            );
-                            transaction_successful = false;
-                            break;
-                        }
+                        GameCategoryRepository::upsert_category(conn, game_id, game_name, None)?;
                     }
-                }
-
-                // トランザクションをコミットまたはロールバック
-                if transaction_successful {
-                    if let Err(e) = conn.execute("COMMIT", []) {
-                        eprintln!("[AutoDiscovery] Failed to commit transaction: {}", e);
-                    }
-                } else if let Err(e) = conn.execute("ROLLBACK", []) {
-                    eprintln!("[AutoDiscovery] Failed to rollback transaction: {}", e);
-                }
+                    Ok::<(), duckdb::Error>(())
+                })
             })
-            .await;
+            .await
+        {
+            eprintln!("[AutoDiscovery] Transaction failed: {}", e);
+        }
 
         // メモリキャッシュに保存
         let cache: tauri::State<'_, Arc<DiscoveredStreamsCache>> = app_handle.state();
@@ -438,46 +408,12 @@ impl AutoDiscoveryPoller {
         // トランザクションで処理して競合状態を防ぐ
         let channels_to_notify = db_manager
             .with_connection(|conn| {
-                // トランザクション開始
-                conn.execute("BEGIN TRANSACTION", [])?;
+                base::with_transaction::<Vec<(i64, String)>, duckdb::Error, _>(conn, |conn| {
+                    let channels =
+                        ChannelRepository::get_offline_auto_discovered_channels(conn)?;
 
-                let cleanup_result: Result<
-                    Vec<(i64, String)>,
-                    Box<dyn std::error::Error + Send + Sync>,
-                > = (|| {
-                    // 自動発見されたチャンネルで、最新の配信が終了しているものを取得
-                    let mut stmt = conn.prepare(
-                        r#"
-                    SELECT c.id, c.channel_name
-                    FROM channels c
-                    WHERE c.is_auto_discovered = true
-                    AND NOT EXISTS (
-                        SELECT 1 FROM streams s
-                        WHERE s.channel_id = c.id
-                        AND s.ended_at IS NULL
-                    )
-                    AND EXISTS (
-                        SELECT 1 FROM streams s
-                        WHERE s.channel_id = c.id
-                    )
-                    "#,
-                    )?;
-
-                    let channels: Vec<(i64, String)> = stmt
-                        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-                        .collect::<Result<Vec<_>, _>>()?;
-
-                    drop(stmt);
-
-                    // データベースから削除（ポーリングは自動的に停止される）
                     for (channel_id, channel_name) in &channels {
-                        // 削除前に再度ライブ状態をチェック（競合回避）
-                        let mut check_stmt = conn.prepare(
-                            "SELECT EXISTS(SELECT 1 FROM streams WHERE channel_id = ? AND ended_at IS NULL)"
-                        )?;
-                        let is_live: bool = check_stmt.query_row([channel_id], |row| row.get(0))?;
-                        drop(check_stmt);
-
+                        let is_live = ChannelRepository::is_channel_live(conn, *channel_id)?;
                         if is_live {
                             eprintln!(
                                 "[AutoDiscovery] Skip cleanup for {} (id: {}) - channel went live again",
@@ -494,20 +430,8 @@ impl AutoDiscoveryPoller {
                     }
 
                     Ok(channels)
-                })();
-
-                match cleanup_result {
-                    Ok(channels) => {
-                        // コミット
-                        conn.execute("COMMIT", [])?;
-                        Ok(channels)
-                    }
-                    Err(e) => {
-                        // ロールバック
-                        let _ = conn.execute("ROLLBACK", []);
-                        Err(e)
-                    }
-                }
+                })
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
             })
             .await?;
 

@@ -383,4 +383,39 @@ impl ChannelRepository {
             |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
         )
     }
+
+    /// 自動発見されたチャンネルのうち、最新の配信が終了しているものを取得（クリーンアップ対象）
+    pub fn get_offline_auto_discovered_channels(
+        conn: &Connection,
+    ) -> Result<Vec<(i64, String)>, duckdb::Error> {
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT c.id, c.channel_name
+            FROM channels c
+            WHERE c.is_auto_discovered = true
+            AND NOT EXISTS (
+                SELECT 1 FROM streams s
+                WHERE s.channel_id = c.id
+                AND s.ended_at IS NULL
+            )
+            AND EXISTS (
+                SELECT 1 FROM streams s
+                WHERE s.channel_id = c.id
+            )
+            "#,
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()
+    }
+
+    /// チャンネルが現在ライブ配信中かどうか（ended_at IS NULL の配信が存在するか）
+    pub fn is_channel_live(conn: &Connection, channel_id: i64) -> Result<bool, duckdb::Error> {
+        let mut stmt = conn.prepare(
+            "SELECT EXISTS(SELECT 1 FROM streams WHERE channel_id = ? AND ended_at IS NULL)",
+        )?;
+        let exists: bool = stmt.query_row([channel_id], |row| row.get(0))?;
+        Ok(exists)
+    }
 }

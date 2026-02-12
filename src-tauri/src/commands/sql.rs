@@ -1,7 +1,8 @@
+use crate::database::repositories::SqlTemplateRepository;
 use crate::database::DatabaseManager;
 use crate::error::ResultExt;
 use chrono::{Local, TimeZone};
-use duckdb::{params, types::TimeUnit, types::ValueRef, Connection, Row};
+use duckdb::{types::TimeUnit, types::ValueRef, Connection, Row};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tauri::State;
@@ -264,15 +265,7 @@ pub struct SqlQueryResult {
     pub execution_time_ms: u128,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SqlTemplate {
-    pub id: i64,
-    pub name: String,
-    pub description: String,
-    pub query: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
+pub use crate::database::repositories::SqlTemplate;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SaveTemplateRequest {
@@ -649,37 +642,7 @@ pub async fn list_sql_templates(
     db_manager: State<'_, DatabaseManager>,
 ) -> Result<Vec<SqlTemplate>, String> {
     db_manager
-        .with_connection(|conn| {
-            let mut stmt = conn
-                .prepare(
-                    "SELECT id, name, description, query, 
-                     CAST(created_at AS VARCHAR) as created_at, 
-                     CAST(updated_at AS VARCHAR) as updated_at 
-                     FROM sql_templates 
-                     ORDER BY updated_at DESC",
-                )
-                .db_context("prepare query")
-                .map_err(|e| e.to_string())?;
-
-            let templates = stmt
-                .query_map([], |row| {
-                    Ok(SqlTemplate {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        description: row.get(2).unwrap_or_else(|_| String::new()),
-                        query: row.get(3)?,
-                        created_at: row.get(4).unwrap_or_else(|_| String::new()),
-                        updated_at: row.get(5).unwrap_or_else(|_| String::new()),
-                    })
-                })
-                .db_context("query templates")
-                .map_err(|e| e.to_string())?
-                .collect::<Result<Vec<_>, _>>()
-                .db_context("fetch templates")
-                .map_err(|e| e.to_string())?;
-
-            Ok(templates)
-        })
+        .with_connection(|conn| SqlTemplateRepository::list_all(conn).map_err(|e| e.to_string()))
         .await
 }
 
@@ -691,70 +654,14 @@ pub async fn save_sql_template(
 ) -> Result<SqlTemplate, String> {
     db_manager
         .with_connection(|conn| {
-            let id = if request.id > 0 {
-                // 更新
-                conn.execute(
-                    "UPDATE sql_templates 
-                     SET name = ?, description = ?, query = ?, updated_at = CURRENT_TIMESTAMP 
-                     WHERE id = ?",
-                    params![
-                        &request.name,
-                        &request.description,
-                        &request.query,
-                        request.id
-                    ],
-                )
-                .db_context("update template")
-                .map_err(|e| e.to_string())?;
-
-                request.id
-            } else {
-                // 新規作成
-                conn.execute(
-                    "INSERT INTO sql_templates (name, description, query) 
-                     VALUES (?, ?, ?)",
-                    params![&request.name, &request.description, &request.query],
-                )
-                .db_context("insert template")
-                .map_err(|e| e.to_string())?;
-
-                // 最後に挿入されたIDを取得
-                let mut stmt = conn
-                    .prepare("SELECT currval('sql_templates_id_seq')")
-                    .db_context("get last insert id")
-                    .map_err(|e| e.to_string())?;
-
-                stmt.query_row([], |row| row.get(0))
-                    .db_context("fetch last insert id")
-                    .map_err(|e| e.to_string())?
-            };
-
-            // 保存したテンプレートを取得して返す
-            let mut stmt = conn
-                .prepare(
-                    "SELECT id, name, description, query, 
-                     CAST(created_at AS VARCHAR) as created_at, 
-                     CAST(updated_at AS VARCHAR) as updated_at 
-                     FROM sql_templates 
-                     WHERE id = ?",
-                )
-                .db_context("prepare query")
-                .map_err(|e| e.to_string())?;
-
-            let template = stmt
-                .query_row(params![id], |row| {
-                    Ok(SqlTemplate {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        description: row.get(2).unwrap_or_else(|_| String::new()),
-                        query: row.get(3)?,
-                        created_at: row.get(4).unwrap_or_else(|_| String::new()),
-                        updated_at: row.get(5).unwrap_or_else(|_| String::new()),
-                    })
-                })
-                .map_err(|e| format!("Failed to retrieve saved template: {}", e))?;
-
-            Ok(template)
+            SqlTemplateRepository::save(
+                conn,
+                request.id,
+                &request.name,
+                &request.description,
+                &request.query,
+            )
+            .map_err(|e| e.to_string())
         })
         .await
 }
@@ -767,15 +674,10 @@ pub async fn delete_sql_template(
 ) -> Result<(), String> {
     db_manager
         .with_connection(|conn| {
-            let affected = conn
-                .execute("DELETE FROM sql_templates WHERE id = ?", params![id])
-                .db_context("delete template")
-                .map_err(|e| e.to_string())?;
-
+            let affected = SqlTemplateRepository::delete(conn, id).map_err(|e| e.to_string())?;
             if affected == 0 {
                 return Err("Template not found".to_string());
             }
-
             Ok(())
         })
         .await

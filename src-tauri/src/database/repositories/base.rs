@@ -1,7 +1,28 @@
 /// レポジトリパターンの共通基盤
 ///
 /// クエリフィルターとヘルパートレイトを定義
+use duckdb::Connection;
 use serde::{Deserialize, Serialize};
+
+/// トランザクション内でクロージャを実行する。
+/// 成功時は COMMIT、失敗時は ROLLBACK する。
+pub fn with_transaction<T, E, F>(conn: &Connection, f: F) -> Result<T, E>
+where
+    F: FnOnce(&Connection) -> Result<T, E>,
+    E: From<duckdb::Error>,
+{
+    conn.execute("BEGIN TRANSACTION", [])?;
+    let result = f(conn);
+    match &result {
+        Ok(_) => {
+            conn.execute("COMMIT", [])?;
+        }
+        Err(_) => {
+            let _ = conn.execute("ROLLBACK", []);
+        }
+    }
+    result
+}
 
 /// 時間範囲フィルター
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
