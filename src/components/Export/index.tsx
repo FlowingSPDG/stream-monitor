@@ -39,7 +39,8 @@ export function Export() {
     const fetchChannels = async () => {
       try {
         setIsLoadingChannels(true);
-        const result = await channelsApi.listChannels();
+        // エクスポートでは配信者リストだけあればよいので、Twitch API を叩かない軽量版を使用
+        const result = await channelsApi.listChannelsBasic();
         setChannels(result);
       } catch (error) {
         console.error('Failed to fetch channels:', error);
